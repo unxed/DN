@@ -2,7 +2,8 @@
   StdDlg of Borland TV). The dialog is TFileDialog of tv/ (TvFileDlg); here are the functions that DN calls.
 
   Not done yet (TODO): the filter of DN (Mask like "*.Ops;-Pas.*;p*.d") is given to the dialog as it is, the
-  dialog of tv/ takes ordinary masks; GetFileNameMenu (the choice from a menu, JO) offers nothing. }
+  dialog of tv/ takes ordinary masks; GetFileNameMenu (the choice from a menu, JO) offers no menu and sends the caller to the
+  file dialog. }
 {$mode objfpc}{$H-}
 unit DNStdDlg;
 
@@ -32,7 +33,8 @@ type
 
 { The name of a file chosen in the dialog; '' if it was cancelled. }
 function GetFileNameDialog(Mask, Title, Name: String; Buttons, HistoryId: Word): String;
-{ A choice of a file from a menu; '' and None = True if there is nothing to choose. }
+{ A choice of a file from a menu; '' and None = True if there is nothing to choose, More = True to choose in the file
+  dialog instead. While there is no menu it always answers More (dn#31). }
 function GetFileNameMenu(Path, Mask, Default: String; PutNumbers: Boolean; var More, None: Boolean): String;
 
 implementation
@@ -58,8 +60,10 @@ end;
 
 function GetFileNameMenu(Path, Mask, Default: String; PutNumbers: Boolean; var More, None: Boolean): String;
 begin
-  More := False;
-  None := True;
+  { There is no menu yet: "More" sends every caller to the file dialog (Load palette, the table of xlat). The old
+    answer "nothing to choose" made Load palette do nothing at all and the table of xlat never choosable (dn#31). }
+  More := True;
+  None := False;
   Result := '';
 end;
 
