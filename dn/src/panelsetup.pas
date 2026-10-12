@@ -32,8 +32,34 @@ type
     TotalsInfo: Word; {Combo}
     FreeSpaceInfo: Word; {Combo}
     MiscOptions: Word; {` Checkbox[2]: ZoomPanel, ShowTitles `}
+    Columns: String[1];
+      {` InputLine: the number of columns of names, '1'..'9'; '' or '0': as many
+        as the width of the name lets in (dn#19). See FixedColumns `}
     end;
   {`}
+
+  TOldPanelShowSetup = record
+  {` TPanelShowSetup before Columns: the presets of a configuration saved before it
+    are read into it (boot.pas, cfgPanSetupPreset) and moved over `}
+    ColumnsMask: Word;
+    DirRegister: Word;
+    FileRegister: Word;
+    LFNLen: String[3];
+    EXTLen: String[3];
+    TabulateExt: Word;
+    NoTabulateDirExt: Word;
+    ShowCurFile: Word;
+    CurFileNameType: Word;
+    SelectedInfo: Word;
+    FilterInfo: Word;
+    PathDescrInfo: Word;
+    PackedSizeInfo: Word;
+    BriefPercentInfo: Word;
+    LFN_InFooter: Word;
+    TotalsInfo: Word;
+    FreeSpaceInfo: Word;
+    MiscOptions: Word;
+    end;
 
   TPanelSortSetup = record
   {` Data block for the panel sort settings dialog dlgPanelSortSetup }
@@ -61,6 +87,13 @@ type
     {`2 full set of settings for all panel classes }
   TPanelSetupSet = array[TPanelClass] of TPanelSetup;
   {`}
+
+  TOldPanelSetup = record
+    Show: TOldPanelShowSetup;
+    Sort: TPanelSortSetup;
+    FileMask: String;
+    end;
+  TOldPanelSetupPresets = array[1..10] of array[TPanelClass] of TOldPanelSetup;
 
   TDriveType = (dtUndefined, dtDisk, dtFind, dtTemp, dtList, dtArcFind,
        dtArc, dtNet, dtLink, dtArvid);
@@ -124,6 +157,12 @@ settings here as an auxiliary constant, and filled the presets
 with the DefaultInit program. Now it is called only at
 initialization, but eventually its call could be made via
 (a new) "Restore defaults" command. `}
+
+{ The presets of a configuration saved before the field Columns, moved into PanSetupPreset (no fixed number of columns). }
+procedure PresetsFromOld(const Old: TOldPanelSetupPresets);
+
+{ The number of columns of names the setting asks for, 1..9; 0 when it is empty or "0": as many as fit (dn#19). }
+function FixedColumns(const Show: TPanelShowSetup): Integer;
 
 { The sort of all the preset panels by a name from dn.ini (name, ext, size, date, unsorted; any case); another name changes nothing. }
 procedure ApplyDefaultSortMode(const Mode: String);
@@ -205,6 +244,29 @@ const
      (Param: 0; LFNLen: '12'; EXTLen: '3')
     )
   );
+
+procedure PresetsFromOld(const Old: TOldPanelSetupPresets);
+  var
+    i: Integer;
+    pc: TPanelClass;
+  begin
+  for i := 1 to 10 do
+    for pc := Low(TPanelClass) to High(TPanelClass) do
+      begin
+      Move(Old[i][pc].Show, PanSetupPreset[i][pc].Show, SizeOf(TOldPanelShowSetup));
+      PanSetupPreset[i][pc].Show.Columns := '';
+      PanSetupPreset[i][pc].Sort := Old[i][pc].Sort;
+      PanSetupPreset[i][pc].FileMask := Old[i][pc].FileMask;
+      end;
+  end;
+
+function FixedColumns(const Show: TPanelShowSetup): Integer;
+  begin
+  if (Length(Show.Columns) = 1) and (Show.Columns[1] in ['1'..'9']) then
+    Result := Ord(Show.Columns[1])-Ord('0')
+  else
+    Result := 0;
+  end;
 
 procedure DefaultInit;
   var

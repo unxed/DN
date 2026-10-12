@@ -628,6 +628,14 @@ procedure DoStartup;
             SRead(PanSetupPreset);
             PanSetupFromConfig := True;
             end
+          else if SizeOf(TOldPanelSetupPresets) = L then
+            begin { saved before the field Columns (dn#19) }
+            GetMem(p, SizeOf(TOldPanelSetupPresets));
+            SRead(p^);
+            PresetsFromOld(TOldPanelSetupPresets(p^));
+            FreeMem(p, SizeOf(TOldPanelSetupPresets));
+            PanSetupFromConfig := True;
+            end
           else
             SSkip;
         cfgDriveInfoData:

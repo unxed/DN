@@ -2994,6 +2994,12 @@ turn on the size column, and set 252 for name width. In this case, the first
 column will contain size and the second column (for all the space left) will
 contain the name.
 
+   {Name columns:_} sets the number of columns of names in the panel, 1 to 9:
+the name takes the width the panel leaves to each of them (the width of the
+name set above is not used then). Empty or 0: as many columns as the width of
+the name lets in. For example, 2 gives two columns, as in mc, whatever the
+width of the window.
+
    {Tabulate extension:_} block sets the name and extension display options.
 The "Tabulate" term means to show the extension from a certain position in a
 line and with no separator (".") between the name and extension.

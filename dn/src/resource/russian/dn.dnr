@@ -1405,6 +1405,8 @@ DIALOG dlgPanelShowSetup, 74, 22, 'Вид файловых панелей'
       ITEM '~З~аголовки колонок'
     END
     Label 38, 13, 'Разное', ofPostProcess, ofPreProcess
+    InputLine 51, 16, 54, 17, 1, 0
+    Label 38, 16, 'Колонок имён', ofPostProcess, ofPreProcess
 
 #4  Button 60, 17, 73, 19, 'За~п~исать', 0, bfNormal
     Button 39, 19, 50, 21, '~О~К', cmOK, bfDefault, ofPostProcess, ofPreProcess
