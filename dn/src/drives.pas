@@ -903,6 +903,9 @@ function TDrive.GetDirectory( const FileMask: String; var TotalInfo: TSize): TFi
       P := NewFileRec(SR.FullName , SR.SR.Name 
           , SR.FullSize, SR.SR.Time, SR.SR.CreationTime
           , SR.SR.LastAccessTime, SR.SR.Attr, @CurDir);
+      { a link to nothing is marked in the panel (dn#20); only links cost the extra look }
+      if (SR.SR.Attr and SysLinkAttr <> 0) and SysLinkIsBroken(MakeNormName(CurDir, SR.FullName)) then
+        P^.Attr := P^.Attr or SysBrokenLinkAttr;
       Inc(MemReq, SizeOf(TFileRec));
       Inc(MemReq, Length(CurDir+SR.FullName)+2);
       

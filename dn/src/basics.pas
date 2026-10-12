@@ -66,11 +66,12 @@ uses
 
 
 type
-  TNameFormatMode = (nfmNull, nfmHidden, nfmSystem, nfmHiddenSystem);
+  TNameFormatMode = (nfmNull, nfmHidden, nfmSystem, nfmHiddenSystem, nfmBrokenLink);
 
 const
+  { nfmBrokenLink: a symbolic link whose target does not exist (Unix), "!" as in other file managers }
   NameFormatChar: array[TNameFormatMode] of Char =
-    ('.', gcShadeLight, gcShadeMedium, gcShadeDark);
+    ('.', gcShadeLight, gcShadeMedium, gcShadeDark, '!');
 
 (*  flnPreferName = 1;  { Non-tabulated extension;
         in this case always ExtSize = 0}
