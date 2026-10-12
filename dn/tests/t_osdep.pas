@@ -68,6 +68,15 @@ begin
   Check((SysFindFirst(P, $10, Srch, False) = 0) and (Srch.Attr and SysLinkAttr = 0), 'a directory is not a link');
   SysFindClose(Srch);
   DeleteFile('vpsys_lnk');
+  { a link to nothing is broken; a link to a file, the file itself and a missing name are not (dn#20) }
+  FpSymlink('vpsys_nothing', 'vpsys_dangle');
+  Check(SysLinkIsBroken('vpsys_dangle'), 'a link to a missing file is broken');
+  FpSymlink('vpsys_dir', 'vpsys_lnk');
+  Check(not SysLinkIsBroken('vpsys_lnk'), 'a link to a directory that exists is not broken');
+  Check(not SysLinkIsBroken('vpsys_dir'), 'a directory is not a broken link');
+  Check(not SysLinkIsBroken('vpsys_nothing'), 'a missing name is not a broken link');
+  DeleteFile('vpsys_lnk');
+  DeleteFile('vpsys_dangle');
   RemoveDir('vpsys_dir');
 {$ENDIF}
 

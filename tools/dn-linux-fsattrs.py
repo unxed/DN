@@ -83,6 +83,9 @@ def tree_links(w):
 d, w, text, alive = case(out, tree_links, '')
 dirs.append(d)
 check(alive and all(n in text for n in ('dlink', 'broken', 'link', 'target')), 'the panel lists the links, the dangling one too', text)
+# the dangling link has the mark "!" where the dot of the name stands (dn#20), the live links have none
+check(re.search(r'broken\s+!', text) is not None and re.search(r'link\s+!', text) is None and re.search(r'dlink\s*!', text) is None,
+      'the dangling link is marked "!", the live ones are not', text)
 d, w, text, alive = case(out, tree_links, 'HOME DOWN ENTER')       # .., dlink
 dirs.append(d)
 check(alive and re.search(r'work[\\/]dlink', text) and re.search(r'in\s+txt', text) is not None, 'Enter on a link to a directory enters it', text)
