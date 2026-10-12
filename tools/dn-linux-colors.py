@@ -6,7 +6,8 @@ of the active panel and the selected button. The screen of the terminal program 
   - today's date when it is the selected one is blue on teal (31), not black on dark gray (80; the unreadable 89 on a gray selection before);
   - no cell of the calendar shows black on dark gray (an unreadable pair);
   - an input line of a dialog (the mask of Find File) is white on black (0F) as on the reference screens of DN, its selected text white on teal (3F),
-    and no cell of the dialog is white on light blue (9F)."""
+    and no cell of the dialog is white on light blue (9F);
+  - Options, Store palette and Load palette open their file dialogs and a stored palette is loaded back (dn#31)."""
 import datetime, os, re, shutil, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dn_wait import DnTerm
@@ -102,6 +103,18 @@ try:
         blue = [(yy, xx) for yy in range(len(rows)) for xx in range(100) if pair(t, yy, xx) and pair(t, yy, xx)[1] == LIGHT_BLUE]
         check(not blue, 'no cell of the dialog is on light blue (9F)', repr(blue[:5]))
     t.send('\x1b', 0.3)
+    # Options, Store palette / Load palette (dn#31): both open their file dialog; a stored palette is loaded back
+    pal = os.path.join(w, 'mine.pal')
+    t.send('\x1bo', 0.8)
+    t.send('t', 1.0)
+    check('Store Color Palette' in t.text(), 'Options, Store palette opens its file dialog', t.text())
+    t.send('\x19' + pal + '\r', 1.0)                    # Ctrl-Y clears the input line
+    check(os.path.isfile(pal), 'Store palette writes the file', t.text())
+    t.send('\x1bo', 0.8)
+    t.send('a', 1.0)
+    check('Load Color Palette' in t.text(), 'Options, Load palette opens its file dialog (it did nothing before)', t.text())
+    t.send('\x19' + pal + '\r', 1.0)
+    check(t.alive() and 'Load Color Palette' not in t.text(), 'the stored palette is loaded back, DN goes on', t.text())
     t.close(0.3)
 finally:
     shutil.rmtree(d, ignore_errors=True)
