@@ -1659,6 +1659,71 @@ WrongArc:
     PutInClipLong(S);
     end { _CtrlIns };
 
+  procedure _CtrlInsToCmdLine;
+{ Far Ctrl+Ins with a non-empty command line: the names go into the
+  command line instead of the clipboard (cmInsertName, as in _CtrlEnter) }
+    var
+      S: String;
+      LS: LongString;
+      I: LongInt;
+      b: Boolean;
+    begin
+    LS := '';
+    CE;
+    b := False;
+    if  (Files = nil) or (Files.Count <= 0) then
+      Exit;
+    if SelNum = 0
+    then
+      LS := MakeFName(CurPos, False, False)
+    else
+      for I := 0 to Files.Count-1 do
+        if PFileRec(Files.At(I))^.Selected then
+          begin
+          LS := LS+MakeFName(I, b, True);
+          b := True;
+          end;
+
+    S := LS;
+    Message(CommandLine, evCommand, cmInsertName, @S);
+    end { _CtrlInsToCmdLine };
+
+  procedure _CtrlInsFull;
+{ Far Ctrl+Alt+Ins: full names into the clipboard (as Alt+Shift+Ins gives) }
+    var
+      S: LongString;
+      I: LongInt;
+      b: Boolean;
+      PF: PFileRec;
+    begin
+    S := '';
+    CE;
+    b := False;
+    if  (Files = nil) or (Files.Count <= 0) then
+      Exit;
+    if SelNum = 0
+    then
+      begin
+      PF := Files.At(CurPos);
+      S := MakeNormName(PF^.Owner^, PF^.FlName[uLfn]);
+      end
+    else
+      for I := 0 to Files.Count-1 do
+        begin
+        PF := PFileRec(Files.At(I));
+        if not PF^.Selected then
+          Continue;
+        if b
+        then
+          S := S+' '+SquashesName(MakeNormName(PF^.Owner^, PF^.FlName[uLfn]))
+        else
+          S := SquashesName(MakeNormName(PF^.Owner^, PF^.FlName[uLfn]));
+        b := True;
+        end;
+
+    PutInClipLong(S);
+    end { _CtrlInsFull };
+
   {function _AltEnter: boolean; forward;} {Cat}
   procedure _CtrlEnter;
     var
@@ -2132,8 +2197,25 @@ WrongArc:
           CE;
           end;
       { Flash 23.05.2005: Added taking short name with path }
-      kbCtrlIns, kbCtrlShiftIns, kbCtrlAltIns, kbCtrlAltShiftIns:
-        {if ShiftState and kbCtrlShift<>0 then}_CtrlIns;
+      kbCtrlIns:
+        { Far UX mode: with a non-empty command line the names go into it,
+          with an empty one into the clipboard (as before) }
+        if FarUxEnabled and (CmdLine.Str <> '') then
+          _CtrlInsToCmdLine
+        else
+          _CtrlIns;
+      kbCtrlShiftIns:
+        _CtrlIns;
+      kbCtrlAltShiftIns:
+        _CtrlIns;
+      kbCtrlAltIns:
+        { Far UX mode: full names like Alt+Shift+Ins (built directly:
+          the name builder reads the live ShiftState, and Alt would flip
+          it to short names) }
+        if FarUxEnabled then
+          _CtrlInsFull
+        else
+          _CtrlIns;
       kbCtrlEnter, kbCtrlShiftEnter, kbCtrlAltEnter:
         _CtrlEnter;
       kbLeft:

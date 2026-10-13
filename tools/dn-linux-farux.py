@@ -69,6 +69,11 @@ def quit_dn(t):
     return t.close(4)
 
 
+def cmdline_row(t):
+    return '\n'.join(''.join(c for c, _ in row)
+                     for row in t.screen.cells[27:29])
+
+
 out = os.path.abspath(sys.argv[1])
 fails = 0
 
@@ -100,6 +105,30 @@ try:
     check(len(selected_files(t)) == 3, 'FarUx on: Shift+Gray+ selects all', t)
     t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub
     check(selected_files(t) == [], 'FarUx on: Shift+Gray- deselects all', t)
+    t.send('\x1b[H', 0.5)                       # Home
+    t.send('\x1b[B', 0.5)                       # Down -> alpha1
+    t.send(w32(0x2D, 0, 6), 1.0)                 # Ctrl+Alt+Ins: full names
+                                                     # (win32 Cs: $04 ctrl + $02 alt)
+    t.send('\x1b[B', 0.5)
+    t.send('\x1b[B', 0.5)                       # Down,Down -> beta.txt
+    t.send(w32(0x73), 1.2)                       # F4 editor
+    t.send(w32(0x2D, 0, 16), 1.0)                # Shift+Ins pastes
+    t.pump(0.5)
+    editor_text = t.text()
+    editor_text = editor_text[editor_text.find('Edit -'):]
+    check('work\\alpha1' in editor_text,
+          'FarUx on: Ctrl+Alt+Ins puts the full name into the clipboard', t)
+    t.send(w32(0x1B), 1.0)                       # Esc leaves the editor
+    t.pump(0.5)
+    if 'was modified' in t.text():
+        t.send('n', 1.0)                         # No: do not save the paste
+    check('Edit -' not in t.text(), 'FarUx on: the editor is closed', t)
+    t.send('\x1b[H', 0.5)                       # Home
+    t.send('\x1b[B', 0.5)                       # Down -> alpha1
+    t.send('q', 0.8)                             # type into the command line
+    t.send(w32(0x2D, 0, 4), 1.0)                 # Ctrl+Ins
+    check('alpha1' in cmdline_row(t),
+          'FarUx on: Ctrl+Ins with text inserts the name into the command line', t)
     check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
@@ -110,6 +139,12 @@ try:
     check('Search:' not in t.text(), 'FarUx off: Alt+A starts no search', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
+    t.send('\x1b[H', 0.5)                       # Home
+    t.send('\x1b[B', 0.5)                       # Down -> alpha1
+    t.send('q', 0.8)
+    t.send(w32(0x2D, 0, 4), 1.0)                 # Ctrl+Ins
+    check('alpha1' not in cmdline_row(t),
+          'FarUx off: Ctrl+Ins with text still goes to the clipboard', t)
     check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
