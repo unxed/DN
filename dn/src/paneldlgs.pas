@@ -58,6 +58,7 @@ function GetSelection(P: TFilePanelRoot; Single: Boolean):
 function SelectFiles(AFP: Pointer; Select, XORs: Boolean): Boolean;
 procedure CM_CopyFiles(AFP: Pointer; MoveMode, Single: Boolean);
 procedure InvertSelection(AFP: Pointer; dr: Boolean);
+procedure SelectAllFiles(AFP: Pointer; Select: Boolean);
 procedure CM_CompareDirs(AFP, IP: Pointer);
 procedure CM_EraseFiles(AFP: Pointer; Single: Boolean);
 procedure CM_MakeList(AFP: Pointer);
@@ -983,6 +984,54 @@ procedure InvertSelection(AFP: Pointer; dr: Boolean);
     end;
   DrawViews(P);
   end { InvertSelection };
+{-DataCompBoy-}
+
+{-DataCompBoy-}
+procedure SelectAllFiles(AFP: Pointer; Select: Boolean);
+{ Far Shift+Gray+/Gray-: select/deselect all without a mask dialog }
+  var
+    I: LongInt;
+    PF: PFileRec;
+    P: TFilePanelRoot absolute AFP;
+    J, K: Byte;
+  begin
+  P.SelNum := 0;
+  P.SelectedLen := 0;
+  P.PackedLen := 0;
+  for I := FirstNameNum(P) to P.Files.Count do
+    begin
+    PF := PFileRec(P.Files.At(I-1));
+    PF^.Selected := Select;
+
+    {JO}
+    if  (FMSetup.Options and fmoAlwaysCopyDesc <> 0)
+         and (FMSetup.DIZ <> '')
+      and (P.Drive.DriveType < dtArcFind)
+    then
+      begin
+      K := 1;
+      for J := 1 to Length(FMSetup.DIZ) do
+        begin
+        if  (FMSetup.DIZ[J] = ';') then
+          begin
+          if  (LowStrg(PF^.FlName[True]) = LowStrg(Copy(FMSetup.DIZ, K,
+                   J-K)))
+          then
+            PF^.Selected := False;
+          K := J+1;
+          end;
+        if J = Length(FMSetup.DIZ) then
+          if  (LowStrg(PF^.FlName[True]) = LowStrg(Copy(FMSetup.DIZ, K,
+                   J-K+1)))
+          then
+            PF^.Selected := False;
+        end;
+      end;
+    {JO}
+    P.AddSelected(PF);
+    end;
+  DrawViews(P);
+  end { SelectAllFiles };
 {-DataCompBoy-}
 
 {-DataCompBoy-}

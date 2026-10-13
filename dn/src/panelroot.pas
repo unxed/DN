@@ -55,7 +55,7 @@ interface
 
 uses
   Defines, Streams,
-  Views, Drivers, FilesCol, panelsetup, Drives, timeutil
+  Views, Drivers, FilesCol, panelsetup, Drives, timeutil, farux
   ;
 
 type
@@ -1908,6 +1908,28 @@ WrongArc:
       PanelHeight: Integer; // Panel height without the column-headers line
     begin
     PanelHeight := Size.Y-Byte((Pansetup.Show.MiscOptions and 2) <> 0);
+    { Far UX mode: Shift+Gray+ selects all, Shift+Gray- deselects all
+      (no dialog). The BIOS codes carry the numpad scan; the terminal form
+      carries the character with pure Shift and no scan. }
+    if FarUxEnabled then
+      begin
+      if (DNKeyCode(Event) = kbShiftGPlus) or
+         (((DNKeyCode(Event) and $FF) = Ord('+')) and
+          ((DNKeyCode(Event) shr 16) = 3)) then
+        begin
+        SelectAllFiles(Self, True);
+        CE;
+        Exit;
+        end;
+      if (DNKeyCode(Event) = kbShiftGMinus) or
+         (((DNKeyCode(Event) and $FF) = Ord('-')) and
+          ((DNKeyCode(Event) shr 16) = 3)) then
+        begin
+        SelectAllFiles(Self, False);
+        CE;
+        Exit;
+        end;
+      end;
     case DNKeyCode(Event) of
       kbCtrlAltShift1, kbCtrlAltShift2, kbCtrlAltShift3,
       kbCtrlAltShift4, kbCtrlAltShift5, kbCtrlAltShift6,

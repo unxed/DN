@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pty_screen import PtyTerm
 
 CURSOR = (('i', 0), ('i', 6), 0)
+SEL = (('i', 11), ('i', 8), 0)
 
 
 def w32(vk, uc=0, cs=0, sc=0):
@@ -50,6 +51,18 @@ def cursor_file(t):
     return None
 
 
+def selected_files(t):
+    # selected rows carry ('i', 11) as the first attr element; the second
+    # differs under the cursor (('i', 6) instead of ('i', 8))
+    out = []
+    for row in t.screen.cells:
+        s = ''.join(c for c, _ in row)
+        if (('alpha' in s or 'beta' in s)
+                and any(a[0] == ('i', 11) for _, a in row)):
+            out.append(s.strip()[:8])
+    return out
+
+
 def quit_dn(t):
     t.send(w32(0x58, ord('x'), 2), 0.5)           # Alt-X
     t.send(w32(0x0D, 13), 1.5)                   # Enter confirms
@@ -83,6 +96,10 @@ try:
           'FarUx on: Ctrl+Shift+Enter moves back', t)
     t.send(w32(0x1B), 1.0)                       # Esc
     check('Search:' not in t.text(), 'FarUx on: Esc leaves the search', t)
+    t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
+    check(len(selected_files(t)) == 3, 'FarUx on: Shift+Gray+ selects all', t)
+    t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub
+    check(selected_files(t) == [], 'FarUx on: Shift+Gray- deselects all', t)
     check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
@@ -91,6 +108,8 @@ d, t = start(out, False)
 try:
     t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
     check('Search:' not in t.text(), 'FarUx off: Alt+A starts no search', t)
+    t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
+    check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
     check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
