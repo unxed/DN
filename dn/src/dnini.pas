@@ -251,6 +251,11 @@ const
   {last video mode in a full-screen session}
   {}VIOScreenMode: LongInt = 65535; {JO}
   {last video mode in a windowed session}
+  {,'~~~~~~~~~~~~~~~~~~~~~~~~;~~~~~~~~~~~~;~~~~~~~~~~~~~~~~~~~~;~~~~~~~~~~~~~~~~~~`,}
+  {;      Variable name      ;   Type     ; Default value      ;          Comments ;}
+  { '._______________________;____________;____________________;___________________'}
+  {} {FilePanels: appended at the end for plugin compatibility}
+  {}FarUxMode: Boolean = False; {Far UX mode, off by default}
   {,'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`~~~~~~~~~~~~`,}
   {;                   This is end of parameters definitions                       ;}
   { '._____________________________________________________________________________'}

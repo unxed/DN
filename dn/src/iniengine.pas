@@ -374,6 +374,8 @@ procedure Proceed(RegisterVar: TDoProc);
        SizeOf(QuickRenameInDialog), @QuickRenameInDialog);
   RegisterVar(CSFilePanels, 'UpperCaseSorting', ikBool,
        SizeOf(UpperCaseSorting), @UpperCaseSorting); {JO}
+  RegisterVar(CSFilePanels, 'FarUxMode', ikBool,
+       SizeOf(FarUxMode), @FarUxMode);
   { Options / File Manager / Setup, "Left/Right by page" }
   RegisterVar(CSFilePanels, 'PanelArrowsPage', ikBool, SizeOf(PanelArrowsPage), @PanelArrowsPage);
   
