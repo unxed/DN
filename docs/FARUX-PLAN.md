@@ -110,14 +110,22 @@ idlers/gadgets/...) ~900K–1M. Арифметика: extras ~900K + редки�
 
 ## 1. RUP-план: Far UX mode (каждая итерация — атомарный коммит в main + тесты)
 
-- I1 Флаг. `FarUxMode: Boolean=False` в `dnini.pas` + `iniengine.pas` + чекбокс
-  `dlgFMSetup` (3 языка) + `setups.pas`. Поведение не меняется. Тест: новый
-  `dn/tests/t_farux.pas` (дефолт False, ini roundtrip `0/1`).
-- I2 Быстрый поиск Alt+буквы. Перехват в `TFilePanel.HandleEvent` до меню
-  (за флагом): удержание `Alt`/`Alt+Shift` + набор, `Ctrl+Enter`/`Ctrl+Shift+Enter`
-  следующий/предыдущий, `*?` в наборе, показ маски в `InfoView`. Старый `Ctrl-S`/
-  double-мод остаётся. Тесты: unit на чистую функцию матчинга + pty `tour-far-*`
-  в `tools/dn-linux-ops.py` (голые/Alt+буквы не открывают меню, кириллица тоже).
+- I1 Флаг. `FarUxMode: Boolean=False` в `dnini.pas` (append в конце блока —
+  требование совместимости плагинов) + `RegisterVar(...'FarUxMode',ikBool...)`
+  в `iniengine.pas` + accessor `FarUxEnabled` в новом MIT-юните `farux.pas`.
+  Поведение не меняется; настройка пока только ini-only (прецедент:
+  `QuickRenameInDialog`/`UpperCaseSorting` тоже без чекбокса — `dlgFMSetup`
+  правит запись `Startup.FMSetup`, а не глобалы `dnini`, привязка чекбокса
+  требует отдельной разводки и уезжает в I5). Тест: новый
+  `dn/tests/t_farux.pas` (дефолт False, accessor следует настройке).
+- I2 Быстрый поиск Alt+буквы. **I2a (готово): чистый классификатор
+  `FarFastFindChar` в `farux.pas` + unit-тесты (12 проверок).** I2b (ждёт
+  зелёного дерева): перехват в `TFilePanel.HandleEvent` до меню
+  (за флагом): удержание `Alt`/`Alt+Shift` + набор, `Ctrl+Enter`/
+  `Ctrl+Shift+Enter` следующий/предыдущий, `*?` в наборе, показ маски в
+  `InfoView`. Старый `Ctrl-S`/double-мод остаётся. Тесты: unit на чистую
+  функцию матчинга + pty `tour-far-*` в `tools/dn-linux-ops.py`
+  (голые/Alt+буквы не открывают меню, кириллица тоже).
 - I3 Таблица панелей (только существующие функции DN): `Tab/Ctrl-U/R/L/Q/T/O/P`,
   `Ctrl+F1/F2`, `Ctrl+стрелки`, `Gray+/-/*` + `Ctrl/Alt/Shift` варианты по матрице
   far2l минус `Alt+Gray*`, `Ctrl+M`, `Ctrl+H/N`, `Ctrl+F3..F12`, вставки имён
@@ -126,7 +134,8 @@ idlers/gadgets/...) ~900K–1M. Арифметика: extras ~900K + редки�
 - I4 Сервисные F и истории за флагом: `F3/F4/F5/F6/F7/F8(+Shift)`, `Alt+F1/F2/F7/
   F8/F10/F11/F12`, `Alt+Del`, `Shift+F4/F5/F6`, `Enter/Shift+Enter` в историях
   (без перемещения), `Ctrl+Enter` имени в комстроку. Тесты: pty `check()` в ops.
-- I5 Финиш: `F1/F2/F9/F10/F11`, доки (`dn/README`, help), accept `dn-linux-accept.py`.
+- I5 Финиш: `F1/F2/F9/F10/F11`, чекбокс `dlgFMSetup` (3 языка + разводка
+  `setups.pas`), доки (`dn/README`, help), accept `dn-linux-accept.py`.
   Критерий: функции DN доступны как в Far там, где они есть; нового функционала нет.
 
 ## 2. RUP-план: mini (параллельная ветка, существующий код не трогать)
