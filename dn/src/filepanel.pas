@@ -53,7 +53,7 @@ interface
 
 uses
   Defines, Streams, Views, Drivers, FilesCol,
-  panelroot, Collect, topview
+  panelroot, Collect, topview, farux
   ;
 
 type
@@ -1805,6 +1805,7 @@ procedure TFilePanel.HandleEvent(var Event: TEvent);
     I, J: LongInt;
     PDr: TDrive;
     KeyCode: LongInt; {Cat}
+    FFC: Char; { Far fast find: the letter of an Alt+letter key }
 
   procedure CE;
     begin
@@ -1879,7 +1880,31 @@ procedure TFilePanel.HandleEvent(var Event: TEvent);
     MaskSearch := False;
     end { MaskSearch };
 
-  label GotoKb;
+  function MaskSearchBack: Boolean;
+{ Far fast find: the file matching the quick-search mask before the current one }
+    var
+      I: LongInt;
+    begin
+    MaskSearchBack := True;
+    I := CurPos-1;
+    if I < 0 then
+      I := Files.Count-1;
+    repeat
+      if InMask(PFileRec(Files.At(I))^.FlName[uLfn],
+           QSMaskPlusStar)
+      then
+        begin
+        ScrollBar.SetValue(I);
+        Exit;
+        end;
+      Dec(I);
+      if I < 0 then
+        I := Files.Count-1;
+    until I = CurPos;
+    MaskSearchBack := False;
+    end { MaskSearchBack };
+
+  label lbMakeUp, GotoKb, lbMakeDown;
 
   begin { TFilePanel.HandleEvent }
   
@@ -2005,9 +2030,18 @@ procedure TFilePanel.HandleEvent(var Event: TEvent);
           CED;
           Exit
           end;
-        if DNKeyCode(Event) = kbCtrlEnter then
+        if (DNKeyCode(Event) = kbCtrlEnter) or
+           { Far UX mode: the terminal form carries the character byte
+             ($041C0A vs the BIOS $041C00); compare without it, house shr-8 style }
+           (FarUxEnabled and ((DNKeyCode(Event) shr 8) = (kbCtrlEnter shr 8))) then
           begin
           MaskSearch(1);
+          CE;
+          Exit;
+          end;
+        if FarUxEnabled and ((DNKeyCode(Event) shr 8) = (kbCtrlShiftEnter shr 8)) then
+          begin
+          MaskSearchBack;
           CE;
           Exit;
           end;
@@ -2033,6 +2067,24 @@ procedure TFilePanel.HandleEvent(var Event: TEvent);
             InfoView.DrawView; { need to change both the mask and the file data }
           QSLastSuccessPos := LastSuccessPos;
           CED;
+          Exit;
+          end;
+        end;
+
+  { Far UX mode: hold Alt and type the start of the name (before the
+    triggers below, the panel commands and the menu hotkeys) }
+      if FarUxEnabled and (not QuickSearch) then
+        begin
+        FFC := FarFastFindChar(DNKeyCode(Event));
+        if FFC <> #0 then
+          begin
+          InitQuickSearch(Self);
+          QSLastSuccessPos := LastSuccessPos;
+          DoQuickSearch(Ord(FFC));
+          if not MaskSearch(0) then
+            DoQuickSearch(kbBack);
+          DrawView;
+          CE;
           Exit;
           end;
         end;

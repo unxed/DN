@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Far UX fast find (Alt+letters) in a pty, checked on the screen: with
+[FilePanels] FarUxMode=1 Alt+A moves the cursor to alpha1 (no menu opens),
+Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
+the search; with the mode off Alt+A starts no search. The exact keys go
+over the win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
+over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
+import os
+import shutil
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pty_screen import PtyTerm
+
+CURSOR = (('i', 0), ('i', 6), 0)
+
+
+def w32(vk, uc=0, cs=0, sc=0):
+    """a press and a release of a key"""
+    return '\x1b[%d;%d;%d;1;%d;1_\x1b[%d;%d;%d;0;%d;1_' % (vk, sc, uc, cs, vk, sc, uc, cs)
+
+
+def start(out, farux):
+    d = tempfile.mkdtemp(prefix='dnfar-')
+    for f in os.listdir(out):
+        if f == 'dn' or f.upper().endswith(('.LNG', '.DLG', '.HLP')):
+            shutil.copy(os.path.join(out, f), d)
+        elif f == 'xlt':
+            shutil.copytree(os.path.join(out, f), os.path.join(d, f))
+    if farux:
+        with open(os.path.join(d, 'dn.ini'), 'w') as f:
+            f.write('[FilePanels]\nFarUxMode=1\n')
+    w = os.path.join(d, 'work')
+    os.makedirs(w)
+    open(os.path.join(w, 'alpha1.txt'), 'w').write('first\n')
+    open(os.path.join(w, 'alpha2.txt'), 'w').write('other\n')
+    open(os.path.join(w, 'beta.txt'), 'w').write('third\n')
+    t = PtyTerm(['./dn'], 100, 30, env={'TV_WIN32_INPUT': '1'}, cwd=w, exe=os.path.join(d, 'dn'))
+    t.pump(1.5, 6)
+    t.send(w32(0x1B), 1.0)                       # Esc closes the start box
+    return d, t
+
+
+def cursor_file(t):
+    for row in t.screen.cells:
+        s = ''.join(c for c, _ in row)
+        if ('alpha' in s or 'beta' in s) and CURSOR in set(a for _, a in row):
+            return s.strip()[:12]
+    return None
+
+
+def quit_dn(t):
+    t.send(w32(0x58, ord('x'), 2), 0.5)           # Alt-X
+    t.send(w32(0x0D, 13), 1.5)                   # Enter confirms
+    return t.close(4)
+
+
+out = os.path.abspath(sys.argv[1])
+fails = 0
+
+
+def check(ok, msg, t=None):
+    global fails
+    print(('PASS ' if ok else 'FAIL ') + msg)
+    if not ok:
+        fails += 1
+        if t is not None:
+            print(t.text())
+
+
+d, t = start(out, True)
+try:
+    t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
+    check('Search:' in t.text(), 'FarUx on: Alt+A shows the fast-find mask', t)
+    check(cursor_file(t) is not None and 'alpha1' in cursor_file(t),
+          'FarUx on: the cursor stands on alpha1, no menu opens', t)
+    t.send(w32(0x0D, 13, 4), 1.0)                # Ctrl+Enter
+    check(cursor_file(t) is not None and 'alpha2' in cursor_file(t),
+          'FarUx on: Ctrl+Enter moves to the next match', t)
+    t.send(w32(0x0D, 13, 20), 1.0)               # Ctrl+Shift+Enter
+    check(cursor_file(t) is not None and 'alpha1' in cursor_file(t),
+          'FarUx on: Ctrl+Shift+Enter moves back', t)
+    t.send(w32(0x1B), 1.0)                       # Esc
+    check('Search:' not in t.text(), 'FarUx on: Esc leaves the search', t)
+    check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+d, t = start(out, False)
+try:
+    t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
+    check('Search:' not in t.text(), 'FarUx off: Alt+A starts no search', t)
+    check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+print('ALL OK' if not fails else '%d FAILED' % fails)
+sys.exit(1 if fails else 0)
