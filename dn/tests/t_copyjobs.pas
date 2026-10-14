@@ -108,6 +108,7 @@ begin
     'rename and make directory are blocked');
   Check(not BackgroundCopyBlocks(cmCancel) and not BackgroundCopyBlocks(cmOK) and not BackgroundCopyBlocks(cmViewFile),
     'cancel, OK and the viewer pass');
+  Check(BackgroundCopyBlocks(cmQuit), 'quitting is blocked while a background copy runs');
   Check(not BackgroundCopyBlocks(0), 'command 0 passes');
 
 Finish;
