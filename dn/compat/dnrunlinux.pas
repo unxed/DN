@@ -42,9 +42,22 @@ uses
 var
   UserScr: TVtEmu;             { the screen of the user: what the commands drew (zeroed until the first command) }
 
+function ShortPath(const Path: String): String;
+var
+  Home: String;
+begin
+  Result := Path;
+  Home := GetEnvironmentVariable('HOME');
+  if (Home <> '') and (Path = Home) then
+    Result := '~'
+  else if (Home <> '') and (Length(Path) > Length(Home)) and (Copy(Path, 1, Length(Home)) = Home) and (Path[Length(Home) + 1] = '/') then
+    Result := '~' + Copy(Path, Length(Home) + 1, MaxInt);
+end;
+
 procedure BackendRunExternal(const CmdLine: String; Quiet: Boolean);
 var
   P: Integer;
+  Prompt: String;
 begin
   if GetEnvironmentVariable('DN_EMBED_TERM') <> '0' then
   begin
@@ -55,7 +68,9 @@ begin
     if GetEnvironmentVariable('DN_RUN_PAUSE') = '0' then P := 0
     else if GetEnvironmentVariable('DN_RUN_PAUSE') = '1' then P := 1
     else if GetEnvironmentVariable('DN_RUN_PAUSE') = '2' then P := 2;
-    VtRunScreen(UserScr, '/bin/sh', ['sh', '-c', SysCommandLineToOs(CmdLine)], '', GetCurrentDir + '$ ' + SysCommandLineToOs(CmdLine), P);
+    Prompt := ShortPath(GetCurrentDir) + '$ ';
+    { run shell with a plain prompt to avoid escape sequences that colour the command screen }
+    VtRunScreen(UserScr, '/bin/sh', ['sh', '-c', 'PS1=' + QuotedStr(Prompt) + '; export PS1; ' + SysCommandLineToOs(CmdLine)], '', Prompt + SysCommandLineToOs(CmdLine), P);
     Exit;
   end;
   SysRunShell(CmdLine);      { the terminal is given to the shell for the command }
