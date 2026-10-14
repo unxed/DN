@@ -83,7 +83,8 @@ begin
   Check(not JobEnd(L, False, False, '') and not JobEnd(L, True, False, 'x') and JobGet(L, J) and (J.State = jsCancelled) and (J.Error = ''), 'JobEnd does not change a job cancelled from outside');
   Check(JobsClearEnded = 5, 'the ended jobs of this part are cleared');
 
-  { the background mark and the one running copy (part 4b-3) }
+  { the background mark and the one running copy (part 4b-3); E from the first part still waits in the queue and would be the next one }
+  Check(JobCancel(E), 'the job left in the queue by the first part is cancelled');
   M := JobAdd('copy to /bg/', 0);
   N := JobAdd('copy to /bg2/', 0);
   Check(JobGet(M, J) and not J.Background, 'a new job is not a background one');
@@ -97,6 +98,6 @@ begin
   Check(JobEnd(M, False, False, '') and (JobRunning = 0), 'no job runs after the copy ends');
   Check(not JobSetBackground(M, False) and JobGet(M, J) and J.Background, 'the mark of a done job stays as it was');
   Check(JobStart(N) and (JobRunning = N) and JobCancel(N) and (JobRunning = 0), 'a cancelled job does not run');
-  Check(JobsClearEnded = 2, 'the jobs of the background part are cleared');
+  Check(JobsClearEnded = 3, 'the jobs of the background part and the cancelled E are cleared');
   Finish;
 end.
