@@ -20,6 +20,7 @@ type
     Total: Int64;         { bytes to copy; 0 when unknown }
     Done: Int64;          { bytes copied so far }
     Error: String;        { why the job failed (jsFailed only) }
+    Background: Boolean;  { the user sent the copy to the background: the panels work while it runs (JobSetBackground) }
   end;
 
 { Adds a job in the state jsQueued and returns its Id. }
@@ -69,6 +70,15 @@ function JobPercent(Id: LongInt): Integer;
 { The number of jobs that have not ended (queued or running). }
 function JobsActive: Integer;
 
+{ Marks a queued or running job as a background one, or takes the mark off; False for an unknown job and for one that has ended.
+  The copy loop reads the mark (JobGet) to decide whether it passes the events to the panels. }
+function JobSetBackground(Id: LongInt; Value: Boolean): Boolean;
+
+{ Id of the job that runs now (jsRunning), 0 when none. There is one copy at a time: whoever starts a copy while this is not 0
+  adds a queued job (JobAdd) instead of copying at once, because a copy in the background keeps its file list and its source
+  panel in use. }
+function JobRunning: LongInt;
+
 { Removes the jobs that have ended (done, failed, cancelled) and returns how many. The order of the others is kept. }
 function JobsClearEnded: Integer;
 
@@ -105,6 +115,7 @@ begin
   Jobs[N].Total := Total;
   Jobs[N].Done := 0;
   Jobs[N].Error := '';
+  Jobs[N].Background := False;
   Result := NextId;
   Inc(NextId);
 end;
@@ -258,6 +269,29 @@ begin
   for I := 0 to High(Jobs) do
     if Jobs[I].State in [jsQueued, jsRunning] then
       Inc(Result);
+end;
+
+function JobSetBackground(Id: LongInt; Value: Boolean): Boolean;
+var
+  I: Integer;
+begin
+  I := Find(Id);
+  Result := (I >= 0) and (Jobs[I].State in [jsQueued, jsRunning]);
+  if Result then
+    Jobs[I].Background := Value;
+end;
+
+function JobRunning: LongInt;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(Jobs) do
+    if Jobs[I].State = jsRunning then
+    begin
+      Result := Jobs[I].Id;
+      Exit;
+    end;
 end;
 
 function JobsClearEnded: Integer;
