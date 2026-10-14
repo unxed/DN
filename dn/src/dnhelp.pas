@@ -283,6 +283,7 @@ const
   hcMiscKbdLayout        = 48103;
   hcSelectPreset         = 48104;
   hcDialogItems          = 48105;
+  hcGroupRename          = 48106;
   hcSkipBadFile          = 49009;
   hcQueryAbort           = 49010;
   hc_                    = 65535;

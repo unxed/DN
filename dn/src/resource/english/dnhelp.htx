@@ -4582,6 +4582,27 @@ only).
 .topic ChangeNameCase=48093 ; [C] /DataCompBoy/ 22-05-2000
 .title Changing file names case
 
+.topic GroupRename=48106
+.title Group rename
+
+   The command renames the selected files (or the current file, if nothing
+is selected) in one step. The new name of each file is written as a mask. The
+mask is copied as it is, except for the fields in brackets:
+
+   [N]   the name without the extension
+   [E]   the extension without the dot
+   [C]   the number of the file in the group
+   [C3]  the same number with at least three digits (001, 002, ...); any
+         width from 1 to 9 can be written, [C1] ... [C9]
+   [[    a bracket
+
+   The first number is set in the "First number" field (1 by default). The
+mask and the number are remembered until DN is closed.
+   Example: for the mask {photo_[C3].[E]:_} and the first number 1 the files
+{a.jpg:_} and {b.jpg:_} become {photo_001.jpg:_} and {photo_002.jpg:_}.
+   If a file cannot be renamed, the command reports it and stops; the files
+renamed before remain renamed.
+
 .topic Path=48094 ; [C] /DataCompBoy/  3-06-2000
 .title Select path
 
