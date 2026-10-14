@@ -18,6 +18,8 @@ procedure BackendBeep(Frequency, Duration: LongInt);
 { Bytes of memory that can be used for buffers. }
 procedure BackendSerialTrace(const Msg: string);
 function BackendBatchExt: string;
+function BackendBatchHeader: string;
+function BackendBatchRunner: string;
 function BackendDefaultTempDir: string;
 function BackendDescribe: string;
 function BackendHasShortNames: Boolean;
@@ -54,6 +56,24 @@ end;
 function BackendBatchExt: string;
 begin
   Result := '.CMD';
+end;
+
+function BackendBatchHeader: string;
+begin
+{$IFDEF UNIX}
+  Result := '';                 { sh has no '@echo off' }
+{$ELSE}
+  Result := '@echo off';
+{$ENDIF}
+end;
+
+function BackendBatchRunner: string;
+begin
+{$IFDEF UNIX}
+  Result := 'sh ';              { the file is not executable: sh reads it }
+{$ELSE}
+  Result := '';
+{$ENDIF}
 end;
 
 function BackendDefaultTempDir: string;

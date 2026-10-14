@@ -21,6 +21,10 @@ function OSMemAvail: LongInt;
 procedure OSSerialTrace(const Msg: string);
 { The extension of the files that DN writes for a command interpreter (the swap batch files, the list of files): .BAT on DOS, .CMD elsewhere. }
 function OSBatchExt: string;
+{ The first line of such a file ('' if none): '@echo off' for the DOS and Windows interpreters, nothing on Unix (the shell has no such command). }
+function OSBatchHeader: string;
+{ What goes before the name of such a file in the command that runs it: 'sh ' on Unix (the file has no execute bit), '' elsewhere. }
+function OSBatchRunner: string;
 { The directory for temporary files when neither DN.INI nor TEMP and TMP name one: /tmp/ on Unix , '' elsewhere. }
 function OSDefaultTempDir: string;
 { What the system is ("Linux 6.1.0", "Windows 10.0", "DOS 7.10"): a fact for the log of the flight recorder. }
@@ -70,6 +74,16 @@ end;
 function OSBatchExt: string;
 begin
   Result := BackendBatchExt;
+end;
+
+function OSBatchHeader: string;
+begin
+  Result := BackendBatchHeader;
+end;
+
+function OSBatchRunner: string;
+begin
+  Result := BackendBatchRunner;
 end;
 
 function OSDescribe: string;

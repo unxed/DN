@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Enter on a file runs the command of its extension from dn.ext: tools/dn-linux-assoc.py OUTDIR
 dn.ext of the directory where DN starts holds `txt{touch !.!.done}`; Enter on a.txt must make a.txt.done
-(`!.!` is the name with the extension). DN writes the command into a file $DN<n>$.CMD of TEMP and runs that file."""
+(`!.!` is the name with the extension). DN writes the command into a file $DN<n>$.CMD of TEMP (no execute bit, no `@echo off`) and runs it as `sh <file>`."""
 import os, shutil, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dn_wait import DnTerm

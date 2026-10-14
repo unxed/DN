@@ -18,6 +18,8 @@ procedure BackendBeep(Frequency, Duration: LongInt);
 { Bytes of memory that can be used for buffers. }
 procedure BackendSerialTrace(const Msg: string);
 function BackendBatchExt: string;
+function BackendBatchHeader: string;
+function BackendBatchRunner: string;
 function BackendDefaultTempDir: string;
 function BackendDescribe: string;
 function BackendHasShortNames: Boolean;
@@ -103,6 +105,16 @@ end;
 function BackendBatchExt: string;
 begin
   Result := '.BAT';
+end;
+
+function BackendBatchHeader: string;
+begin
+  Result := '@echo off';
+end;
+
+function BackendBatchRunner: string;
+begin
+  Result := '';
 end;
 
 function BackendDefaultTempDir: string;
