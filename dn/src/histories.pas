@@ -727,13 +727,17 @@ procedure TTHistList.HandleEvent(var Event: TEvent);
 
   begin { TTHistList.HandleEvent }
   if  (Event.What = evKeyDown) and (List <> nil) then
+    begin
+    { AK155: do as everyone else: CtrlEnter = Drop. The terminal form carries
+      the character byte ($041C0A vs the BIOS $041C00): compare without it,
+      as filepanel.pas does }
+    if  (DNKeyCode(Event) shr 8) = (kbCtrlEnter shr 8) then
+      begin
+      EndModal(cmYes);
+      ClearEvent(Event);
+      Exit;
+      end;
     case DNKeyCode(Event) of
-      kbCtrlEnter: {AK155: do as everyone else: CtrlEnter = Drop}
-        begin
-        EndModal(cmYes);
-        ClearEvent(Event);
-        Exit;
-        end;
       kbDel:
         goto 1;
       kbShiftDown:
@@ -756,6 +760,7 @@ procedure TTHistList.HandleEvent(var Event: TEvent);
         RolledFwd := False;
         DrawView;
         end;
+    end
     end
   else if (Event.What = evBroadcast) then
     case Event.Message.Command of
