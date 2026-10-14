@@ -99,7 +99,7 @@ procedure CloseWriteStream;
     the entire unwritten part. `}
 
 implementation
-uses DnPath,
+uses DnPath, CopyJobs,
   FlightRec, mainapp, Startup, Messages, HistList, Commands,
   timeutil, Validate, TitleSet, UserMenu, Dos, DnIni,
   
@@ -460,6 +460,10 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     PathBuffer: array[0..255] of Char; {target directory}
     RC: LongInt;
     CondLfn: TUseLFN; {JO}
+    JobId: LongInt;     { the record of this copy in CopyJobs }
+    UserStop: Boolean;  { the copy was stopped by an answer of the user (Cancel), not by an error }
+    JobMsg: String;     { why the copy failed, when it stopped without a Cancel answer }
+    JobStopped: Boolean; { the copy loop ended by a Cancel or by an error (CopyCancel can be cleared to write the rest) }
 
   function MkName(const Nm: String): String;
     var
@@ -517,11 +521,14 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     if TimerExpired(_Tmr) then
       begin
       DE;
+      JobProgress(JobId, (ToRead+ToWrite) div 2);
       if C or CtrlBreakHit then
         begin
         StopDlgData := 0;
         CancelAnswer := ExecResource(dlgQueryAbort, StopDlgData);
         CopyCancel := CancelAnswer <> cmNo;
+        if CopyCancel then
+          UserStop := True;
         end;
       CtrlBreakHit := False;
       NewTimer(_Tmr, 300);
@@ -634,6 +641,8 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     D.Free;
 
     CopyCancel := I = cmCancel;
+    if CopyCancel then
+      UserStop := True;
     end { Overwrite };
 
   var
@@ -1022,6 +1031,7 @@ lRetryToReset:
                     else {case}
                       begin
                       CopyCancel := True;
+                      UserStop := True;
                       ForceDispatch;
                       Break;
                       end;
@@ -1233,6 +1243,7 @@ DoRewrite:
                 else {case}
                   begin
                   CopyCancel := True; {instead of NoWrite}
+                  UserStop := True;
                   ForceDispatch;
                   Break;
                   end;
@@ -1590,7 +1601,7 @@ lbStartWrite:
        cmOK: Goto 1;
        cmYes: begin SkipAllBad := True; Exit; end;
        cmNo: Exit;
-       cmCancel: begin CopyCancel := True; Exit; end;
+       cmCancel: begin CopyCancel := True; UserStop := True; Exit; end;
       End;
 {--- finish ------- Eugeny Zvyagintzev and Max Piwamoto 04-02-2005 ----}
       end;
@@ -2371,6 +2382,11 @@ qqqq:
   ToDo := 0;
   ToDoCopy := 0;
   ToDoClusCopy := 0;
+  UserStop := False;
+  JobStopped := False;
+  JobMsg := '';
+  JobId := JobAdd(CopyDir, 0);
+  JobStart(JobId);
   R := TRect.Create(0, 0, 60, 15); {John_SW 30-06-2005}
   Info := TWhileView.Create(R);
   if CopyOptions and cpoMove <> 0 then
@@ -2403,10 +2419,12 @@ qqqq:
   if MemBuf = nil then
     begin
     Application.OutOfMemory;
+    JobMsg := 'out of memory';
     goto 1;
     end;
   CopyQueue := TLineQueue.Create(250, 100);
   Info.Bottom := GetString(dlFC_Total)+FStr(ToDo)+GetString(dlBytes);
+  JobSetTotal(JobId, ToDo);
   Info.DrawView;
   DrvC := Drv+64;
   if  (CopyOptions and cpoCheckFree <> 0) and (Files.Count > 1)
@@ -2414,12 +2432,16 @@ qqqq:
     and (MessageBox(GetString(erNoDiskSpacePre),
         @DrvC, mfYesButton+mfNoButton) <> cmYes)
   then
+    begin
     CopyCancel := True;
+    UserStop := True;
+    end;
   if CopyCancel then
     goto 1;
   MaxRead;
   if Abort or CopyCancel then
     begin
+    JobStopped := True;
     ClrIO;
     if (StopDlgData and 1) <> 0 then
       begin
@@ -2445,6 +2467,13 @@ qqqq:
   CopyQueue := nil;
   DoneMemBuf;
 1:
+  { The record of the copy ends here: every way out of the body above comes to this label. }
+  if Abort then
+    JobEnd(JobId, True, False, 'aborted after an I/O error')
+  else if JobMsg <> '' then
+    JobEnd(JobId, True, False, JobMsg)
+  else
+    JobEnd(JobId, CopyCancel or JobStopped, UserStop, 'copy stopped by an error');
   
   Flush := ((SystemData.Options shl 3) and ossFlushDsk <> 0);
   if Flush then

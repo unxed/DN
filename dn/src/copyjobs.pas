@@ -42,6 +42,10 @@ function JobStart(Id: LongInt): Boolean;
 { Records how many bytes are copied; only for a running job. Done is kept between 0 and Total (when Total is known). }
 function JobProgress(Id: LongInt; Done: Int64): Boolean;
 
+{ Sets the number of bytes to copy, which is known only after the files are counted; for a queued or running job. A smaller Total
+  than Done brings Done down to it; a negative Total is 0 (unknown). }
+function JobSetTotal(Id: LongInt; Total: Int64): Boolean;
+
 { jsRunning -> jsDone; Done becomes Total. }
 function JobFinish(Id: LongInt): Boolean;
 
@@ -53,6 +57,11 @@ function JobCancel(Id: LongInt): Boolean;
 
 { True for a cancelled job; False for any other and for an unknown Id. }
 function JobIsCancelled(Id: LongInt): Boolean;
+
+{ Closes a running job by the way its copy ended: not Stopped -> JobFinish; Stopped by the user (ByUser) -> JobCancel; Stopped
+  otherwise (an error) -> JobFail with Msg. True when the state changed; a job that has ended already (cancelled from the list
+  while it was running, say) stays as it is. }
+function JobEnd(Id: LongInt; Stopped, ByUser: Boolean; const Msg: String): Boolean;
 
 { 0..100: the share of Total that is copied; 100 for a done job; 0 while Total is unknown. }
 function JobPercent(Id: LongInt): Integer;
@@ -160,6 +169,21 @@ begin
   Jobs[I].Done := Done;
 end;
 
+function JobSetTotal(Id: LongInt; Total: Int64): Boolean;
+var
+  I: Integer;
+begin
+  I := Find(Id);
+  Result := (I >= 0) and (Jobs[I].State in [jsQueued, jsRunning]);
+  if not Result then
+    Exit;
+  if Total < 0 then
+    Total := 0;
+  Jobs[I].Total := Total;
+  if (Total > 0) and (Jobs[I].Done > Total) then
+    Jobs[I].Done := Total;
+end;
+
 function JobFinish(Id: LongInt): Boolean;
 var
   I: Integer;
@@ -192,6 +216,16 @@ begin
   Result := (I >= 0) and (Jobs[I].State in [jsQueued, jsRunning]);
   if Result then
     Jobs[I].State := jsCancelled;
+end;
+
+function JobEnd(Id: LongInt; Stopped, ByUser: Boolean; const Msg: String): Boolean;
+begin
+  if not Stopped then
+    Result := JobFinish(Id)
+  else if ByUser then
+    Result := JobCancel(Id)
+  else
+    Result := JobFail(Id, Msg);
 end;
 
 function JobIsCancelled(Id: LongInt): Boolean;
