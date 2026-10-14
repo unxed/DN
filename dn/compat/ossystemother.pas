@@ -20,6 +20,8 @@ procedure BackendSerialTrace(const Msg: string);
 function BackendBatchExt: string;
 function BackendBatchHeader: string;
 function BackendBatchRunner: string;
+function BackendBatchDelete: string;
+function BackendBatchQuote(const S: string): string;
 function BackendDefaultTempDir: string;
 function BackendDescribe: string;
 function BackendHasShortNames: Boolean;
@@ -73,6 +75,24 @@ begin
   Result := 'sh ';              { the file is not executable: sh reads it }
 {$ELSE}
   Result := '';
+{$ENDIF}
+end;
+
+function BackendBatchDelete: string;
+begin
+{$IFDEF UNIX}
+  Result := 'rm -f ';
+{$ELSE}
+  Result := '@DEL ';
+{$ENDIF}
+end;
+
+function BackendBatchQuote(const S: string): string;
+begin
+{$IFDEF UNIX}
+  Result := '''' + S + '''';   { the names DN writes ($DN<n>$...) hold no quote }
+{$ELSE}
+  Result := S;
 {$ENDIF}
 end;
 

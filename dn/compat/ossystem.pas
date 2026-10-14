@@ -25,6 +25,10 @@ function OSBatchExt: string;
 function OSBatchHeader: string;
 { What goes before the name of such a file in the command that runs it: 'sh ' on Unix (the file has no execute bit), '' elsewhere. }
 function OSBatchRunner: string;
+{ The command that deletes a file from such a file, with a space after it: '@DEL ' for the DOS and Windows interpreters, 'rm -f ' on Unix. }
+function OSBatchDelete: string;
+{ A file name as an argument in such a file: in single quotes on Unix (sh would expand the '$' of $DN<n>$), as it is elsewhere. }
+function OSBatchQuote(const S: string): string;
 { The directory for temporary files when neither DN.INI nor TEMP and TMP name one: /tmp/ on Unix , '' elsewhere. }
 function OSDefaultTempDir: string;
 { What the system is ("Linux 6.1.0", "Windows 10.0", "DOS 7.10"): a fact for the log of the flight recorder. }
@@ -84,6 +88,16 @@ end;
 function OSBatchRunner: string;
 begin
   Result := BackendBatchRunner;
+end;
+
+function OSBatchDelete: string;
+begin
+  Result := BackendBatchDelete;
+end;
+
+function OSBatchQuote(const S: string): string;
+begin
+  Result := BackendBatchQuote(S);
 end;
 
 function OSDescribe: string;

@@ -104,6 +104,7 @@ const
   CmdExt: String[4] = '.CMD'; {command-file extension}
   CmdHeader: String[16] = '@echo off'; {first line of a command file ('' if none)}
   CmdRunner: String[4] = ''; {goes before the name of a command file in the command that runs it}
+  CmdDelete: String[8] = '@DEL '; {deletes a file from a command file, with the space after it}
 
 type
 
@@ -396,6 +397,7 @@ procedure FatalError(const S: String);
 begin
   CmdExt := OSBatchExt;           { .BAT on DOS (and Windows 9x), .CMD elsewhere }
   CmdHeader := OSBatchHeader;     { '@echo off', nothing on Unix }
-  CmdRunner := OSBatchRunner      { 'sh ' on Unix, nothing elsewhere }
+  CmdRunner := OSBatchRunner;     { 'sh ' on Unix, nothing elsewhere }
+  CmdDelete := OSBatchDelete      { '@DEL ', 'rm -f ' on Unix }
 end.
 
