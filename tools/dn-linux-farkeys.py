@@ -112,6 +112,10 @@ try:
     t.send('echo farkeys1', 0.5)                 # a command for the history
     t.send(w32(0x0D, 13), 2.0)                   # Enter runs it
     t.pump(1.0)
+    check('Press Enter' in t.text(), 'FarUx on: the command ran and DN waits for Enter', t)
+    t.send(w32(0x0D, 13), 1.5)                   # Enter brings the panels back
+    check(t.alive() and 'alpha1' in t.text() and 'Press Enter' not in t.text(),
+          'FarUx on: the panels are back after the command', t)
     t.send(w32(0x77, 0, ALT), 1.5)               # Alt+F8: the command history
     check('farkeys1' in t.text(), 'FarUx on: Alt+F8 lists the command', t)
     t.send(w32(0x0D, 13, CTRL), 1.0)             # Ctrl+Enter
