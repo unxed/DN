@@ -2650,6 +2650,7 @@ MENU dlgMainMenu
     MenuItem '~К~опіювати...', main.CopyFiles
     MenuItem '~П~ерейменувати/перенести...', main.MoveFiles
     MenuItem 'Змінити ре~г~істр імен...', main.ChangeNameCase
+    MenuItem 'Групове перей~м~енування...', main.GroupRename
     MenuItem 'К~о~піювати в архів...', main.PanelArcFiles
     MenuItem 'До~б~ути з архіву...', main.ExtractArchive
     MenuItem 'Розрі~з~ати/склеїти...', main.PanelLongCopy
@@ -4554,6 +4555,19 @@ END
 ;DataCompBoy
 
 ;DataCompBoy
+DIALOG dlgGroupRename, 62, 12, 'Групове перейменування'
+    HelpCtx hcChangeNameCase
+; the mask (String[79]) and the first number (String[9]) of CM_GroupRename
+    InputLine 2, 3, 59, 4, 79, 0
+    Label 2, 2, '~Ш~аблон нових імен', ofPostProcess, ofPreProcess
+    StaticText 2, 4, 59, 5, '[N] ім''я, [E] розширення, [C] номер, [C3] 001'
+    InputLine 24, 6, 34, 7, 9, 0
+    Label 2, 6, '~П~ерший номер', ofPostProcess, ofPreProcess
+    Button  9, 9, 21, 11, 'О~К~', cmOK, bfDefault, ofPostProcess, ofPreProcess
+    Button 22, 9, 34, 11, '~В~ідміна', cmCancel, bfNormal, ofPostProcess, ofPreProcess
+    Button 35, 9, 47, 11, 'Допомо~г~а', cmHelp, bfNormal, ofPostProcess, ofPreProcess
+END
+
 DIALOG dlgNameCase, 40, 12, 'Зміна регістра імен'
     HelpCtx hcChangeNameCase
     RadioButtons 2, 3, 22, 8, ofPostProcess, ofPreProcess

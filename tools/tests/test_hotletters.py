@@ -111,7 +111,7 @@ class HotLetterTests(unittest.TestCase):
     def test_dialogs_parsed(self):
         for lang in LANGS:
             d = dialogs(lang)
-            self.assertEqual(len(d), 91, lang)
+            self.assertEqual(len(d), 92, lang)
             self.assertGreater(sum(len(c) for c in d.values()), 1000, lang)
 
 

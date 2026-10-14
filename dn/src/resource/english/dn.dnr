@@ -509,6 +509,7 @@ MENU dlgMainMenu
     MenuItem '~C~opy...', main.CopyFiles
     MenuItem '~R~ename/Move...', main.MoveFiles
     MenuItem 'C~h~ange name case...', main.ChangeNameCase
+    MenuItem 'Group re~n~ame...', main.GroupRename
     MenuItem 'Cop~y~ to archive...', main.PanelArcFiles
     MenuItem 'Ex~t~ract archive...', main.ExtractArchive
     MenuItem '~S~plit/combine...', main.PanelLongCopy
@@ -4702,6 +4703,19 @@ END
 ;DataCompBoy
 
 ;DataCompBoy
+DIALOG dlgGroupRename, 62, 12, 'Group rename'
+    HelpCtx hcChangeNameCase
+; the mask (String[79]) and the first number (String[9]) of CM_GroupRename
+    InputLine 2, 3, 59, 4, 79, 0
+    Label 2, 2, '~M~ask of the new names', ofPostProcess, ofPreProcess
+    StaticText 2, 4, 59, 5, '[N] name, [E] extension, [C] number, [C3] 001'
+    InputLine 24, 6, 34, 7, 9, 0
+    Label 2, 6, '~F~irst number', ofPostProcess, ofPreProcess
+    Button  9, 9, 21, 11, 'O~K~', cmOK, bfDefault, ofPostProcess, ofPreProcess
+    Button 22, 9, 34, 11, '~C~ancel', cmCancel, bfNormal, ofPostProcess, ofPreProcess
+    Button 35, 9, 47, 11, '~H~elp', cmHelp, bfNormal, ofPostProcess, ofPreProcess
+END
+
 DIALOG dlgNameCase, 40, 12, 'Change names case'
     HelpCtx hcChangeNameCase
     RadioButtons 2, 3, 22, 8, ofPostProcess, ofPreProcess

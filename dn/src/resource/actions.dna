@@ -124,6 +124,7 @@ ACTION main.FindFile,                       cmFindFile, kbAltF7, 'Alt-F7', hcFil
 ACTION main.CopyFiles,                      cmCopyFiles, kbF5, 'F5', hcFileMenu
 ACTION main.MoveFiles,                      cmMoveFiles, kbF6, 'F6', hcFileMenu
 ACTION main.ChangeNameCase,                 cmChangeNameCase, kbCtrlAltF6, 'Ctrl-Alt-F6', hcFileMenu
+ACTION main.GroupRename,                    cmGroupRename, kbNoKey, '', hcFileMenu
 ACTION main.PanelArcFiles,                  cmPanelArcFiles, kbShiftF1, 'Shift-F1', hcFileMenu
 ACTION main.ExtractArchive,                 cmExtractArchive, kbShiftF2, 'Shift-F2', hcFileMenu
 ACTION main.PanelLongCopy,                  cmPanelLongCopy, kbCtrlAltF5, 'Ctrl-Alt-F5', hcFileMenu
