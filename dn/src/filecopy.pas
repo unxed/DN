@@ -506,9 +506,14 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
       CancelAnswer: word;
       C: Boolean;
     procedure DE;
+      var
+        Job: TCopyJob;
       begin
       GrdClick := True;
-      DispatchEvents(Info, C)
+      if JobGet(JobId, Job) and Job.Background then
+        DispatchEventsBackground(Info, C)
+      else
+        DispatchEvents(Info, C)
       end;
 
     begin

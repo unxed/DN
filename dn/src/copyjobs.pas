@@ -82,7 +82,14 @@ function JobRunning: LongInt;
 { Removes the jobs that have ended (done, failed, cancelled) and returns how many. The order of the others is kept. }
 function JobsClearEnded: Integer;
 
+{ True for a command that must not run while a background copy runs: it would change the files the copy reads or writes (a new copy,
+  move, delete, make directory, attributes, rename, archive, a change of the directory or a re-read of a panel). The copy loop
+  clears such a command instead of passing it to the panels (part 4b-3). Navigation, the viewer, the menus and the rest pass. }
+function BackgroundCopyBlocks(Command: Word): Boolean;
+
 implementation
+
+uses Commands;
 
 var
   Jobs: array of TCopyJob;
@@ -307,6 +314,25 @@ begin
     end;
   Result := Length(Jobs) - K;
   SetLength(Jobs, K);
+end;
+
+const
+  BlockedCommands: array[0..23] of Word = (
+    cmForceRescan, cmCopyFiles, cmTempCopyFiles, cmPanelLongCopy, cmMoveFiles, cmPanelMkDir, cmPanelErase, cmSetFAttr,
+    cmPanelReread, cmChangeDrive, cmChangeDir, cmPanelArcFiles, cmExtractArchive, cmSingleCopy, cmSingleRename, cmGroupRename,
+    cmFastRename, cmRereadDir, cmRereadInfo, cmRereadTree, cmRereadForced, cmArchiveFiles, cmTouchFile, cmChangeDirectory);
+
+function BackgroundCopyBlocks(Command: Word): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := Low(BlockedCommands) to High(BlockedCommands) do
+    if BlockedCommands[I] = Command then
+    begin
+      Result := True;
+      Exit;
+    end;
 end;
 
 end.

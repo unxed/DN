@@ -105,9 +105,14 @@ type
 
 procedure DispatchEvents(InfoView: TWhileView; var CancelParam: Boolean);
 
+{ The same for a copy in the background (dn#40, part 4b-3): the event goes to the whole program, so that the panels work; Esc and
+  the Cancel button still stop the copy, and a command that would change what the copy reads or writes is dropped
+  (CopyJobs.BackgroundCopyBlocks). }
+procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolean);
+
 implementation
 uses
-  mainapp, Commands, Dos, TitleSet, basics, strutil, fileutil, TvGlyphs
+  mainapp, Commands, CopyJobs, Dos, TitleSet, basics, strutil, fileutil, TvGlyphs
   ;
 
 constructor TPercentGauge.Create(const Bounds: TRect; AMaxValue: LongInt);
@@ -497,6 +502,25 @@ procedure DispatchEvents(InfoView: TWhileView; var CancelParam: Boolean);
     {and InfoView.MouseInView(Event.Mouse.Where)
     or (Event.What = evKeyDown) and ((Event.KeyDown.CharScan.ScanCode=kbAltS) or (Event.))
     then Application}InfoView.HandleEvent(Event);
+  end;
+
+procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolean);
+  var
+    Event: TEvent;
+  begin
+  Application.GetEvent(Event);
+  if  (Event.What = evCommand) and (Event.Message.Command = cmCancel) and
+      (Event.Message.InfoPtr = InfoView.But) or
+      (Event.What = evKeyDown) and (DNKeyCode(Event) = kbESC)
+  then
+    begin
+    InfoView.ClearEvent(Event);
+    CancelParam := True;
+    end;
+  if  (Event.What = evCommand) and BackgroundCopyBlocks(Event.Message.Command) then
+    InfoView.ClearEvent(Event);
+  if Event.What <> evNothing then
+    Application.HandleEvent(Event);
   end;
 
 end.
