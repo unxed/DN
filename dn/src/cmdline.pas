@@ -275,6 +275,7 @@ procedure TCommandLine.GetDir;
   Dec(SkyEnabled);
   NeedAbort := False;
   MakeNoSlash(Dir);
+  Dir := ShortHomePath(Dir); { the home directory as "~", like the line written before a command }
   SetDirShape;
   end { TCommandLine.GetDir };
 

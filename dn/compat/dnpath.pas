@@ -37,8 +37,15 @@ function IsQualified(const S: string): Boolean;
 function HasDriveLetter(const S: string): Boolean;
 { the separators of the other kind become those of the host }
 function NormalizeSep(const S: string): string;
+{ the path with the home directory (HOME) written as "~", like the prompt of a Unix shell: "~" for HOME itself, "~/src" for
+  HOME/src; any other path, a path when HOME is not set and every path on a host with drives (DOS, Windows) stay as they are.
+  Both the prompt of the command line and the line written before a command (DNRunLinux) use it. }
+function ShortHomePath(const S: string): string;
 
 implementation
+
+uses
+  Dos;
 
 function IsPathSep(Ch: Char): Boolean;
 begin
@@ -97,6 +104,24 @@ end;
 function NormalizeSep(const S: string): string;
 begin
   Result := TvPath.PathNative(S);
+end;
+
+function ShortHomePath(const S: string): string;
+{$IF not HasDrives}
+var
+  Home: string;
+{$ENDIF}
+begin
+  Result := S;
+{$IF not HasDrives}
+  Home := GetEnv('HOME');
+  if (Home = '') or (Length(S) < Length(Home)) or (Copy(S, 1, Length(Home)) <> Home) then
+    Exit;
+  if Length(S) = Length(Home) then
+    Result := '~'
+  else if S[Length(Home) + 1] = DnSep then
+    Result := '~' + Copy(S, Length(Home) + 1, MaxInt);
+{$ENDIF}
 end;
 
 end.

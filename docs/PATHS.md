@@ -10,7 +10,7 @@ and it has real faults (a Unix file name that holds a backslash is cut in two; "
   it stays `C:\DIR\FILE`, or `\\host\share\...`.
 * The rules of each system live in `TvPath` of tv3 (`tv/src/tvpath.pas`); `dn/compat/dnpath.pas` is a thin layer over it (`DnSep`,
   `HasDrives`, `IsPathSep`, `PathRootLen`, `IsAbsPath`, `NormalizeSep`) with what only DN needs (`ArcSep`, `DriveOf`, `DriveRoot`,
-  `HasDriveLetter`, `IsQualified`). The rest of DN does not spell a separator or a drive letter. `tools/check-paths.py` (called by `tools/check-layout.sh`)
+  `HasDriveLetter`, `IsQualified`, `ShortHomePath`: the home directory as `~` in the prompts, Unix only). The rest of DN does not spell a separator or a drive letter. `tools/check-paths.py` (called by `tools/check-layout.sh`)
   counts the places that still do, against `tools/paths-baseline.txt`; the number may only fall.
 * The members of an archive keep `\` on every host (`ArcSep`): that is the format DN's archive code has always used, it is not a host path.
 * Code that needs drives (the drive menu, `D:` hotkeys, the drive bar of a panel) asks `HasDrives` and is absent on Unix. On Unix the
