@@ -38,6 +38,7 @@ class LinuxPackageLayoutTest(unittest.TestCase):
                     "lib/dn/dn.dlg",
                     "lib/dn/dn.hlp",
                     "lib/dn/xlt",
+                    "lib/dn/dn.ext",
                     "share/applications/dn.desktop",
                     "share/icons/hicolor/scalable/apps/dn.svg",
                 ):
