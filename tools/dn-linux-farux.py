@@ -2,7 +2,7 @@
 """Far UX fast find (Alt+letters) in a pty, checked on the screen: with
 [FilePanels] FarUxMode=1 Alt+A moves the cursor to alpha1 (no menu opens),
 Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
-the search; with the mode off Alt+A starts no search; the check box "Far UX
+the search, Alt+F10 opens the folder tree and Alt+F12 the folder history; with the mode off Alt+A starts no search; the check box "Far UX
 mode" of the File Manager setup switches the mode on at once and in dn.ini. The exact keys go
 over the win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
@@ -130,6 +130,13 @@ try:
     t.send(w32(0x2D, 0, 4), 1.0)                 # Ctrl+Ins
     check('alpha1' in cmdline_row(t),
           'FarUx on: Ctrl+Ins with text inserts the name into the command line', t)
+    t.send(w32(0x1B), 0.6)                       # Esc clears the command line
+    for vk, what in ((0x79, 'Alt+F10 opens the folder tree'), (0x7B, 'Alt+F12 opens the folder history')):
+        before = t.text()
+        t.send(w32(vk, 0, 2), 1.2)               # Alt+F10 / Alt+F12
+        check(t.text() != before and t.alive(), 'FarUx on: ' + what, t)
+        t.send(w32(0x1B), 1.0)                   # Esc closes it
+        check('alpha1' in t.text(), 'FarUx on: Esc after %s returns to the panels' % what.split()[0], t)
     check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
