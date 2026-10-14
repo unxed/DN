@@ -1,6 +1,7 @@
 basics.pas 1
 calcwin.pas 1
 cmdline.pas 1
+dnexec.pas 1
 editcore.pas 2
 fsinfo.pas 1
 highlite.pas 1

@@ -1507,6 +1507,11 @@ If you want to use the filename in your command, insert a '!',
 name with extension - '!.!', directory of file - '!\'.
 To indicate the symbol '!', use '!!'.
 
+Instead of an extension, ??? may be r: followed by a regular expression that
+is matched against the whole file name, for example r:^b.*\.log$ for the
+files whose names start with b and end with .log (the mini build has no
+regular expressions and skips such entries).
+
 A fragment of the file of extensions:
 
  Asm{{    @echo off
