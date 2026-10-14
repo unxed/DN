@@ -4,7 +4,8 @@
 Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
 the search; Shift+Gray+/- select/deselect all, Ctrl+Gray+/- select/deselect
 the files with the extension of the current one, Ctrl+Gray* inverts; with
-the mode off Alt+A starts no search and the gray keys select nothing. The exact keys go
+the mode off Alt+A starts no search and the gray keys select nothing; the check box "Far UX
+mode" of the File Manager setup switches the mode on at once and in dn.ini. The exact keys go
 over the win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
@@ -169,6 +170,26 @@ try:
     check('alpha1' not in cmdline_row(t),
           'FarUx off: Ctrl+Ins with text still goes to the clipboard', t)
     check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
+d, t = start(out, False)
+try:
+    t.send(w32(0x4F, ord('o'), 2), 0.8)           # Alt+O: the menu Options
+    t.send('f', 0.6)                             # File Manager
+    t.send('s', 1.0)                             # Setup
+    check('[ ] Far UX mode' in t.text(), 'the File Manager setup shows "Far UX mode", off', t)
+    t.send(w32(0x58, ord('x'), 2), 0.6)           # Alt+X: its hot key
+    check('[X] Far UX mode' in t.text(), 'Alt+X checks "Far UX mode"', t)
+    t.send(w32(0x0D, 13), 1.0)                   # Enter: OK
+    ini = open(os.path.join(d, 'dn.ini'), errors='replace').read() if os.path.isfile(os.path.join(d, 'dn.ini')) else ''
+    check('FarUxMode=1' in ini, 'the setup writes FarUxMode=1 into dn.ini', t)
+    t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
+    check('Search:' in t.text() and cursor_file(t) is not None and 'alpha1' in cursor_file(t),
+          'the mode works at once: Alt+A finds alpha1', t)
+    t.send(w32(0x1B), 1.0)                       # Esc leaves the search
+    check(quit_dn(t) == 0, 'setup: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
 

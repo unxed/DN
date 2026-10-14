@@ -30,6 +30,7 @@ begin
   Check((Buf[0] = $0A41) and (Buf[1] = $0A42), 'MoveBuf from characters');
   { the same on the cells of tv/ (TDrawBuffer of DN) }
   FillChar(Cells, SizeOf(Cells), 0);
+  Check(CellAttr(Cells[9]) = $07, 'cells: the default colours of the terminal read as 7 on 0, not $5F');
   MoveChar(Cells, 'x', $1F, 3);
   Check((CellChar(Cells[0]) = $78) and (CellAttr(Cells[2]) = $1F) and (CellChar(Cells[3]) = 0), 'cells: MoveChar fills the characters and the attributes');
   MoveChar(Cells, 'y', 0, 2);
