@@ -3378,6 +3378,11 @@ DIALOG dlgFMSetup, 76, 22, 'Установки Менеджера Файлів'
       END
     Label 36, 17, '└─ ~Л~іва панель:', ofPostProcess, ofPreProcess
 
+; FarUxMode (dn.ini [FilePanels]): the Far keys in the panels (farux.pas)
+    CheckBoxes 36, 18, 73, 19, ofPostProcess, ofPreProcess
+      ITEM 'Режим Far U~X~'
+    END
+
     Button 37, 19, 47, 21, 'О~К~', cmOK, bfDefault, ofPostProcess, ofPreProcess
     Button 47, 19, 58, 21, 'Відміна', cmCancel, ofPostProcess, ofPreProcess
     Button 58, 19, 70, 21, 'Допомо~г~а', cmHelp, ofPostProcess, ofPreProcess
