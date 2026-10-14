@@ -1971,6 +1971,7 @@ WrongArc:
       CondLfn: TUseLFN; {JO}
       
       PanelHeight: Integer; // Panel height without the column-headers line
+      FarGray: Char; // Far UX mode: the gray key of a Ctrl combination
     begin
     PanelHeight := Size.Y-Byte((Pansetup.Show.MiscOptions and 2) <> 0);
     { Far UX mode: Shift+Gray+ selects all, Shift+Gray- deselects all
@@ -1991,6 +1992,24 @@ WrongArc:
           ((DNKeyCode(Event) shr 16) = 3)) then
         begin
         SelectAllFiles(Self, False);
+        CE;
+        Exit;
+        end;
+      { Ctrl+Gray+ / Ctrl+Gray- select / deselect the files with the
+        extension of the current one (DN: of its type, a Far user expects
+        the extension: that is Ctrl+Shift+Gray+/- of DN); Ctrl+Gray*
+        inverts with the folders, as in DN. The terminal forms count too. }
+      FarGray := FarCtrlGrayKey(DNKeyCode(Event), Event.KeyDown.VirtualKey);
+      if FarGray in ['+', '-'] then
+        begin
+        SelectExt(FarGray = '+', 10, 3, False);
+        CE;
+        Exit;
+        end;
+      if FarGray = '*' then
+        begin
+        StopQuickSearch;
+        InvertSelection(Self, True);
         CE;
         Exit;
         end;
