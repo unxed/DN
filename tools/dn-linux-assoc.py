@@ -3,7 +3,8 @@
 dn.ext of the directory where DN starts holds `txt{touch !.!.done}`; Enter on a.txt must make a.txt.done
 (`!.!` is the name with the extension). DN writes the command into a file $DN<n>$.CMD of TEMP (no execute bit, no `@echo off`) and runs it as `sh <file>`.
 The item of dn.xrn chosen by its number (Ctrl+Shift+F1 for `>1`) goes the same way through a file $DN<n>$.BAT, which deletes itself at the end
-(`rm -f '<file>'`: unquoted, sh would expand the `$DN<n>` of its name)."""
+(`rm -f '<file>'`: unquoted, sh would expand the `$DN<n>` of its name).
+A mask `r:<regular expression>` of dn.ext is matched against the whole name (`r:^b.*\.log$` runs for b1.log; not in the mini build)."""
 import os, shutil, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dn_wait import DnTerm
@@ -97,5 +98,45 @@ def by_number(out):
     return fails
 
 
+def regex_mask(out):
+    if os.environ.get('DN_MINI') == '1':
+        print('SKIP r: masks of dn.ext: the mini build (DN_MINI=1) has no regular expressions', flush=True)
+        return 0
+    d = tempfile.mkdtemp(prefix='dnassocre-')
+    fails = 0
+    try:
+        for f in os.listdir(out):
+            if f == 'dn' or f.lower().endswith(('.lng', '.dlg', '.hlp')):
+                shutil.copy(os.path.join(out, f), d)
+        w = os.path.join(d, 'work')
+        os.makedirs(w)
+        with open(os.path.join(w, 'dn.ext'), 'w') as f:
+            f.write('r:^b.*\\.log$ {touch !.!.done}\n')
+        with open(os.path.join(w, 'b1.log'), 'w') as f:
+            f.write('log\n')
+        t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'), env={'DNLNG': 'ENGLISH'})
+        t.started()
+        t.send('\x1b', 0.5)
+        t.pump(0.5, 3)
+        t.send('\x1b[F', 0.5)                      # End: b1.log (sorted by the extension: dn.ext, b1.log)
+        t.pump(0.5, 3)
+        t.send('\r', 1.0)                          # Enter: the r: line of dn.ext
+        done = os.path.join(w, 'b1.log.done')
+        stop = time.time() + 10
+        while not os.path.exists(done) and time.time() < stop:
+            t.pump(0.5, 1)
+        ok = os.path.exists(done)
+        print(('PASS ' if ok else 'FAIL ') + 'Enter on b1.log runs the line `r:^b.*\\.log$` of dn.ext: b1.log.done')
+        if not ok:
+            fails += 1
+            print('--- screen')
+            print(t.text())
+        t.send('\x1b', 0.5)
+        t.close()
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    return fails
+
+
 if __name__ == '__main__':
-    sys.exit(1 if main(sys.argv[1]) + by_number(sys.argv[1]) else 0)
+    sys.exit(1 if main(sys.argv[1]) + by_number(sys.argv[1]) + regex_mask(sys.argv[1]) else 0)

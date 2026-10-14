@@ -73,7 +73,8 @@ const
 
 implementation
 
-uses DnPath, DNRun, FlightRec,
+uses {$IFNDEF DN_MINI} SysUtils, RegExpr, {$ENDIF} { first: Abort and the like of the units below win }
+  DnPath, DNRun, FlightRec,
   
   
    realmode, 
@@ -280,6 +281,26 @@ procedure ExecString(const S: AnsiString; const WS: String);
   end;
 {/JO}
 {-DataCompBoy-}
+{ A mask of dn.ext: "r:<regular expression>" is matched against the whole name (as the regex/ masks of mc.ext; the mini build has no
+  regular expressions, so such a line never matches there), anything else is a DN filter (InExtFilter) as before }
+function ExtMaskMatches(const Name, Mask: String): Boolean;
+  begin
+  if (Length(Mask) > 2) and (Mask[1] = 'r') and (Mask[2] = ':') then
+    begin
+    Result := False;
+    {$IFNDEF DN_MINI}
+    try
+      Result := ExecRegExpr(Copy(Mask, 3, MaxInt), Name);
+    except
+      on ERegExpr do
+        Result := False;        { a wrong expression matches nothing }
+    end;
+    {$ENDIF}
+    end
+  else
+    Result := InExtFilter(Name, Mask);
+  end;
+
 function SearchExt(FileRec: PFileRec; var HS: String): Boolean;
   var
     AllRight: Boolean;
@@ -341,7 +362,7 @@ RL:
       DelRight(s1);
       if s1[1] <> ';' then
         begin
-        if InExtFilter(FName, s1) then
+        if ExtMaskMatches(FName, s1) then
           begin
           lAssignText(F1, SwpDir+'$DN'+ItoS(DNNumber)+'$'+CmdExt);
           ClrIO;
