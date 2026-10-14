@@ -4704,7 +4704,7 @@ END
 
 ;DataCompBoy
 DIALOG dlgGroupRename, 62, 12, 'Group rename'
-    HelpCtx hcChangeNameCase
+    HelpCtx hcGroupRename
 ; the mask (String[79]) and the first number (String[9]) of CM_GroupRename
     InputLine 2, 3, 59, 4, 79, 0
     Label 2, 2, '~M~ask of the new names', ofPostProcess, ofPreProcess
