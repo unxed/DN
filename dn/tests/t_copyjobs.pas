@@ -1,7 +1,7 @@
 { The model of the background copy jobs (copyjobs, dn#40 part 4): the states, the progress, the cancel and the clearing. }
 {$mode objfpc}{$H-}
 program t_copyjobs;
-uses CopyJobs;
+uses CopyJobs, Commands;
 {$I dntest.inc}
 
 var
@@ -99,5 +99,16 @@ begin
   Check(not JobSetBackground(M, False) and JobGet(M, J) and J.Background, 'the mark of a done job stays as it was');
   Check(JobStart(N) and (JobRunning = N) and JobCancel(N) and (JobRunning = 0), 'a cancelled job does not run');
   Check(JobsClearEnded = 3, 'the jobs of the background part and the cancelled E are cleared');
-  Finish;
+  { part 4b-3b: what a background copy does not let through }
+  Check(BackgroundCopyBlocks(cmCopyFiles) and BackgroundCopyBlocks(cmMoveFiles) and BackgroundCopyBlocks(cmPanelErase),
+    'copy, move and delete are blocked while a copy runs');
+  Check(BackgroundCopyBlocks(cmChangeDir) and BackgroundCopyBlocks(cmPanelReread) and BackgroundCopyBlocks(cmRereadDir),
+    'a change of the directory and a re-read of a panel are blocked');
+  Check(BackgroundCopyBlocks(cmGroupRename) and BackgroundCopyBlocks(cmSingleRename) and BackgroundCopyBlocks(cmPanelMkDir),
+    'rename and make directory are blocked');
+  Check(not BackgroundCopyBlocks(cmCancel) and not BackgroundCopyBlocks(cmOK) and not BackgroundCopyBlocks(cmViewFile),
+    'cancel, OK and the viewer pass');
+  Check(not BackgroundCopyBlocks(0), 'command 0 passes');
+
+Finish;
 end.
