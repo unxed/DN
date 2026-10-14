@@ -85,7 +85,7 @@ class TextPolicyTests(unittest.TestCase):
         spec.loader.exec_module(audit)
         glyph = re.compile(r"#(17[6-9]|18[0-9]|19[0-9]|2[01][0-9]|22[0-3]|240|249|25[0-4])\b|#\$(B[0-9A-Fa-f]|[C-D][0-9A-Fa-f]|F0|F9|FA|FB|FC|FD|FE)\b", re.I)
         palettes = _rx(r"^dn/src/(calendar|dbview|dndlgs|fviewer|palettes|panelwin|pktview|uniwin)\.pas$",
-                       r"^dn/src/(filepanel|keymap)\.pas$")              # range checks of a key, the tables of the code pages
+                       r"^dn/src/(filepanel|keymap|farux)\.pas$")       # range checks of keys, the tables of the code pages
         bad = []
         for name, data in tracked_files():
             if not re.match(r"^dn/(src|archives|compat)/.*\.(pas|inc)$", name) or _any(palettes, name):
