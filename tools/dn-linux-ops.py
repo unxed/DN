@@ -194,7 +194,10 @@ def utf8(out, d):
     t = DnTerm(['./dn'], 100, 30, cwd=cj, exe=os.path.join(d, 'dn'))
     t.started()
     t.send(F['ESC'], 0.5)
-    rows = {k: next((l for l in t.text().split('\n') if k in l), '') for k in ('abc', '\u65e5\u672c\u8a9e', 'ex')}     # the screen of the test has no cell for a combining mark
+    # only the lines of the files (the name, the extension and the column line): the frame title shows the random
+    # temporary path (dnops-ey4beexn holds 'ex'), so a bare substring may find the title instead of the file
+    files = [l for l in t.text().split('\n') if 'txt' in l and '\u2502' in l]
+    rows = {k: next((l for l in files if k in l), '') for k in ('abc', '\u65e5\u672c\u8a9e', 'ex')}     # the screen of the test has no cell for a combining mark
     ok = all(rows.values())
     col = {k: v.find('txt') for k, v in rows.items()}
     check(ok and col['abc'] == col['\u65e5\u672c\u8a9e'] + 3 and col['abc'] == col['ex'], 'UTF-8: wide letters take two columns and a combining mark none (the extension stays in its column)', t.text())
