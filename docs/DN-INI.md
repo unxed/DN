@@ -35,3 +35,8 @@ form).
 
 * `DefaultSortMode=name|ext|size|date|unsorted`: the sort of the preset panels of a DN that has no saved setup (`t_defsort`).
 * `[XLat] Enabled=`: hot keys on a non-Latin layout; more layouts in `xlat.txt` next to `dn.ini` (`tv/tests/t_xlat.pas`).
+* `[FilePanels] FarUxMode=1`: the keys of Far in the panels (off by default). Alt with letters is the fast find (Ctrl+Enter and
+  Ctrl+Shift+Enter go to the next and the previous match); Shift+Gray+ and Shift+Gray- select and deselect all files, Ctrl+Gray+ and
+  Ctrl+Gray- the files with the extension of the current one, Ctrl+Gray* inverts the selection with the folders; Ctrl+Ins with text in
+  the command line inserts the names there, Ctrl+Alt+Ins puts the full names into the clipboard (`t_farux`,
+  `tools/dn-linux-farux.py`).

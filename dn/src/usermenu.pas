@@ -871,7 +871,8 @@ function ExecUserMenu(DoGlobal: Boolean): Boolean;
         lAssignText(F1, SwpDir+'$DN'+ItoS(DNNumber)+'$'+CmdExt);
         lRewriteText(F1);
         
-        Writeln(F1.T, '@Echo off');
+        if CmdHeader <> '' then
+          Writeln(F1.T, CmdHeader);
         
         I := I-1001;
         if F <> nil then
