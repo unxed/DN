@@ -5,7 +5,7 @@ uses CopyJobs;
 {$I dntest.inc}
 
 var
-  A, B, C, D, E, F: LongInt;
+  A, B, C, D, E, F, G, H, K, L: LongInt;
   J: TCopyJob;
 
 begin
@@ -55,5 +55,32 @@ begin
 
   F := JobAdd('f', 1);
   Check(F > E, 'an id is not used twice after clearing');
+
+  { the total is set after the files are counted }
+  Check(JobSetTotal(F, 200) and JobGet(F, J) and (J.Total = 200), 'the total of a queued job can be set');
+  Check(JobStart(F) and JobProgress(F, 150) and JobSetTotal(F, 100) and JobGet(F, J) and (J.Total = 100) and (J.Done = 100), 'a smaller total brings Done down to it');
+  Check(JobSetTotal(F, -3) and JobGet(F, J) and (J.Total = 0) and (J.Done = 100), 'a negative total is 0 and Done stays');
+  Check(not JobSetTotal(F + 1000, 5), 'the total of an unknown job is not set');
+  Check(JobEnd(F, False, False, '') and JobGet(F, J) and (J.State = jsDone), 'JobEnd without a stop finishes the job');
+  Check(not JobSetTotal(F, 5), 'the total of a done job is not set');
+
+  { the sequences that FilesCopy writes: add, start, total, progress, end }
+  G := JobAdd('copy to /x/', 0);
+  Check(JobStart(G) and JobSetTotal(G, 100) and JobProgress(G, 40) and (JobPercent(G) = 40), 'a copy in progress');
+  Check(JobEnd(G, False, False, 'unused') and JobGet(G, J) and (J.State = jsDone) and (J.Done = 100) and (J.Error = ''), 'a copy that ran to the end is done');
+  Check(not JobEnd(G, True, True, '') and not JobEnd(G, True, False, 'late') and JobGet(G, J) and (J.State = jsDone) and (J.Error = ''), 'a done job is not ended again');
+
+  H := JobAdd('copy to /y/', 0);
+  Check(JobStart(H) and JobSetTotal(H, 100) and JobProgress(H, 10), 'a second copy in progress');
+  Check(JobEnd(H, True, True, 'unused') and JobGet(H, J) and (J.State = jsCancelled) and (J.Done = 10) and (J.Error = ''), 'a copy stopped by the user is cancelled');
+
+  K := JobAdd('copy to /z/', 0);
+  Check(JobStart(K) and JobProgress(K, 7), 'a third copy in progress');
+  Check(JobEnd(K, True, False, 'copy stopped by an error') and JobGet(K, J) and (J.State = jsFailed) and (J.Error = 'copy stopped by an error') and (J.Done = 7), 'a copy stopped by an error fails with the reason');
+
+  L := JobAdd('copy to /w/', 0);
+  Check(JobStart(L) and JobCancel(L), 'a running job is cancelled from outside');
+  Check(not JobEnd(L, False, False, '') and not JobEnd(L, True, False, 'x') and JobGet(L, J) and (J.State = jsCancelled) and (J.Error = ''), 'JobEnd does not change a job cancelled from outside');
+  Check(JobsClearEnded = 5, 'the ended jobs of this part are cleared');
   Finish;
 end.
