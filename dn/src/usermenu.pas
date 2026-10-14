@@ -98,7 +98,7 @@ uses DnPath,
   Lfn, {DataCompBoy}
   mainapp, basics, strutil, fileutil, Startup, Messages, Menus,
   Commands, editcore, WinClp, DNHelp, Dos, Dialogs, Tree
-  , filediz, Collect, Math
+  , filediz, Collect, Math, OSSystem
   ;
 
 type
@@ -1285,7 +1285,8 @@ RL:
     F.Free;
     Exit
     end;
-  Writeln(F1.T, '@Echo off');
+  if CmdHeader <> '' then
+    Writeln(F1.T, CmdHeader);
 
   if OS2 <> #0 then
     begin
@@ -1334,19 +1335,19 @@ RL:
   with UserParams do
     begin
     if ActiveList <> '' then
-      Writeln(F1.T, '@DEL ', ActiveList);
+      Writeln(F1.T, CmdDelete, OSBatchQuote(ActiveList));
     if PassiveList <> '' then
-      Writeln(F1.T, '@DEL ', PassiveList);
+      Writeln(F1.T, CmdDelete, OSBatchQuote(PassiveList));
     end;
 
-  Write(F1.T, '@DEL ', FreeStr);
+  Write(F1.T, CmdDelete, OSBatchQuote(FreeStr));
   Close(F1.T);
   F.Free;
 
   if OS2 <> #0 then
     S := OS2+'call '+FreeStr
   else
-    S := FreeStr;
+    S := CmdRunner+FreeStr;
 
   if TitleStr = '' then
     TitleStr := GetString(dlMenuParamLabel);

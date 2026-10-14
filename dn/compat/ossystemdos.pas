@@ -20,6 +20,8 @@ procedure BackendSerialTrace(const Msg: string);
 function BackendBatchExt: string;
 function BackendBatchHeader: string;
 function BackendBatchRunner: string;
+function BackendBatchDelete: string;
+function BackendBatchQuote(const S: string): string;
 function BackendDefaultTempDir: string;
 function BackendDescribe: string;
 function BackendHasShortNames: Boolean;
@@ -115,6 +117,16 @@ end;
 function BackendBatchRunner: string;
 begin
   Result := '';
+end;
+
+function BackendBatchDelete: string;
+begin
+  Result := '@DEL ';
+end;
+
+function BackendBatchQuote(const S: string): string;
+begin
+  Result := S;
 end;
 
 function BackendDefaultTempDir: string;
