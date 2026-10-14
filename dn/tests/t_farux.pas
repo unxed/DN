@@ -20,6 +20,18 @@ begin
   Check(FarFastFindChar(kbAltEnter) = #0, 'Alt+Enter is not a fast-find letter');
   Check(FarFastFindChar(kbAltSpace) = #0, 'Alt+Space is not a fast-find letter');
   Check(FarFastFindChar(kbF3) = #0, 'a plain F-key is not a fast-find letter');
+  Check(FarCtrlGrayKey(kbCtrlGPlus, 0) = '+', 'the BIOS Ctrl+Gray+ is a Ctrl gray key');
+  Check(FarCtrlGrayKey(kbCtrlGMinus, 0) = '-', 'the BIOS Ctrl+Gray- is a Ctrl gray key');
+  Check(FarCtrlGrayKey(kbCtrlGAst, 0) = '*', 'the BIOS Ctrl+Gray* is a Ctrl gray key');
+  Check(FarCtrlGrayKey($04002B, $6B) = '+', 'Ctrl and + of the numpad (win32 input) is Ctrl+Gray+');
+  Check(FarCtrlGrayKey($04002D, 0) = '-', 'Ctrl and - from a terminal that gives no key is Ctrl+Gray-');
+  Check(FarCtrlGrayKey($04002A, $6A) = '*', 'Ctrl and * of the numpad is Ctrl+Gray*');
+  Check(FarCtrlGrayKey($04002D, $BD) = #0, 'Ctrl and - of the main keyboard is not a gray key');
+  Check(FarCtrlGrayKey($03002B, $6B) = #0, 'Shift with + of the numpad is not a Ctrl gray key');
+  Check(FarCtrlGrayKey($0C002B, $6B) = #0, 'Ctrl+Alt with + is not a Ctrl gray key');
+  Check(FarCtrlGrayKey(kbCtrlA, 0) = #0, 'Ctrl+A is not a gray key');
   FarUxMode := False;
+  Check(FarCtrlGrayKey(kbCtrlGPlus, 0) = #0, 'no Ctrl gray key while the mode is off');
+  Check(FarCtrlGrayKey($04002B, $6B) = #0, 'no terminal Ctrl gray key while the mode is off');
   Finish;
 end.

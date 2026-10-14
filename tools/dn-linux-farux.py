@@ -2,11 +2,15 @@
 """Far UX fast find (Alt+letters) in a pty, checked on the screen: with
 [FilePanels] FarUxMode=1 Alt+A moves the cursor to alpha1 (no menu opens),
 Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
-the search, Alt+F10 opens the folder tree and Alt+F12 the folder history; with the mode off Alt+A starts no search; the check box "Far UX
+the search, Alt+F10 opens the folder tree and Alt+F12 the folder history;
+Shift+Gray+/- select/deselect all, Ctrl+Gray+/- select/deselect the files
+with the extension of the current one, Ctrl+Gray* inverts; with the mode
+off Alt+A starts no search and the gray keys select nothing; the check box "Far UX
 mode" of the File Manager setup switches the mode on at once and in dn.ini. The exact keys go
 over the win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -38,16 +42,22 @@ def start(out, farux):
     open(os.path.join(w, 'alpha1.txt'), 'w').write('first\n')
     open(os.path.join(w, 'alpha2.txt'), 'w').write('other\n')
     open(os.path.join(w, 'beta.txt'), 'w').write('third\n')
+    # another extension, sorted (by the extension, the default) after the .txt files
+    open(os.path.join(w, 'gamma.xyz'), 'w').write('fourth\n')
     t = PtyTerm(['./dn'], 100, 30, env={'TV_WIN32_INPUT': '1'}, cwd=w, exe=os.path.join(d, 'dn'))
     t.pump(1.5, 6)
     t.send(w32(0x1B), 1.0)                       # Esc closes the start box
     return d, t
 
 
+def has_file(s):
+    return 'alpha' in s or 'beta' in s or 'gamma' in s
+
+
 def cursor_file(t):
     for row in t.screen.cells:
         s = ''.join(c for c, _ in row)
-        if ('alpha' in s or 'beta' in s) and CURSOR in set(a for _, a in row):
+        if has_file(s) and CURSOR in set(a for _, a in row):
             return s.strip()[:12]
     return None
 
@@ -58,8 +68,7 @@ def selected_files(t):
     out = []
     for row in t.screen.cells:
         s = ''.join(c for c, _ in row)
-        if (('alpha' in s or 'beta' in s)
-                and any(a[0] == ('i', 11) for _, a in row)):
+        if has_file(s) and any(a[0] == ('i', 11) for _, a in row):
             out.append(s.strip()[:8])
     return out
 
@@ -103,9 +112,22 @@ try:
     t.send(w32(0x1B), 1.0)                       # Esc
     check('Search:' not in t.text(), 'FarUx on: Esc leaves the search', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
-    check(len(selected_files(t)) == 3, 'FarUx on: Shift+Gray+ selects all', t)
+    check(len(selected_files(t)) == 4, 'FarUx on: Shift+Gray+ selects all', t)
     t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub
     check(selected_files(t) == [], 'FarUx on: Shift+Gray- deselects all', t)
+    t.send('\x1b[H', 0.5)                       # Home
+    t.send('\x1b[B', 0.5)                       # Down -> alpha1.txt
+    t.send(w32(0x6B, ord('+'), 8), 1.0)          # Ctrl+NumpadAdd
+    sel = selected_files(t)
+    check(len(sel) == 3 and not any('gamma' in f for f in sel),
+          'FarUx on: Ctrl+Gray+ selects the files with the extension of the current one', t)
+    t.send(w32(0x6D, ord('-'), 8), 1.0)          # Ctrl+NumpadSub
+    check(selected_files(t) == [],
+          'FarUx on: Ctrl+Gray- deselects the files with the extension of the current one', t)
+    t.send(w32(0x6A, ord('*'), 8), 1.0)          # Ctrl+NumpadMultiply
+    check(len(selected_files(t)) == 4, 'FarUx on: Ctrl+Gray* inverts the selection', t)
+    t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub
+    check(selected_files(t) == [], 'FarUx on: Shift+Gray- deselects all again', t)
     t.send('\x1b[H', 0.5)                       # Home
     t.send('\x1b[B', 0.5)                       # Down -> alpha1
     t.send(w32(0x2D, 0, 6), 1.0)                 # Ctrl+Alt+Ins: full names
@@ -117,7 +139,7 @@ try:
     t.pump(0.5)
     editor_text = t.text()
     editor_text = editor_text[editor_text.find('Edit -'):]
-    check('work\\alpha1' in editor_text,
+    check(re.search(r'work[\\/]alpha1', editor_text) is not None,
           'FarUx on: Ctrl+Alt+Ins puts the full name into the clipboard', t)
     t.send(w32(0x1B), 1.0)                       # Esc leaves the editor
     t.pump(0.5)
@@ -147,6 +169,8 @@ try:
     check('Search:' not in t.text(), 'FarUx off: Alt+A starts no search', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
+    t.send(w32(0x6B, ord('+'), 8), 1.0)          # Ctrl+NumpadAdd
+    check(selected_files(t) == [], 'FarUx off: the terminal Ctrl+Gray+ selects nothing', t)
     t.send('\x1b[H', 0.5)                       # Home
     t.send('\x1b[B', 0.5)                       # Down -> alpha1
     t.send('q', 0.8)

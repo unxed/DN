@@ -20,7 +20,18 @@ function FarFastFindChar(KeyCode: LongInt): Char;
   (as in Far: hold Alt and type the start of the name), else #0.
   Alt+F-keys, Alt+Enter and Alt+Space give #0 here. `}
 
+function FarCtrlGrayKey(KeyCode: LongInt; VirtualKey: Word): Char;
+{` In Far UX mode: '+', '-' or '*' for Ctrl with a gray key of the numpad,
+  else #0. KeyCode is in the form of DN (DNKeyCode), VirtualKey is the
+  Windows VK_* code of the event (0 if the terminal does not tell it).
+  The BIOS codes (kbCtrlGPlus...) carry the numpad scan; a terminal gives
+  the character with pure Ctrl and no scan: it counts unless VirtualKey
+  names another key (Ctrl with '-' of the main keyboard is VK_OEM_MINUS). `}
+
 implementation
+
+uses
+  Commands;
 
 function FarUxEnabled: Boolean;
 begin
@@ -38,6 +49,39 @@ begin
   if C = #$F0 then { Alt+Space is not a file-name character }
     Exit;
   Result := C;
+end;
+
+function FarCtrlGrayKey(KeyCode: LongInt; VirtualKey: Word): Char;
+const
+  VkMultiply = $6A;
+  VkAdd = $6B;
+  VkSubtract = $6D;
+var
+  C: Char;
+  Vk: Word;
+begin
+  Result := #0;
+  if not FarUxMode then
+    Exit;
+  case KeyCode of
+    kbCtrlGPlus: Exit('+');
+    kbCtrlGMinus: Exit('-');
+    kbCtrlGAst: Exit('*');
+  end;
+  if (KeyCode shr 16) <> 4 then { pure Ctrl }
+    Exit;
+  if (KeyCode and $FF00) <> 0 then
+    Exit;
+  C := Char(KeyCode and $FF);
+  case C of
+    '+': Vk := VkAdd;
+    '-': Vk := VkSubtract;
+    '*': Vk := VkMultiply;
+  else
+    Exit;
+  end;
+  if (VirtualKey = 0) or (VirtualKey = Vk) then
+    Result := C;
 end;
 
 end.
