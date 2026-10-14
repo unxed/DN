@@ -77,7 +77,7 @@ You need: `fpc` 3.2.x (check with `fpc -iV`; on Debian/Ubuntu `sudo apt install 
 
 On Linux DN is built with UTF-8 inside (names, the editor, the clipboard, Alt+Cyrillic; quick search in the panel is Ctrl-S). The old build with a code page inside: `DN_UTF8=0 tools/build.sh linux64`.
 
-On Linux the commands of the DN command line run in the embedded terminal (`TvVtRun`): the output stays as the "user screen" (Ctrl-O, or Esc on an empty command line), interactive programs work. Settings: `DN_EMBED_TERM=0` is the old way (the terminal is handed to the shell), `DN_RUN_PAUSE=0|1|2` is wait for nothing / wait for Enter (the default) / wait only on an error.
+On Linux the commands of the DN command line run in the embedded terminal (`TvVtRun`): the output stays as the "user screen" (Ctrl-O, or Esc on an empty command line), interactive programs work. Settings: `DN_EMBED_TERM=0` is the old way (the terminal is handed to the shell), `DN_RUN_PAUSE=0|1|2` is wait for nothing (the default) / wait for Enter / wait only on an error.
 
 How all this was done and what pitfalls were met (a guide for whoever repeats the path from scratch): [`docs/MODERNIZATION-GUIDE.md`](docs/MODERNIZATION-GUIDE.md).
 

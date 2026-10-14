@@ -59,7 +59,7 @@ It needs a terminal of at least 80x25 (xterm, the Linux console, kitty, alacritt
 viewer, the editor, the clipboard (OSC 52) and Alt+Cyrillic work in any alphabet (wide CJK letters and combining marks are
 not counted right yet). The commands of the command line run in an embedded terminal (the screen of the user: Ctrl-O or Esc
 on an empty command line; DN_EMBED_TERM=0 gives the terminal to the shell, DN_RUN_PAUSE=0|1|2 sets what happens when the
-command ends).
+command ends: 0, the default, goes back to the panels at once).
 
   bin/dn             start the installed program; lib/dn/ holds the binary and its resources.
   Install the archive under /usr/local with: tar -xzf dn-VERSION-$target.tar.gz -C /usr/local --strip-components=1

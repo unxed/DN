@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Names with spaces, a missing directory, DN_RUN_PAUSE and an archive in an archive (Linux, a pty, checked on the file system): tools/dn-linux-names.py OUTDIR
   - DN_RUN_PAUSE: 1 waits for Enter after a command (the output of the shell stays), 0 goes back to the panels at once, 2 waits only when the status is not 0;
+    empty (not set) is 0;
   - a directory and files with spaces in the names: enter, make a directory, copy, delete;
   - a missing directory: `cd` to a directory that is not there, and a directory that is removed under the panel: DN stays alive;
   - a zip in a zip: the inner archive is entered and its member is listed."""
@@ -163,7 +164,7 @@ def zipzip(out):
 
 def main():
     out = os.path.abspath(sys.argv[1])
-    parts = [lambda c=c: run_pause(out, *c) for c in (('1', 'echo hello-from-dn', True), ('0', 'echo hello-from-dn', False),
+    parts = [lambda c=c: run_pause(out, *c) for c in (('', 'echo hello-from-dn', False), ('1', 'echo hello-from-dn', True), ('0', 'echo hello-from-dn', False),
                                                       ('2', 'echo hello-from-dn', False), ('2', 'echo hello-from-dn; false', True))]
     if os.environ.get('DN_MINI') == '1':        # the mini build (dn/build.env) has no embedded terminal: DN_RUN_PAUSE is its setting
         print('SKIP DN_RUN_PAUSE: the mini build (DN_MINI=1) has no embedded terminal', flush=True)

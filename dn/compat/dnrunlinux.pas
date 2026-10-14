@@ -1,8 +1,8 @@
 { DNRunLinux: running an external program from DN on Linux (the backend of the facade DNRun).
   Moved from DNRun (platform separation, stage 3): the code is the same, only the place is new. The command runs on a pty on the whole screen through the
   emulator of tv/ (TvVtRun: the keys go to the command, the screen stays as the user screen, Ctrl-O shows it); DN_EMBED_TERM=0 gives the terminal to
-  /bin/sh -c as before (SysRunShell), Enter returns. DN_RUN_PAUSE: what happens when the command ends: 1 (default) "Press Enter", 0 back to the panels at once,
-  2 the pause only when the status is not 0. The mini build (DN_MINI) has no emulator: the command always gets the terminal.
+  /bin/sh -c as before (SysRunShell), Enter returns. DN_RUN_PAUSE: what happens when the command ends: 0 (default) back to the panels at once, as in mc (the output
+  stays on the user screen), 1 "Press Enter", 2 the pause only when the status is not 0. The mini build (DN_MINI) has no emulator: the command always gets the terminal.
   MIT, see LICENSE. }
 {$mode objfpc}{$H-}
 unit DNRunLinux;
@@ -49,8 +49,8 @@ var
 begin
   if GetEnvironmentVariable('DN_EMBED_TERM') <> '0' then
   begin
-    { the pause: DN_RUN_PAUSE 0 never, 1 always (default), 2 when the status is not 0 }
-    P := 1;
+    { the pause: DN_RUN_PAUSE 0 never (default, unxed/dn#33), 1 always, 2 when the status is not 0 }
+    P := 0;
     if Quiet then
       P := 2;
     if GetEnvironmentVariable('DN_RUN_PAUSE') = '0' then P := 0
