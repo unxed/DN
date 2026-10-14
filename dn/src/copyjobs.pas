@@ -83,8 +83,9 @@ function JobRunning: LongInt;
 function JobsClearEnded: Integer;
 
 { True for a command that must not run while a background copy runs: it would change the files the copy reads or writes (a new copy,
-  move, delete, make directory, attributes, rename, archive, a change of the directory or a re-read of a panel). The copy loop
-  clears such a command instead of passing it to the panels (part 4b-3). Navigation, the viewer, the menus and the rest pass. }
+  move, delete, make directory, attributes, rename, archive, a change of the directory or a re-read of a panel), or quit before the
+  user can cancel the copy from the jobs list. The copy loop clears such a command instead of passing it to the panels. Navigation,
+  the viewer, the menus and the rest pass. }
 function BackgroundCopyBlocks(Command: Word): Boolean;
 
 implementation
@@ -317,10 +318,11 @@ begin
 end;
 
 const
-  BlockedCommands: array[0..23] of Word = (
+  BlockedCommands: array[0..24] of Word = (
     cmForceRescan, cmCopyFiles, cmTempCopyFiles, cmPanelLongCopy, cmMoveFiles, cmPanelMkDir, cmPanelErase, cmSetFAttr,
     cmPanelReread, cmChangeDrive, cmChangeDir, cmPanelArcFiles, cmExtractArchive, cmSingleCopy, cmSingleRename, cmGroupRename,
-    cmFastRename, cmRereadDir, cmRereadInfo, cmRereadTree, cmRereadForced, cmArchiveFiles, cmTouchFile, cmChangeDirectory);
+    cmFastRename, cmRereadDir, cmRereadInfo, cmRereadTree, cmRereadForced, cmArchiveFiles, cmTouchFile, cmChangeDirectory,
+    cmQuit);
 
 function BackgroundCopyBlocks(Command: Word): Boolean;
 var
