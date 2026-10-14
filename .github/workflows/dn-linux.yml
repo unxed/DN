@@ -120,6 +120,7 @@ jobs:
               python3 tools/dn-linux-sortmark.py out/dn
               python3 tools/dn-linux-qsearch.py out/dn
               python3 tools/dn-linux-places.py out/dn
+              python3 tools/dn-linux-assoc.py out/dn
               python3 tools/dn-linux-find.py out/dn
               python3 tools/dn-linux-resize.py out/dn
               python3 tools/dn-linux-dlgresize.py out/dn
