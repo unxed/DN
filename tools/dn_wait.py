@@ -49,6 +49,8 @@ class DnTerm(PtyTerm):
         e = dict(os.environ)
         e.update({'TERM': 'xterm-256color', 'COLORTERM': '', 'COLUMNS': str(cols), 'LINES': str(rows)})
         e.update(env or {})
+        # the tests were written with "Press Enter" after a command, the default before unxed/dn#33; DN_RUN_PAUSE='' is the default of DN
+        e.setdefault('DN_RUN_PAUSE', '1')
         if exe and os.path.basename(exe) == 'dn' and 'DN2' not in e:
             e['DN2'] = os.path.dirname(os.path.abspath(exe))
         # TEMP of its own, next to the copy of DN: DN writes files of fixed names there ($dntest.swp, $DN0$.LST), and the copies that run side by side

@@ -212,6 +212,8 @@ class PtyTerm:
         # the directory of the program and of the files together, as it was before the move); a test of the default place passes env={'DN2': ''}
         if exe and os.path.basename(exe) == 'dn' and 'DN2' not in e:
             e['DN2'] = os.path.dirname(os.path.abspath(exe))
+        # the tests were written with "Press Enter" after a command, the default before unxed/dn#33; DN_RUN_PAUSE='' is the default of DN
+        e.setdefault('DN_RUN_PAUSE', '1')
         winsz = struct.pack('HHHH', rows, cols, 0, 0)
         self.pid, self.fd = pty.fork()
         self.status = None
