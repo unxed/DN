@@ -863,8 +863,12 @@ function TDrive.GetDirectory( const FileMask: String; var TotalInfo: TSize): TFi
     MAvail: LongInt;
     SearchAttr: word;
     PName: PString; //AK155 In SR the name for mask comparison
+    UpDate, UpCreationDate, UpLastAccDate: LongInt; // times of the '..' entry
   begin
   ClrIO;
+  UpDate := 0;
+  UpCreationDate := 0;
+  UpLastAccDate := 0;
   PName := @SR.FullName;
   
   if (Panel <> nil) and
@@ -896,6 +900,12 @@ function TDrive.GetDirectory( const FileMask: String; var TotalInfo: TSize): TFi
   while (DosError = 0) and not Abort and (MAvail > MemReq)
   do
     begin
+    if  SR.SR.Name = '..' then
+      begin { the panel shows the date of the parent directory in the line at the bottom }
+      UpDate := SR.SR.Time;
+      UpCreationDate := SR.SR.CreationTime;
+      UpLastAccDate := SR.SR.LastAccessTime;
+      end;
     if not IsDummyDir(SR.SR.Name) and
       ((SR.SR.Attr and Directory <> 0) or InFilter(PName^, FileMask))
     then
@@ -923,7 +933,7 @@ function TDrive.GetDirectory( const FileMask: String; var TotalInfo: TSize): TFi
     begin
     Files.AtInsert(0, NewFileRec('..',
        '..', 
-      -1, 0, 0, 0, Directory, @CurDir));
+      -1, UpDate, UpCreationDate, UpLastAccDate, Directory, @CurDir));
     end;
   GetDirectory := Files;
   end { TDrive.GetDirectory };
