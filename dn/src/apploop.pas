@@ -74,7 +74,7 @@ uses
   osdep, dirwatch, fileutil, mainapp, gadgets,
   Drives, basics, envutil, Commands,
   boot, UserMenu, Messages, Startup,
-  panelroot, Macro
+  panelroot, Macro, farux, panelwinx
   ;
 
 (*{$I  runcmd.inc}*)
@@ -153,6 +153,27 @@ procedure MyApp.GetEvent(var Event: TEvent);
         Event.What := evNothing;
         ScreenGrabber(False);
         Exit
+        end;
+      { Far UX mode: in the file manager window Alt+F9 changes the screen mode, Alt+F10 opens the folder tree and Alt+F12
+        the folder history, as in Far (in DN they are the game, user mode 1 and the language). The editor and the
+        other windows keep their own Alt+F keys. }
+      if FarUxEnabled and (not MacroPlaying) and (Pointer(Current) = Pointer(MainApp.Desktop))
+        and (MainApp.Desktop.Current is TXDoubleWindow)
+      then
+        begin
+        case DNKeyCode(Event) of
+          kbAltF9: W := cmChScreenMode;
+          kbAltF10: W := cmDirTree;
+          kbAltF12: W := cmDirHistory;
+          else W := 0;
+        end {case};
+        if W <> 0 then
+          begin
+          Event.What := evCommand;
+          Event.Message.Command := W;
+          Event.Message.InfoPtr := nil;
+          Exit;
+          end;
         end;
       if  (Event.KeyDown.CharScan.ScanCode >= ((kbCtrlF1 shr 8) and $FF))
              and (Event.KeyDown.CharScan.ScanCode <= ((kbCtrlF10 shr 8) and $FF))
