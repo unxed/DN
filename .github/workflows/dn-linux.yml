@@ -125,6 +125,7 @@ jobs:
               python3 tools/dn-linux-dlgresize.py out/dn
               python3 tools/dn-linux-embterm.py out/dn
               python3 tools/dn-linux-kitty.py out/dn
+              python3 tools/dn-linux-farkeys.py out/dn
           - name: stage 10 dialogs
             cmds: |
               python3 tools/dn-linux-scrollchars.py out/dn
