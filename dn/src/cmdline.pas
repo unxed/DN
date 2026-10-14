@@ -275,6 +275,7 @@ procedure TCommandLine.GetDir;
   Dec(SkyEnabled);
   NeedAbort := False;
   MakeNoSlash(Dir);
+  Dir := ShortHomePath(Dir); { the home directory as "~", like the line written before a command }
   SetDirShape;
   end { TCommandLine.GetDir };
 
@@ -397,7 +398,7 @@ procedure TCommandLine.Draw;
   New(S);
   S^:= (Cut(Copy(Dir, 1,
            Length(Dir)-1), 49)+Dir[Length(Dir)]);
-  SW := CStrLen(S^);
+  SW := CellsIn(S^); { the prompt is written as it is (MoveStr): CStrLen would skip the "~" of the home directory }
   C3 := $0F;
   C1 := $07;
   if Overwrite then

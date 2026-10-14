@@ -37,22 +37,10 @@ end;
 
 {$ELSE}
 uses
-  SysUtils, osdep, TvVt, TvVtRun;
+  SysUtils, osdep, DnPath, TvVt, TvVtRun;
 
 var
   UserScr: TVtEmu;             { the screen of the user: what the commands drew (zeroed until the first command) }
-
-function ShortPath(const Path: String): String;
-var
-  Home: String;
-begin
-  Result := Path;
-  Home := GetEnvironmentVariable('HOME');
-  if (Home <> '') and (Path = Home) then
-    Result := '~'
-  else if (Home <> '') and (Length(Path) > Length(Home)) and (Copy(Path, 1, Length(Home)) = Home) and (Path[Length(Home) + 1] = '/') then
-    Result := '~' + Copy(Path, Length(Home) + 1, MaxInt);
-end;
 
 procedure BackendRunExternal(const CmdLine: String; Quiet: Boolean);
 var
@@ -69,7 +57,7 @@ begin
     else if GetEnvironmentVariable('DN_RUN_PAUSE') = '1' then P := 1
     else if GetEnvironmentVariable('DN_RUN_PAUSE') = '2' then P := 2;
     { the line written before the command, like the prompt of a shell: the directory with ~ for the home directory }
-    Prompt := ShortPath(GetCurrentDir) + '$ ';
+    Prompt := ShortHomePath(GetCurrentDir) + '$ ';
     VtRunScreen(UserScr, '/bin/sh', ['sh', '-c', SysCommandLineToOs(CmdLine)], '', Prompt + SysCommandLineToOs(CmdLine), P);
     Exit;
   end;

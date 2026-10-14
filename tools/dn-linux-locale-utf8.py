@@ -31,7 +31,8 @@ def install(out):
 
 
 def cmdline(text):
-    return [l for l in text.split('\n') if l.startswith('/') and '>' in l][:1]
+    # the prompt of the command line: the directory, with HOME written as "~" (HOME is the test directory here)
+    return [l for l in text.split('\n') if l.startswith(('/', '~')) and '>' in l][:1]
 
 
 def one(out, loc, utf8_ok):
