@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """The build with UTF-8 inside under locales that are not UTF-8 (Linux, a pty): tools/dn-linux-locale-utf8.py OUTDIR
 The names of files and the typed text are UTF-8 whatever the locale says (C, POSIX, KOI8-R); under a Latin-1 locale DN stays alive and ASCII works
-(a terminal that sends UTF-8 to a program that thinks it is Latin-1 is a mistake of the setup, not shown as a fault of DN)."""
+(a terminal that sends UTF-8 to a program that thinks it is Latin-1 is a mistake of the setup, not shown as a fault of DN).
+In a directory with a Russian name the cursor of the command line stands right after the typed text and a click lands on the character under
+the mouse (the prompt is measured in columns, not in bytes: dn#52)."""
 import os, shutil, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dn_wait import DnTerm, side_by_side
@@ -61,6 +63,34 @@ def one(out, loc, utf8_ok):
         shutil.rmtree(d, ignore_errors=True)
 
 
+def prompt(out):
+    d, w = install(out)
+    try:
+        w = os.path.join(w, '\u041a\u0430\u0442\u0430\u043b\u043e\u0433')         # a name of 7 characters and 14 bytes
+        os.makedirs(w)
+        e = {'DNLNG': 'ENGLISH', 'DN2': d, 'HOME': d, 'LC_ALL': 'C.UTF-8', 'LANG': 'C.UTF-8'}
+        t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'), env=e)
+        t.started()
+        t.send('\x1b', 0.5)
+        t.send('abc', 0.6)
+        rows = [(y, ''.join(c for c, _ in r)) for y, r in enumerate(t.screen.cells)]
+        line = [(y, r) for y, r in rows if '\u041a\u0430\u0442\u0430\u043b\u043e\u0433>abc' in r][:1]
+        check(line, 'prompt: the command line shows the Russian directory and the typed text', t.text())
+        if line:
+            y, r = line[0]
+            x = r.index('>abc') + 1                                    # the column of "a"
+            check((t.screen.x, t.screen.y) == (x + 3, y), 'prompt: the cursor stands right after the typed text',
+                  'cursor %r, expected %r: %r' % ((t.screen.x, t.screen.y), (x + 3, y), r.rstrip()))
+            t.send('\x1b[<0;%d;%dM\x1b[<0;%d;%dm' % (x + 2, y + 1, x + 2, y + 1), 0.5)   # a click on "b"
+            t.send('X', 0.6)
+            check(any('>aXbc' in ''.join(c for c, _ in r) for r in t.screen.cells), 'prompt: a click puts the cursor on the character under the mouse',
+                  t.text())
+        check(t.alive() and 'Fatal' not in t.text(), 'prompt: DN is alive')
+        t.close(0.3)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 out = os.path.abspath(sys.argv[1])
-side_by_side([lambda c=c: one(out, *c) for c in (('C', True), ('POSIX', True), ('ru_RU.KOI8-R', True), ('ru_RU.UTF-8', True), ('en_US.UTF-8', True), ('en_US.ISO-8859-1', False))])      # each locale in a directory of its own, all at once
+side_by_side([lambda: prompt(out)] + [lambda c=c: one(out, *c) for c in (('C', True), ('POSIX', True), ('ru_RU.KOI8-R', True), ('ru_RU.UTF-8', True), ('en_US.UTF-8', True), ('en_US.ISO-8859-1', False))])      # each locale in a directory of its own, all at once
 sys.exit(1 if bad else 0)
