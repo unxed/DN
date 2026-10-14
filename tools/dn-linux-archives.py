@@ -468,6 +468,7 @@ def jobs(names: list) -> list:
         ('simple.tar.bz2', 'inside', 'BZ2:'),
         ('simple.tar.xz', 'inside', 'XZ:'),
         ('simple.txz', 'inside', 'XZ:'),
+        ('simple.zoo', 'inside', 'ZOO:'),
         ('outer.zip', 'inner', 'ZIP:'),
     ):
         if name not in names:

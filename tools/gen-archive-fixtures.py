@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,27 @@ def write_member(dirpath: str, name: str = 'inside.txt', body: str = 'hello from
     with open(path, 'w', encoding='utf-8') as f:
         f.write(body)
     return name
+
+
+def write_zoo(path: str, name: str, body: bytes) -> None:
+    """a ZOO archive with one stored member (no packer needed): the header of 34 bytes, a directory entry of type 2 and the
+    entry that ends the list (an empty name)"""
+    magic = 0xFDC4A7DC
+    start = 34
+    entry_len = 38 + 13 + 7            # the fixed part, the 8.3 name, then var_dir_len, tz, dir_crc, namlen, dirlen
+    data_at = start + entry_len
+    end_at = data_at + len(body)
+    date, time_ = (2026 - 1980) << 9 | 10 << 5 | 14, 12 << 11
+
+    def entry(fname: bytes, next_at: int, offset: int, size: int) -> bytes:
+        return (struct.pack('<IBBIIHHHIIBBBBIH', magic, 2, 0, next_at, offset, date, time_, 0, size, size, 2, 0, 0, 0, 0, 0)
+                + fname.ljust(13, b'\0') + struct.pack('<HBHBB', 0, 127, 0, 0, 0))
+
+    with open(path, 'wb') as f:
+        f.write(b'ZOO 2.10 Archive.\x1a\0\0' + struct.pack('<IIiBB', magic, start, -start, 2, 0))
+        f.write(entry(name.encode('ascii'), end_at, data_at, len(body)))
+        f.write(body)
+        f.write(entry(b'', 0, 0, 0))
 
 
 def main() -> int:
@@ -84,6 +106,10 @@ def main() -> int:
         # gzip -n keeps name; result plain.txt.gz
         if os.path.exists(os.path.join(out, 'plain.txt.gz')):
             made.append('plain.txt.gz')
+
+    # zoo (written here: the format is simple and the packer is rarely installed)
+    write_zoo(os.path.join(out, 'simple.zoo'), 'inside.txt', b'hello from fixture\n')
+    made.append('simple.zoo')
 
     if have('7z'):
         run(['7z', 'a', '-bd', '-y', os.path.join(out, 'simple.7z'), 'inside.txt'], cwd=stage)

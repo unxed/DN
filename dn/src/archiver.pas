@@ -787,7 +787,7 @@ procedure PrepareArchiveDialog(D: TView);
     Exit;
   M := 0;
   for I := 0 to TRadioButtons(P).Strings.Count-1 do
-    if not (I in [arcARJ, arcCAB, arcLHA, arcRAR, arcZIP, arcTAR, arcTGZ, arc7Z, arcBZ2, arcXZ]) then
+    if not (I in [arcARJ, arcCAB, arcLHA, arcRAR, arcZIP, arcTAR, arcTGZ, arc7Z, arcBZ2, arcXZ, arcZOO]) then
       M := M or (LongWord(1) shl I);
   TRadioButtons(P).SetButtonState(M, False);
   end;
