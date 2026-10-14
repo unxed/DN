@@ -98,8 +98,13 @@ type
     procedure HandleEvent(var Event: TEvent); override;
     destructor Destroy; override;
     procedure ClearInterior;
+    { The copy window offers the second button "Background" (cmCopyBackground, dn#40 part 4); Value = False takes it away again,
+      the window of a copy that is in the background has only "Stop". }
+    procedure OfferBackground(Value: Boolean);
   private
     Side: (sdLeft, sdRight);
+    BgBut: TButton;
+    BackgroundOffered: Boolean;
     procedure InsBut;
     end;
 
@@ -197,11 +202,42 @@ procedure TBarGauge.Draw;
 procedure TWhileView.InsBut;
   var
     R: TRect;
+    X: Integer;
   begin
+  if BgBut <> nil then
+    begin
+    BgBut.Free;
+    BgBut := nil;
+    end;
+  if BackgroundOffered then
+    begin
+    { "Stop" (12 columns), two spaces, "Background" (16 columns), together in the middle of the window }
+    X := (Size.X-30) div 2;
+    R := TRect.Create(X, Size.Y-3, X+12, Size.Y-1);
+    But := TButton.Create(R, GetString(dlStop), cmCancel, bfDefault);
+    Insert(But);
+    R := TRect.Create(X+14, Size.Y-3, X+30, Size.Y-1);
+    BgBut := TButton.Create(R, GetString(dlCopyBackground), cmCopyBackground, bfNormal);
+    Insert(BgBut);
+    Exit;
+    end;
   R := TRect.Create(1, Size.Y-3, 13, Size.Y-1);
   But := TButton.Create(R, GetString(dlStop), cmCancel, bfDefault);
   But.Options := But.Options or ofCenterX;
   Insert(But);
+  end;
+
+procedure TWhileView.OfferBackground(Value: Boolean);
+  begin
+  if Value = BackgroundOffered then
+    Exit;
+  BackgroundOffered := Value;
+  Lock;
+  But.Free;
+  But := nil;
+  InsBut;
+  UnLock;
+  DrawView;
   end;
 
 constructor TWhileView.Create(const Bounds: TRect);
@@ -210,6 +246,8 @@ constructor TWhileView.Create(const Bounds: TRect);
   begin
   inherited Create(Bounds);
   QuitNormal := False;
+  BgBut := nil;
+  BackgroundOffered := False;
   Options := (Options or ofCentered or ofTopSelect) and not ofSelectable;
   Lines := TLineCollection.Create(Bounds.B.Y-Bounds.A.Y, 10, False);
   for I := 0 to Bounds.B.Y-Bounds.A.Y-2 do
@@ -482,11 +520,25 @@ destructor TWhileView.Destroy;
   inherited Destroy;
   end;
 
+{ The "Background" button of the copy window: the running copy goes to the background (CopyJobs.JobSetBackground) and the window keeps
+  only "Stop"; from the next call on the events go to the whole program (DispatchEventsBackground). }
+procedure SendToBackground(InfoView: TWhileView; var Event: TEvent);
+  begin
+  if  (Event.What <> evCommand) or (Event.Message.Command <> cmCopyBackground) or (InfoView.BgBut = nil) or
+      (Event.Message.InfoPtr <> InfoView.BgBut)
+  then
+    Exit;
+  InfoView.ClearEvent(Event);
+  if JobSetBackground(JobRunning, True) then
+    InfoView.OfferBackground(False);
+  end;
+
 procedure DispatchEvents(InfoView: TWhileView; var CancelParam: Boolean);
   var
     Event: TEvent;
   begin
   Application.GetEvent(Event);
+  SendToBackground(InfoView, Event);
   if  (Event.What = evCommand) and (Event.Message.Command = cmCancel) and
       (Event.Message.InfoPtr = InfoView.But) or
       (Event.What = evKeyDown) and (DNKeyCode(Event) = kbESC)

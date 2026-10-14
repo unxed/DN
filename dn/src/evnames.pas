@@ -22,7 +22,7 @@ type
   end;
 
 const
-  Commands: array[0..603] of TNameRec = (
+  Commands: array[0..604] of TNameRec = (
     (V: 0; N: 'cmValid'),
     (V: 1; N: 'cmQuit'),
     (V: 2; N: 'cmError'),
@@ -163,6 +163,7 @@ const
     (V: 209; N: 'cmNetInfo'),
     (V: 210; N: 'cmDizView'),
     (V: 211; N: 'cmGroupRename'),
+    (V: 212; N: 'cmCopyBackground'),
     (V: 221; N: 'cmPhoneBookMode'),
     (V: 222; N: 'cmImportPhones'),
     (V: 223; N: 'cmSearchPhone'),

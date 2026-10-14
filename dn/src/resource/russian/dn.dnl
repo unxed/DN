@@ -518,6 +518,7 @@ dlStartingCluster,         '~Н~ачальный кластер'
 dlStartingSector,          '~Н~ачальный сектор'
 dlStdDlgManyFiles,         ^C'Много файлов.'
 dlStop,                    '~С~топ'
+dlCopyBackground,          'В ~ф~оне'
 dlStoreColorPal,           'Запомнить цветовую палитру'
 
 dlSystemInfo               'Системная информация'
