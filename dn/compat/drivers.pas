@@ -823,7 +823,7 @@ end;
 
 function CellAttr(const Cell: TScreenCell): Byte;
 begin
-  Result := Byte(Cell.Attribute);
+  Result := Cell.Attribute.ToBIOS;        { the default colours give 7 on 0, RGB and XTerm the nearest BIOS colour (Byte() gives $5F for them) }
 end;
 
 procedure WordsToCells(var Dest: TScreenCell; const Source; Count: Integer);
