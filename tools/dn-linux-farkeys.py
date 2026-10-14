@@ -118,7 +118,7 @@ try:
           'FarUx on: the panels are back after the command', t)
     t.send(w32(0x77, 0, ALT), 1.5)               # Alt+F8: the command history
     check('farkeys1' in t.text(), 'FarUx on: Alt+F8 lists the command', t)
-    t.send(w32(0x0D, 13, CTRL), 1.0)             # Ctrl+Enter
+    t.send(w32(0x0D, 13, 4), 1.0)                # Ctrl+Enter (RIGHT_CTRL, as in dn-linux-farux.py)
     check('farkeys1' in cmdline_row(t),
           'FarUx on: Ctrl+Enter in the history puts the command into the command line', t)
     t.send(w32(0x1B), 0.6)                       # Esc clears the command line
