@@ -2674,7 +2674,7 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
         if CheckExit then
            {JO}
           begin
-          ST := SwpDir+'$DN'+ItoS(DNNumber)+'$'+CmdExt+' '+ST;
+          ST := CmdRunner+SwpDir+'$DN'+ItoS(DNNumber)+'$'+CmdExt+' '+ST;
           ExecString(ST, '');
           if RunMenu then
             begin

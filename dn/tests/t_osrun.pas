@@ -42,6 +42,11 @@ begin
   Check(OSBatchExt = '.CMD', 'batch extension elsewhere');
 {$ENDIF}
 {$IFDEF UNIX}
+  Check((OSBatchHeader = '') and (OSBatchRunner = 'sh '), 'a command file of Unix: no @echo off, run by sh');
+{$ELSE}
+  Check((OSBatchHeader = '@echo off') and (OSBatchRunner = ''), 'a command file elsewhere: @echo off, run by name');
+{$ENDIF}
+{$IFDEF UNIX}
   Check(OSDefaultTempDir = '/tmp/', 'default temporary directory of Unix');
 {$ELSE}
   Check(OSDefaultTempDir = '', 'no default temporary directory elsewhere');

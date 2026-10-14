@@ -102,6 +102,8 @@ const
   ConfigModified: Boolean = False;
   SkyDelay: Byte = 1;
   CmdExt: String[4] = '.CMD'; {command-file extension}
+  CmdHeader: String[16] = '@echo off'; {first line of a command file ('' if none)}
+  CmdRunner: String[4] = ''; {goes before the name of a command file in the command that runs it}
 
 type
 
@@ -392,6 +394,8 @@ procedure FatalError(const S: String);
 { becouse there is TOO MUCH filetypes with these extensions }
 
 begin
-  CmdExt := OSBatchExt            { .BAT on DOS (and Windows 9x), .CMD elsewhere }
+  CmdExt := OSBatchExt;           { .BAT on DOS (and Windows 9x), .CMD elsewhere }
+  CmdHeader := OSBatchHeader;     { '@echo off', nothing on Unix }
+  CmdRunner := OSBatchRunner      { 'sh ' on Unix, nothing elsewhere }
 end.
 

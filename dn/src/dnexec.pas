@@ -352,7 +352,8 @@ RL:
             Exit;
             end;
           
-          Writeln(F1.T, '@echo off');
+          if CmdHeader <> '' then
+            Writeln(F1.T, CmdHeader);
           
           System.Delete(s, 1, PosChar(BgCh, s));
           repeat
@@ -566,7 +567,7 @@ procedure ExecFile(const FileName: String);
     if SearchExt(fr, M) then
       begin
       {PutHistory(true);}
-      M := SwpDir+'$DN'+ItoS(DNNumber)+'$'+CmdExt+' '+FreeStr;
+      M := CmdRunner+SwpDir+'$DN'+ItoS(DNNumber)+'$'+CmdExt+' '+FreeStr;
       RunCommand(False);
       {M := S; PutHistory(false);}
       {CmdDisabled := false;}
