@@ -37,6 +37,10 @@ An archive holds the program, its resources (`*.lng`, `*.dlg`, `*.hlp`, `xlt/`),
 `LICENSE-TV.TXT`, `COPYRIGHT-TV-MAGIBLOT.TXT`, `THIRD-PARTY-NOTICES-TV.md`; tve: `LICENSE-TVE.TXT`; DOS: `cwsdpmi.exe` and
 `cwsdpmi.doc`). The packing is `tools/dn-pack.sh` (`tools/dn-notices.sh` writes the licence texts and `README.TXT`).
 
+Linux release archives use the same `bin/`, `lib/dn/` and `share/` layout as `make install`. Extract one directly under
+`/usr/local` with `tar -xzf dn-VERSION-linux64.tar.gz -C /usr/local --strip-components=1`; then run `dn` from your `PATH`.
+The `bin/dn` wrapper locates `lib/dn` relative to itself and runs the optional root auto-updater there.
+
 Where DN keeps the files of the user (the places of each system, `TvAppDir` of tv3; `dn/src/cfgdir.pas`):
 
 | | settings (`dn.ini`, the desktop, the histories) | the log and the crash reports | the cache of `dn.ini` |

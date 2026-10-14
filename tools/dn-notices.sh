@@ -61,7 +61,8 @@ not counted right yet). The commands of the command line run in an embedded term
 on an empty command line; DN_EMBED_TERM=0 gives the terminal to the shell, DN_RUN_PAUSE=0|1|2 sets what happens when the
 command ends).
 
-  ./dn               start it in this directory: the files *.lng *.dlg *.hlp and xlt/ must be next to it.
+  bin/dn             start the installed program; lib/dn/ holds the binary and its resources.
+  Install the archive under /usr/local with: tar -xzf dn-VERSION-$target.tar.gz -C /usr/local --strip-components=1
 
 $keys
 DN names the files as DOS does: the disk C: is the root of the file system ("C:\\home\\you"). The first start shows a notice
