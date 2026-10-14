@@ -60,11 +60,11 @@ function GetArchiveByTag(ID: Byte): TARJArchive;
 implementation
 
 uses
-  DnPath, fmtzip, fmtlha, fmtrar, {$IFNDEF DN_MINI} fmtace, fmtha, {$ENDIF} fmtcab,
+  DnPath, fmtzip, fmtlha, fmtrar, {$IFNDEF DN_MINI} fmtace, fmtha, {$ENDIF} fmtcab, fmtzoo,
   {$IFNDEF DN_MINI}
   fmtarc, fmtbsa, fmtbs2, fmthyp, fmtlim, fmthpk, {$ENDIF} fmttar, fmttgz,
   {$IFNDEF DN_MINI}
-  fmtzxz, fmtqrk, fmtufa, fmtis3, fmtsqz, fmthap, fmtzoo, fmtchz,
+  fmtzxz, fmtqrk, fmtufa, fmtis3, fmtsqz, fmthap, fmtchz,
   fmtuc2, fmtain, {$ENDIF} fmt7z,  fmtbz2, fmtxz,
   
   profile, Defines, Streams, strutil, fileutil,
@@ -640,7 +640,6 @@ function HAPDetect: Boolean;
   end;
 {$ENDIF}
 
-{$IFNDEF DN_MINI}
 function ZOODetect: Boolean;
   var
     ID: LongInt;
@@ -649,12 +648,12 @@ function ZOODetect: Boolean;
   ArcFile.Read(ID, SizeOf(ID));
   if  (ArcFile.Status = stOK) and (ID = (-37443620 { $FDC4A7DC })) then
     begin
-    ArcFile.Read(ArcPos, SizeOf(ArcPos));
+    ArcFile.Read(ID, SizeOf(ID)); { zoo_start: 4 bytes, ArcPos is 8 }
+    ArcPos := ID;
     ZOODetect := True;
     end;
   ArcFile.Seek(ArcPos);
   end;
-{$ENDIF}
 
 {$IFNDEF DN_MINI}
 function CHZDetect: Boolean;
@@ -766,6 +765,8 @@ function DetectArchive: TARJArchive;
     DetectArchive := PTARArchive.Create
   else if TGZDetect then
     DetectArchive := PTGZArchive.Create
+  else if ZOODetect then
+    DetectArchive := PZOOArchive.Create
   else if S7ZDetect then
     DetectArchive := PS7ZArchive.Create
   else if BZ2Detect then
@@ -869,6 +870,8 @@ function GetArchiveTagBySign(Sign: TStr4): Byte;
     GetArchiveTagBySign := arcBZ2
   else if sign = sigXZ then
     GetArchiveTagBySign := arcXZ
+  else if Sign = sigZOO then
+    GetArchiveTagBySign := arcZOO
   else
     GetArchiveTagBySign := arcUNK;
   end { GetArchiveTagBySign };
@@ -964,6 +967,8 @@ function GetArchiveByTag(ID: Byte): TARJArchive;
     GetArchiveByTag := PBZ2Archive.Create
   else if ID = arcXZ then
     GetArchiveByTag := PXZArchive.Create
+  else if ID = arcZOO then
+    GetArchiveByTag := PZOOArchive.Create
   else
     GetArchiveByTag := nil;
   CloseProfile;

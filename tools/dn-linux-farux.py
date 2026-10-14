@@ -2,7 +2,8 @@
 """Far UX fast find (Alt+letters) in a pty, checked on the screen: with
 [FilePanels] FarUxMode=1 Alt+A moves the cursor to alpha1 (no menu opens),
 Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
-the search; with the mode off Alt+A starts no search. The exact keys go
+the search, Alt+F10 opens the folder tree and Alt+F12 the folder history; with the mode off Alt+A starts no search; the check box "Far UX
+mode" of the File Manager setup switches the mode on at once and in dn.ini. The exact keys go
 over the win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
@@ -129,6 +130,13 @@ try:
     t.send(w32(0x2D, 0, 4), 1.0)                 # Ctrl+Ins
     check('alpha1' in cmdline_row(t),
           'FarUx on: Ctrl+Ins with text inserts the name into the command line', t)
+    t.send(w32(0x1B), 0.6)                       # Esc clears the command line
+    for vk, what in ((0x79, 'Alt+F10 opens the folder tree'), (0x7B, 'Alt+F12 opens the folder history')):
+        before = t.text()
+        t.send(w32(vk, 0, 2), 1.2)               # Alt+F10 / Alt+F12
+        check(t.text() != before and t.alive(), 'FarUx on: ' + what, t)
+        t.send(w32(0x1B), 1.0)                   # Esc closes it
+        check('alpha1' in t.text(), 'FarUx on: Esc after %s returns to the panels' % what.split()[0], t)
     check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
@@ -146,6 +154,26 @@ try:
     check('alpha1' not in cmdline_row(t),
           'FarUx off: Ctrl+Ins with text still goes to the clipboard', t)
     check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
+d, t = start(out, False)
+try:
+    t.send(w32(0x4F, ord('o'), 2), 0.8)           # Alt+O: the menu Options
+    t.send('f', 0.6)                             # File Manager
+    t.send('s', 1.0)                             # Setup
+    check('[ ] Far UX mode' in t.text(), 'the File Manager setup shows "Far UX mode", off', t)
+    t.send(w32(0x58, ord('x'), 2), 0.6)           # Alt+X: its hot key
+    check('[X] Far UX mode' in t.text(), 'Alt+X checks "Far UX mode"', t)
+    t.send(w32(0x0D, 13), 1.0)                   # Enter: OK
+    ini = open(os.path.join(d, 'dn.ini'), errors='replace').read() if os.path.isfile(os.path.join(d, 'dn.ini')) else ''
+    check('FarUxMode=1' in ini, 'the setup writes FarUxMode=1 into dn.ini', t)
+    t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
+    check('Search:' in t.text() and cursor_file(t) is not None and 'alpha1' in cursor_file(t),
+          'the mode works at once: Alt+A finds alpha1', t)
+    t.send(w32(0x1B), 1.0)                       # Esc leaves the search
+    check(quit_dn(t) == 0, 'setup: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
 

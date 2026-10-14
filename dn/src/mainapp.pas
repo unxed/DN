@@ -646,7 +646,7 @@ begin
     cmViewDBF, cmDBFView, cmUUEncodeFile, cmUUDecodeFile, cmPrintFile, cmFilePrint, cmSetupPrinter, cmPrintFileEd, cmPrintBlock,
     cmUnpDiskImg,
     cmConfigACE, cmConfigHA, cmConfigAIN, cmConfigARC, cmConfigBS2, cmConfigBSA, cmConfigCHZ, cmConfigHAP, cmConfigHPK,
-    cmConfigHYP, cmConfigIS3, cmConfigLIM, cmConfigQUARK, cmConfigSQZ, cmConfigUC2, cmConfigUFA, cmConfigZOO, cmConfigZXZ:
+    cmConfigHYP, cmConfigIS3, cmConfigLIM, cmConfigQUARK, cmConfigSQZ, cmConfigUC2, cmConfigUFA, cmConfigZXZ:
       Result := True;
   end;
   {$ENDIF}

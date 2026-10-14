@@ -116,7 +116,7 @@ case "$target" in *-mini)
 This is the mini build (DN_MINI=1 of tools/build.sh): a smaller program without the game, the calculator and the spreadsheet,
 the phone book, Arvid, UUE, the DBF viewer, the disassembler of the viewer, the printing, the calendar, the ASCII table, the
 disk images, the embedded terminal (a command gets the terminal itself) and the archive formats other than ARJ, CAB, LHA, RAR,
-ZIP, TAR, GZ, 7Z, BZ2 and XZ.
+ZIP, TAR, GZ, 7Z, BZ2, XZ and ZOO.
 EOS
     ;;
 esac

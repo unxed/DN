@@ -56,12 +56,12 @@ implementation
 uses
   panelwin, topview, dlgrecs, strview,
   
-  fmtzip, fmtlha, fmtrar, {$IFNDEF DN_MINI} fmtace, fmtha, {$ENDIF} fmtcab,
+  fmtzip, fmtlha, fmtrar, {$IFNDEF DN_MINI} fmtace, fmtha, {$ENDIF} fmtcab, fmtzoo,
   {$IFNDEF DN_MINI}
   fmtarc, fmtbsa, fmtbs2, fmthyp, fmtlim, fmthpk, {$ENDIF} fmttar,
   {$IFNDEF DN_MINI}
   fmtzxz, fmtqrk, fmtain, fmtchz, fmthap, fmtis3, fmtsqz,
-  fmtuc2, fmtufa, fmtzoo, {$ENDIF} fmttgz, fmt7z,  fmtbz2, fmtxz,
+  fmtuc2, fmtufa, {$ENDIF} fmttgz, fmt7z,  fmtbz2, fmtxz,
   
   {$IFNDEF DN_MINI}
   Arvid,
@@ -102,6 +102,7 @@ begin
   Reg('fmtlha.TLHAArchive', @fmtlha.TLHAArchive.Build);
   Reg('fmtrar.TRARArchive', @fmtrar.TRARArchive.Build);
   Reg('fmtcab.TCABArchive', @fmtcab.TCABArchive.Build);
+  Reg('fmtzoo.TZOOArchive', @fmtzoo.TZOOArchive.Build);
   {$IFNDEF DN_MINI}
   Reg('fmtace.TACEArchive', @fmtace.TACEArchive.Build);
   Reg('fmtha.THAArchive', @fmtha.THAArchive.Build);
@@ -121,7 +122,6 @@ begin
   Reg('fmtis3.TIS3Archive', @fmtis3.TIS3Archive.Build);
   Reg('fmtsqz.TSQZArchive', @fmtsqz.TSQZArchive.Build);
   Reg('fmthap.THAPArchive', @fmthap.THAPArchive.Build);
-  Reg('fmtzoo.TZOOArchive', @fmtzoo.TZOOArchive.Build);
   Reg('fmtchz.TCHZArchive', @fmtchz.TCHZArchive.Build);
   Reg('fmtuc2.TUC2Archive', @fmtuc2.TUC2Archive.Build);
   Reg('fmtain.TAINArchive', @fmtain.TAINArchive.Build);

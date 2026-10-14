@@ -445,15 +445,18 @@ TryDialog:
 
 procedure DoFMSetup;
   var
-    { the data of the dialog: the behaviour, the check box "Left/Right by page" (PanelArrowsPage of dn.ini), the rest of FMSetup }
+    { the data of the dialog: the behaviour, the check box "Left/Right by page" (PanelArrowsPage of dn.ini), the rest of FMSetup,
+      the check box "Far UX mode" (FarUxMode of dn.ini) }
     Data: record
       Options: Word;
       ArrowsPage: Word;
       Rest: array[1..SizeOf(TFMSetup)-SizeOf(Word)] of Byte;
+      FarUx: Word;
       end;
   begin
   Data.Options := Startup.FMSetup.Options;
   Data.ArrowsPage := Ord(PanelArrowsPage);
+  Data.FarUx := Ord(FarUxMode);
   Move(PByte(@Startup.FMSetup)[SizeOf(Word)], Data.Rest, SizeOf(Data.Rest));
   if ExecResource(dlgFMSetup, Data) <> cmOK then
     Exit;
@@ -461,6 +464,8 @@ procedure DoFMSetup;
   Move(Data.Rest, PByte(@Startup.FMSetup)[SizeOf(Word)], SizeOf(Data.Rest));
   PanelArrowsPage := Data.ArrowsPage and 1 <> 0;
   SaveDnIniSettings(@PanelArrowsPage);
+  FarUxMode := Data.FarUx and 1 <> 0;
+  SaveDnIniSettings(@FarUxMode);
   if Startup.FMSetup.TagChar = '' then
     Startup.FMSetup.TagChar[1] := ' ';
   if (Startup.FMSetup.RestChar = '') or

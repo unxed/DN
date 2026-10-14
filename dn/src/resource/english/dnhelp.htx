@@ -3855,6 +3855,14 @@ down, as PgUp/PgDn (the UX guidelines of vtui). When turned off (the default),
 they go to the previous or the next column, or scroll a panel of one column
 sideways. It is also PanelArrowsPage in section [FilePanels] of dn.ini.
 
+   {[X] Far UX mode:_} - The keys of Far Manager in the file panels: Alt+letter
+starts the fast find of a file name (Ctrl+Enter and Shift+Enter go to the next
+and the previous match), Shift+Gray+ and Shift+Gray- select and deselect all
+files, Ctrl+Ins with text in the command line inserts the selected names (or
+the current one) into it, and Ctrl+Alt+Ins copies the full names to the
+clipboard. Off by default. It is also FarUxMode in section [FilePanels] of
+dn.ini.
+
    {Quick search:_} - Selects the quick search key. There are 2 variants:
 "Single Alt" and "Single Ctrl". "Single Alt" means, that you need to press and
 release Alt key to activate quick search and then type file name you want to
