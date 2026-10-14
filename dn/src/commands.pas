@@ -1710,6 +1710,7 @@ const
   cmSingleAttr = 185; {JO}
   cmDirBranch = 186;
   cmChangeNameCase = 187;
+  cmGroupRename = 211; { the group rename by a mask (paneldlgs.CM_GroupRename) }
   cmSetEALongname = 188;
   cmSelectPreset = 230; {JO}
   cmDirBranchFull = 231; {JO}
@@ -3170,6 +3171,7 @@ type
     dlgChScreenMode, {JO}
     dlgSetExportCsvFormat, {KV}
     dlgSkipBadFile,
+    dlgGroupRename, { the mask and the first number of the group rename (CM_GroupRename) }
     dlgActions { the actions of the menus and the status lines (DnActions) }
     );
 

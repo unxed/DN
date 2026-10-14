@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The file operations of the Linux build of DN in a pty, checked on the file system: make a directory, copy, move, delete, edit and
-save a file. usage: tools/dn-linux-ops.py OUTDIR   (OUTDIR: the result of tools/build.sh linux|linux64)"""
+save a file, rename a group of files by a mask (File -> Group rename). usage: tools/dn-linux-ops.py OUTDIR   (OUTDIR: the result of tools/build.sh linux|linux64)"""
 import base64
 import os
 import re
@@ -342,6 +342,35 @@ def desktop(out, d):
     dsk_quit(t)
 
 
+def group_rename(out, d):
+    # File -> Group rename (dn#40 part 3b): Ins marks apple.jpg and berry.jpg, the mask img_[C2].[E] from 1 renames them to img_01.jpg
+    # and img_02.jpg; cherry.txt, not marked, keeps its name
+    w = os.path.join(d, 'grp')
+    os.makedirs(w)
+    for n in ('apple.jpg', 'berry.jpg', 'cherry.txt'):
+        open(os.path.join(w, n), 'w').write(n)
+    t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'))
+    t.started()
+    t.send(F['ESC'], 0.5)
+    t.send(F['HOME'], 0.3)
+    t.send(F['DOWN'], 0.3)                             # .., apple.jpg, berry.jpg, cherry.txt (sorted by the extension)
+    t.send(F['INS'], 0.3)                              # marks apple.jpg, the cursor goes to berry.jpg
+    t.send(F['INS'], 0.3)                              # marks berry.jpg
+    t.send(F['F10'], 0.5)
+    t.send('f', 0.5)                                   # File
+    t.send('n', 0.8)                                   # Group re~n~ame...
+    scr = t.text()
+    check('Group rename' in scr and '[N].[E]' in scr, 'File -> Group rename opens its dialog with the mask [N].[E]', scr)
+    t.send('img_[C2].[E]', 0.5)                        # the typed mask replaces the selected [N].[E]
+    t.send(F['ENTER'], 1.5)
+    names = sorted(os.listdir(w))
+    check(names == ['cherry.txt', 'img_01.jpg', 'img_02.jpg'], 'Group rename: img_[C2].[E] renames the marked files: %r' % names, t.text())
+    check(t.alive() and 'Fatal' not in t.text(), 'Group rename: DN is alive')
+    t.send(F['ALT-X'], 0.8)
+    t.send(F['ENTER'], 1.0)
+    t.close(3)
+
+
 def part(out, fn):
     d = install(out)
     try:
@@ -352,7 +381,7 @@ def part(out, fn):
 
 def main():
     out = os.path.abspath(sys.argv[1])
-    parts = [session, desktop] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
+    parts = [session, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
     side_by_side([lambda fn=fn: part(out, fn) for fn in parts])          # each in a directory of its own, all at once
     print('ALL OK (%d checks)' % count if not fails else '%d of %d checks FAILED' % (fails, count))
     sys.exit(1 if fails else 0)

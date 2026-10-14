@@ -83,6 +83,8 @@ function CM_ChangeDirectory(AFP: Pointer): String;
 procedure CM_MakeDir(AFP: Pointer);
 procedure CM_LongCopy(AFP: Pointer);
 procedure CM_ChangeCase(AFP: Pointer);
+{ The group rename: the selected files (or the current one) get the names that RenMask.ExpandRenameMask makes of a mask }
+procedure CM_GroupRename(AFP: Pointer);
 function PanelSetupTag(const PSS: TPanelSetupSet;
   {` Build a short string description of the panel settings }
     PC: TPanelClass): String;
@@ -105,7 +107,7 @@ uses DnPath,
   progress, gadgets, Archiver, Startup, inputfname, Validate, Messages, Menus, DNHelp,
   FileFind, Tree, copyio, DNUtil, Filediz, Filelst, fsinfo, panelwin,
   fileerrors, objutil, Math
-  , DNDlgs;
+  , DNDlgs, RenMask;
 
 type
   TSelectList = class(TListBox)
@@ -2711,6 +2713,70 @@ procedure CM_ChangeCase(AFP: Pointer);
   FC.RemoveAll;
   FC.Free;
   end { CM_ChangeCase };
+
+const
+  { the data of the dialog of the group rename, kept between the calls }
+  GroupRenameData: record
+    Mask: String[79];
+    Start: String[9];
+    end = (Mask: '[N].[E]'; Start: '1');
+
+procedure CM_GroupRename(AFP: Pointer);
+  var
+    FC: TFilesCollection;
+    P: TFilePanelRoot absolute AFP;
+    Counter, Code: LongInt;
+
+  function DoRename(PF_: Pointer): Boolean;
+    var
+      PF: PFileRec absolute PF_;
+      Dir, NewName: String;
+      i: Integer;
+    begin
+    DoRename := Abort;
+    if Abort or PathFoundInArc(PF^.Owner^) then
+      Exit;
+    NewName := ExpandRenameMask(PF^.FlName[True], GroupRenameData.Mask, Counter);
+    Inc(Counter);
+    if (NewName = '') or (NewName = PF^.FlName[True]) then
+      Exit;
+    Dir := PF^.Owner^;
+    MakeSlash(Dir);
+    lChangeFileName(Dir+PF^.FlName[True], Dir+NewName);
+    i := IOResult;
+    if i <> 0 then
+      begin
+      MessFileNotRename(PF^.FlName[True], NewName, i);
+      MessageBox(GetString(dlFCNoRename1)+GetString(dlDIFile)+^M^C+Cut(PF^.FlName[True], 20)
+        +GetString(dlFCNoRename2)+Cut(NewName, 20), nil, mfError+mfOKButton);
+      DoRename := True;           { stop at the first file that cannot be renamed }
+      end
+    else
+      Message(P, evCommand, cmCopyUnselect, PF);
+    end { DoRename };
+
+  begin { CM_GroupRename }
+  if P.Drive = nil then
+    Exit;
+  FC := GetSelection(P, False);
+  if FC = nil then
+    Exit;
+  if (ExecResource(dlgGroupRename, GroupRenameData) = cmCancel) or (GroupRenameData.Mask = '') then
+    begin
+    FC.RemoveAll;
+    FC.Free;
+    Exit;
+    end;
+  Val(GroupRenameData.Start, Counter, Code);
+  if Code <> 0 then
+    Counter := 1;
+  Abort := False;
+  FC.FirstThat(DoRename);
+  Abort := False;
+  MessageL(P, evCommand, cmPanelReread, 0);
+  FC.RemoveAll;
+  FC.Free;
+  end { CM_GroupRename };
 
 function PanelSetupTag(const PSS: TPanelSetupSet;
     PC: TPanelClass): String;

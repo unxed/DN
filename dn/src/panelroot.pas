@@ -2853,6 +2853,10 @@ WrongArc:
           if  (PF <> nil) and (Drive.DriveType < dtArcFind)
           then
             CM_ChangeCase(Self);
+        cmGroupRename:
+          if  (PF <> nil) and (Drive.DriveType < dtArcFind)
+          then
+            CM_GroupRename(Self);
         {$IFNDEF DN_MINI}
         cmUnpDiskImg:
           begin
