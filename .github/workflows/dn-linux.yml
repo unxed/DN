@@ -6,6 +6,9 @@ name: dn-linux
 on:
   workflow_dispatch:
   push:
+    # a lunobot/** branch is checked by its pull_request run; a push run of the same commit only doubles the runners
+    branches-ignore: ['lunobot/**']
+    tags: ['**']                       # tag pushes run as before (a branches filter alone would drop them)
     paths:
       - dn/**
       - tv
