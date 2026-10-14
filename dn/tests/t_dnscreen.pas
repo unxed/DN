@@ -15,6 +15,9 @@ begin
   ScreenCreate(80, 25);
   Check(GetScreenMode(@Pt, True) = 3, 'GetScreenMode: 80x25 is the mode 3');
   Check((Pt.X = 80) and (Pt.Y = 25), 'GetScreenMode gives the size');
+  Cells := ReadScreenCells;                              { the screen of tv/ is zeroed: the default colours of the terminal }
+  Check((Cells <> nil) and (Hi(Cells[0]) = $07) and (Hi(Cells[80 * 25 - 1]) = $07),
+    'ReadScreenCells: the default colours are 7 on 0, not $5F (the user screen of Ctrl-O was white on magenta, issue #33)');
   ClearScreenCells;
   Cells := ReadScreenCells;
   Check((Cells <> nil) and (Cells[0] = $0720) and (Cells[80 * 25 - 1] = $0720), 'ClearScreenCells: blanks, attribute 7');

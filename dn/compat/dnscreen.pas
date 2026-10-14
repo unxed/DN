@@ -19,7 +19,10 @@ uses
   font). Size may be nil. }
 function GetScreenMode(Size: PSysPoint; Flag: Boolean): Word;
 function SetScreenSize(Cols, Rows: Word): Boolean;
-{ The screen as an array of 16-bit cells; it is filled from the screen of tv/ at every call. }
+{ The screen as an array of 16-bit cells; it is filled from the screen of tv/ at every call. A colour that is not a BIOS colour is
+  brought to the nearest BIOS one, the default colours of the terminal to 7 on 0 (not to $5F, the mark of the Byte conversion of tv/:
+  the screen of tv/ is zeroed, that is in the default colours, until the application draws, and its copy became the user screen
+  of Ctrl-O, white on magenta: issue #33). }
 function ReadScreenCells: Pointer;
 { Writes Size cells from the position Pos (the number of the cell) of that array to the screen of tv/. }
 procedure WriteScreenCells(Pos, Size: LongInt);
@@ -104,7 +107,7 @@ begin
   for I := 0 to N - 1 do
   begin
     if C <> nil then
-      CellCopy[I] := CellToBiosChar(C^.Character) or (Word(Byte(C^.Attribute)) shl 8)
+      CellCopy[I] := CellToBiosChar(C^.Character) or (Word(C^.Attribute.ToBIOS) shl 8)
     else
       CellCopy[I] := $0720;
     if C <> nil then

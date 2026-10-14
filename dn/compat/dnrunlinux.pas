@@ -68,9 +68,9 @@ begin
     if GetEnvironmentVariable('DN_RUN_PAUSE') = '0' then P := 0
     else if GetEnvironmentVariable('DN_RUN_PAUSE') = '1' then P := 1
     else if GetEnvironmentVariable('DN_RUN_PAUSE') = '2' then P := 2;
+    { the line written before the command, like the prompt of a shell: the directory with ~ for the home directory }
     Prompt := ShortPath(GetCurrentDir) + '$ ';
-    { run shell with a plain prompt to avoid escape sequences that colour the command screen }
-    VtRunScreen(UserScr, '/bin/sh', ['sh', '-c', 'PS1=' + QuotedStr(Prompt) + '; export PS1; ' + SysCommandLineToOs(CmdLine)], '', Prompt + SysCommandLineToOs(CmdLine), P);
+    VtRunScreen(UserScr, '/bin/sh', ['sh', '-c', SysCommandLineToOs(CmdLine)], '', Prompt + SysCommandLineToOs(CmdLine), P);
     Exit;
   end;
   SysRunShell(CmdLine);      { the terminal is given to the shell for the command }
