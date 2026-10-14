@@ -26,6 +26,7 @@ case "$name" in
         cp "$out"/*.lng "$out"/*.dlg "$out"/*.hlp "$stage/lib/dn/"
         cp -r "$here/dn/data/xlt" "$stage/lib/dn/xlt"
         cp "$here/dn/data/dn.ini" "$stage/lib/dn/"
+        cp "$here/dn/data/dn.ext.linux" "$stage/lib/dn/dn.ext"     # the commands of Enter for the common types (xdg-open)
         cp "$here/tools/dn-autoupdate.sh" "$stage/lib/dn/"
         cat > "$stage/bin/dn" <<'EOF'
 #!/bin/sh

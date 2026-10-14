@@ -1,0 +1,13 @@
+; dn.ext of the Linux packages: the commands that Enter ({ }), Shift-Enter (( )) and Alt-Enter ([ ]) run for a file.
+; The mask before the bracket is a list of extensions (as in the filters of the panels, separated by commas) or
+; r:<regular expression> for the whole name. In a command ! is the name without the extension, !.! the name with it
+; and !\ the directory of the file. DN copies this file into ~/.config/dn at the first start; edit it there
+; (Options -> Extension file edit).
+;
+; xdg-open hands a file to the program that the desktop has for its type.
+pdf,djvu,epub,ps{xdg-open "!.!" >/dev/null 2>&1 &}
+png,jpg,jpeg,gif,bmp,webp,svg,tif,tiff{xdg-open "!.!" >/dev/null 2>&1 &}
+mp3,ogg,oga,flac,wav,m4a,opus{xdg-open "!.!" >/dev/null 2>&1 &}
+mp4,mkv,avi,webm,mov,mpg,mpeg{xdg-open "!.!" >/dev/null 2>&1 &}
+html,htm,odt,ods,odp,doc,docx,xls,xlsx,ppt,pptx{xdg-open "!.!" >/dev/null 2>&1 &}
+r:^(GNUmakefile|[Mm]akefile)$ {make}
