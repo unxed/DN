@@ -24,7 +24,7 @@ def install(out):
         if f == 'dn' or f.lower().endswith(('.lng', '.dlg', '.hlp')) or f == 'xlt':
             src = os.path.join(out, f)
             (shutil.copytree if os.path.isdir(src) else shutil.copy)(src, os.path.join(d, f))
-    w = os.path.join(d, 'work')
+    w = os.path.join(d, '\u041a\u0430\u0442\u0430\u043b\u043e\u0433')
     os.makedirs(w)
     open(os.path.join(w, '\u0424\u0430\u0439\u043b.txt'), 'w').write('x')
     return d, w
@@ -45,6 +45,11 @@ def one(out, loc, utf8_ok):
         check('\u0424\u0430\u0439\u043b' in text, '%s: a file with a Russian name is shown' % loc, text)
         t.send('\u043f\u0440\u0438\u0432\u0435\u0442 abc', 0.6)
         line = cmdline(t.text())
+        check(
+            line and t.screen.x == len(line[0]),
+            '%s: cursor follows typed text under a non-ASCII path' % loc,
+            'line=%r cursor=%d' % (line, t.screen.x),
+        )
         if utf8_ok:
             check(line and line[0].endswith('\u043f\u0440\u0438\u0432\u0435\u0442 abc'), '%s: typed Russian text reaches the command line' % loc, str(line))
         else:

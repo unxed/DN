@@ -350,7 +350,7 @@ procedure TCommandLine.Update;
     MenuActive
   then
     Exit;
-  P.X := CellsIn(Copy(Str, DeltaX+1, CurX-DeltaX))+Min(Length(Dir), 50);
+  P.X := CellsIn(Copy(Str, DeltaX+1, CurX-DeltaX))+Min(CellsIn(Dir), 50);
   P.Y := 0;
   P := MakeGlobal(P);
   //AK155  BB := not Overwrite  xor (InterfaceData.Options and ouiBlockInsertCursor <> 0);
@@ -410,7 +410,7 @@ procedure TCommandLine.Draw;
     CurX := Length(Str);
   if DeltaX > CurX then
     DeltaX := CurX;
-  while CellsIn(Copy(Str, DeltaX+1, CurX-DeltaX)) > Size.X-Min(Length(Dir), 50)-1 do
+  while CellsIn(Copy(Str, DeltaX+1, CurX-DeltaX)) > Size.X-Min(CellsIn(Dir), 50)-1 do
     Inc(DeltaX, CharAt(Str, DeltaX+1));
   MoveChar(B[0], ' ', C1, Size.X);
   MoveStr(B[0], S^, C3);
@@ -477,10 +477,10 @@ procedure TCommandLine.HandleEvent(var Event: TEvent);
         CE
         end;
       P := MakeLocal(Event.Mouse.Where);
-      if P.X >= Min(Length(Dir), 50) then
+      if P.X >= Min(CellsIn(Dir), 50) then
         if Event.Mouse.Buttons and mbRightButton <> 0 then
           begin
-          if P.X < (Size.X-Min(Length(Dir), 50)) div 2
+          if P.X < (Size.X-Min(CellsIn(Dir), 50)) div 2
           then
             MessageKey(Self, kbLeft)
           else
@@ -489,7 +489,7 @@ procedure TCommandLine.HandleEvent(var Event: TEvent);
           end
         else
           begin
-          CurX := DeltaX+BytesFor(Copy(Str, DeltaX+1, 255), P.X-Min(Length(Dir), 50));
+          CurX := DeltaX+BytesFor(Copy(Str, DeltaX+1, 255), P.X-Min(CellsIn(Dir), 50));
           CE2
           end;
       end;
@@ -768,7 +768,7 @@ RIT Labs DN also wobbled but seemed to fetch correctly.
                 Str := GetCommand(CurString);
                 Changed := True;
                 CurX := Length(Str);
-                if CurX < Size.X-Min(Length(Dir), 50)-1 then
+                if CurX < Size.X-Min(CellsIn(Dir), 50)-1 then
                   DeltaX := 0; {John_SW}
                 CE2;
                 end;
@@ -791,7 +791,7 @@ RIT Labs DN also wobbled but seemed to fetch correctly.
                 Changed := True;
                 CurX := Length(Str);
                 CE2;
-                if CurX < Size.X-Min(Length(Dir), 50)-1 then
+                if CurX < Size.X-Min(CellsIn(Dir), 50)-1 then
                   DeltaX := 0; {John_SW}
                 end;
               kbLeft, kbCtrlS, kbShiftLeft:
