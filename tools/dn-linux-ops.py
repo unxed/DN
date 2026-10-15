@@ -249,6 +249,20 @@ def background_copy(out, d):
             counts.append(sum(os.path.isfile(p) for p in expected))
             t.until(lambda: False, 3.0)
         print('background copy: files copied at 0, 3 and 6 seconds: %r of %d' % (counts, nfiles), flush=True)
+        # Utilities, Copy jobs shows how far the running copy is (dn#88 step 1). The percent is whole, and in the background the copy
+        # does about 10 files a second, so the list is opened only when 2% of the files are there.
+        two_percent = t.until(lambda: sum(os.path.isfile(p) for p in expected) >= nfiles // 50, 30.0)
+        if two_percent and not all(os.path.isfile(p) for p in expected):
+            t.send('\x1bu', 0.8)                        # Alt-U: Utilities
+            t.send('j', 1.0)                            # Copy ~j~obs...
+            jobs_screen = t.text()
+            run = re.search(r'\[run (\d+)%\]', jobs_screen)
+            check(run is not None and int(run.group(1)) > 0,
+                  'Background: Utilities, Copy jobs shows the running copy with a percent above 0 (%s)' % (
+                      run.group(0) if run else 'no "[run N%]" on the screen'), jobs_screen)
+            t.send(F['ESC'], 0.5)                       # Esc closes the list; Enter would press the default button, Cancel job
+        else:
+            print('SKIP Copy jobs: the copy finished (or did not reach 2%) before the list could be opened', flush=True)
         finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 60.0)
         copied = [p for p in expected if os.path.isfile(p)]
         wrong = [p for p in copied if open(p, 'rb').read() != payload]

@@ -1902,6 +1902,8 @@ begin
       Row := PString(L.At(I));
       DisposeStr(Row);
     end;
+    { the rows are plain strings, and Free would treat each of them as a class instance (FreeAll, FreeItem): empty the list first }
+    L.RemoveAll;
     L.Free; { DN: the owner of the list disposes it (mainapp.pas, ListBoxOwnsList) }
 
     if (Cmd = cmYes) and (Focus >= 0) and (Focus < Length(Ids)) then
