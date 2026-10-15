@@ -255,13 +255,12 @@ constructor TEditMacros.Create(S: String; var F: TTextReader);
     Commands.Insert(TMacroGoto.Create(X, Y));
     end;
 
+  procedure Add(N: Word; const S: String);
+    begin
+    IDs.Insert(TLngWord.Create(N, S))
+    end;
+
   procedure MakeIDs;
-
-    procedure Add(N: Word; const S: String);
-      begin
-      IDs.Insert(TLngWord.Create(N, S))
-      end;
-
     begin
     Add(cmSaveText, 'SaveText');
     Add(cmLoadText, 'LoadText');
@@ -744,16 +743,16 @@ procedure EditDOSEnvironment(Env: PByteArray);
     PL.NewLisT(PC);
     end { MakeDialog };
 
+  procedure Put(C: Char);
+    begin
+    Env^[i] := Byte(C);
+    Inc(i);
+    end;
+
   procedure DoPut(P_: Pointer);
   var P: TDOSVar absolute P_;
     var
       J: LongInt;
-
-    procedure Put(C: Char);
-      begin
-      Env^[i] := Byte(C);
-      Inc(i);
-      end;
 
     begin
     if  (P.Name <> nil) then
