@@ -1924,97 +1924,96 @@ FileRead:
       end;
     end;
 
-  procedure MakeDirectories;
+  { unxed/dn#78: the routines below were nested two levels deep in FilesCopy (MakeDirectories -> CopyI, CopyF); on linux-aarch64
+    (FPC 3.2.2) such a routine reads wrong variables of its grandparent through the static link: Info of FilesCopy was a wrong
+    window, so DN died with an Access violation in TWhileView.Write, and CopyCancel and the others were wrong too, so nothing was
+    copied. They are nested once now, and the variables that they share with MakeDirectories live here. }
+  var
+    S: String;
+    FrPos: Integer;
+    KillDescrOf: PFlName;
+
+  procedure CopyI(Dest{Target directory},
+      Source{ full old name }: String;
+      Name: String;  {New name}
+      o: PFileRec; {here, seems, the same as in Source,
+        but o=nil happens}
+      CopyIt: Boolean;
+      Attr: Byte);
+    label 1, 2, TrueCopy;
     var
-      P: PFileRec;
-      PD: TDirName;
-      I: Integer;
-      S: String;
-      FrPos: Integer;
-      KillDescrOf: PFlName;
+      JJ: Integer;
+    var
+      q: String;
+      SSS: String;
       
+    begin
+    Info.Write(5, GetString(dlFCCheckingDirs));
 
-    procedure CopyI(Dest{Target directory},
-        Source{ full old name }: String;
-        Name: String;  {New name}
-        o: PFileRec; {here, seems, the same as in Source,
-          but o=nil happens}
-        CopyIt: Boolean;
-        Attr: Byte);
-      label 1, 2, TrueCopy;
-      var
-        JJ: Integer;
-      var
-        q: String;
-        SSS: String;
-        
+    if  (not CopyPrn) and (Dest <> '') and (Dest[Length(Dest)] <> DnSep)
+    then
+      AddStr(Dest, DnSep);
+    q := MakeNormName(Dest, Name);
+    if q[Length(q)] = '.' then
+      SetLength(q, Length(q)-1);
+    if o = nil then
+      goto 1;
+    if CopyCancel then
+      goto 2;
+    ClrIO;
+    SSS := Source;
+    MakeSlash(SSS);
+    if SSS = Copy(S, 1, Length(SSS)) then
       begin
-      Info.Write(5, GetString(dlFCCheckingDirs));
-
-      if  (not CopyPrn) and (Dest <> '') and (Dest[Length(Dest)] <> DnSep)
-      then
-        AddStr(Dest, DnSep);
-      q := MakeNormName(Dest, Name);
-      if q[Length(q)] = '.' then
-        SetLength(q, Length(q)-1);
-      if o = nil then
-        goto 1;
-      if CopyCancel then
-        goto 2;
+      ForceDispatch;
+      MessageBox(^C+GetString(dlDirectory)+' '+Cut(Source, 40)+
+        GetString(erIntoItself), nil, mfError+mfOKButton);
+      CopyCancel := True;
+      Exit;
+      end;
+    SetLength(SSS, Length(SSS)-1);
+    if  (o <> nil) and (CopyOptions and cpoMove <> 0)
+         and (SSS[1] = q[1])
+    then
+      begin { Directory rename }
       ClrIO;
-      SSS := Source;
-      MakeSlash(SSS);
-      if SSS = Copy(S, 1, Length(SSS)) then
-        begin
-        ForceDispatch;
-        MessageBox(^C+GetString(dlDirectory)+' '+Cut(Source, 40)+
-          GetString(erIntoItself), nil, mfError+mfOKButton);
-        CopyCancel := True;
-        Exit;
-        end;
-      SetLength(SSS, Length(SSS)-1);
-      if  (o <> nil) and (CopyOptions and cpoMove <> 0)
-           and (SSS[1] = q[1])
-      then
-        begin { Directory rename }
+      RnFl(SSS, q);
+      if DosErrorCode in [5, 80, 183] then
+        begin {Possibly the target directory exists but is empty. Then
+           it can be deleted and the rename can still be done }
+        LFN.lRmDir(q);
         ClrIO;
         RnFl(SSS, q);
-        if DosErrorCode in [5, 80, 183] then
-          begin {Possibly the target directory exists but is empty. Then
-             it can be deleted and the rename can still be done }
-          LFN.lRmDir(q);
-          ClrIO;
-          RnFl(SSS, q);
-          end;
-        if Abort then
-          begin
-          CopyCancel := True;
-          goto 2;
-          end;
-        if DosErrorCode in [5, 17, 80, 183] then
-          goto TrueCopy;
-            { The target directory exists and is non-empty, or rename
-              is impossible in principle. So we will honestly copy
-              and delete. }
-        CopyIt := False;
-        o^.Attr := o^.Attr or Copied;
-        if DosErrorCode <> 0 then
-          begin
-          Info.Write(5, '');
-          Info.Write(2, Cut(SSS, 40));
-          Info.Write(4, GetString(dlFC_To));
-          Source := lFExpand(q);
-          Info.Write(6, Cut(Source, 40));
-          ForceDispatch;
-          MessageBox(GetString(dlNotRenameDir)+Source, nil,
-            mfError+mfOKButton);
-          CopyCancel := True;
-          Info.Write(2, '');
-          Info.Write(4, '');
-          Info.Write(6, '');
-          Info.Write(5, GetString(dlFCCheckingDirs));
-          goto 2;
-          end;
+        end;
+      if Abort then
+        begin
+        CopyCancel := True;
+        goto 2;
+        end;
+      if DosErrorCode in [5, 17, 80, 183] then
+        goto TrueCopy;
+          { The target directory exists and is non-empty, or rename
+            is impossible in principle. So we will honestly copy
+            and delete. }
+      CopyIt := False;
+      o^.Attr := o^.Attr or Copied;
+      if DosErrorCode <> 0 then
+        begin
+        Info.Write(5, '');
+        Info.Write(2, Cut(SSS, 40));
+        Info.Write(4, GetString(dlFC_To));
+        Source := lFExpand(q);
+        Info.Write(6, Cut(Source, 40));
+        ForceDispatch;
+        MessageBox(GetString(dlNotRenameDir)+Source, nil,
+          mfError+mfOKButton);
+        CopyCancel := True;
+        Info.Write(2, '');
+        Info.Write(4, '');
+        Info.Write(6, '');
+        Info.Write(5, GetString(dlFCCheckingDirs));
+        goto 2;
+        end;
 
 
 (*
@@ -2024,7 +2023,7 @@ FileRead:
  should not be copied at all but queried, because it may turn out
  completely different. So for now I am killing name transfer. Seems
  it affected nothing.
-   Analyzed in more detail. This rename is completely unneeded.
+ Analyzed in more detail. This rename is completely unneeded.
  This file record is used here only to pass
  it to cmCopyUnselect, and there it only serves for name comparison. By the way,
  rare absurdity. The whole collection is scanned for a name match
@@ -2034,168 +2033,172 @@ FileRead:
  if this new name matches an already existing one. And all this
  is needed only for pretty redraw of panels and footer as
  copying proceeds. And then the panel is reread anyway.}
-        {$IFDEF DualName}
-        o^.FlName[False] := GetName
-                (lfGetShortFileName(MakeNormName(GetPath(Source), Name)));
-        {$ENDIF}
-        CopyShortString(MakeNormName(GetPath(Source), Name),
-           o^.FlName[True]);
+      {$IFDEF DualName}
+      o^.FlName[False] := GetName
+              (lfGetShortFileName(MakeNormName(GetPath(Source), Name)));
+      {$ENDIF}
+      CopyShortString(MakeNormName(GetPath(Source), Name),
+         o^.FlName[True]);
 *)
-        if SourcePanel <> nil then
-          Message(SourcePanel, evCommand, cmCopyUnselect, o);
-        KillDescrOf := @o^.FlName;
-          { When renaming a directory the description with the old name
-           must be removed }
-        goto 1;
-        end
-      else
-        begin { Directory copy }
+      if SourcePanel <> nil then
+        Message(SourcePanel, evCommand, cmCopyUnselect, o);
+      KillDescrOf := @o^.FlName;
+        { When renaming a directory the description with the old name
+         must be removed }
+      goto 1;
+      end
+    else
+      begin { Directory copy }
 TrueCopy:
-        CopyIt := True;
-        ClrIO;
-        if not CopyPrn then
-          begin
-          CheckMkDir(q);
-          if not Abort then
-            JJ := SetFileAttr(q, Attr and not Directory)
-          end;
-        KillDescrOf := nil;
-          { When copying a directory the description with the old name
-            need not be removed }
-        end;
-      if Abort then
-        begin
-        CopyCancel := True;
-        goto 2;
-        end;
-1:
-      if CopyPrn then
-        begin
-        if Dest = '' then
-          SSS := Name
-        else
-          SSS := Dest;
-        end
-      else
-        SSS := q;
-      
-      {MessageBox('Dirs.AtInsert: ' + SSS + ' '+ Source, nil, mfOKButton);}
-      Dirs.AtInsert(FrPos, TDirName.Create(Source, SSS, CopyIt, o, Attr));
-      Inc(FrPos);
-2:
-      end { CopyI };
-
-    { The link Source as the link Dest (a move removes Source); -1 when the system does not copy links. An error is told and stops the copy. }
-    function CopyLinkOf(const Source, Dest: String): LongInt;
-      begin
-      Result := SysCopyLink(Source, Dest);
-      if (Result = 0) and (CopyOptions and cpoMove <> 0) then
-        Result := SysEraseLink(Source);
-      if Result > 0 then
-        begin
-        ForceDispatch;
-        MessageBox(^C+GetString(dlErrorWriting)+Cut(Dest, 40), nil, mfError+mfOKButton);
-        CopyCancel := True;
-        end;
-      end;
-
-    procedure CopyF(Dest, Source: String; CopyIt: Boolean; Attr: Byte);
-      var
-        SR: lSearchRec;
-        Drive: Byte;
-        LinkRC: LongInt;
-      begin
-      if Dest[Length(Dest)] = DnSep then
-        SetLength(Dest, Length(Dest)-1);
-      if Dest[Length(Dest)] = '.' then
-        SetLength(Dest, Length(Dest)-1);
+      CopyIt := True;
       ClrIO;
-      {AK155 Why this piece is needed is not immediately clear. Seems
+      if not CopyPrn then
+        begin
+        CheckMkDir(q);
+        if not Abort then
+          JJ := SetFileAttr(q, Attr and not Directory)
+        end;
+      KillDescrOf := nil;
+        { When copying a directory the description with the old name
+          need not be removed }
+      end;
+    if Abort then
+      begin
+      CopyCancel := True;
+      goto 2;
+      end;
+1:
+    if CopyPrn then
+      begin
+      if Dest = '' then
+        SSS := Name
+      else
+        SSS := Dest;
+      end
+    else
+      SSS := q;
+    
+    {MessageBox('Dirs.AtInsert: ' + SSS + ' '+ Source, nil, mfOKButton);}
+    Dirs.AtInsert(FrPos, TDirName.Create(Source, SSS, CopyIt, o, Attr));
+    Inc(FrPos);
+2:
+    end { CopyI };
+
+  { The link Source as the link Dest (a move removes Source); -1 when the system does not copy links. An error is told and stops the copy. }
+  function CopyLinkOf(const Source, Dest: String): LongInt;
+    begin
+    Result := SysCopyLink(Source, Dest);
+    if (Result = 0) and (CopyOptions and cpoMove <> 0) then
+      Result := SysEraseLink(Source);
+    if Result > 0 then
+      begin
+      ForceDispatch;
+      MessageBox(^C+GetString(dlErrorWriting)+Cut(Dest, 40), nil, mfError+mfOKButton);
+      CopyCancel := True;
+      end;
+    end;
+
+  procedure CopyF(Dest, Source: String; CopyIt: Boolean; Attr: Byte);
+    var
+      SR: lSearchRec;
+      Drive: Byte;
+      LinkRC: LongInt;
+    begin
+    if Dest[Length(Dest)] = DnSep then
+      SetLength(Dest, Length(Dest)-1);
+    if Dest[Length(Dest)] = '.' then
+      SetLength(Dest, Length(Dest)-1);
+    ClrIO;
+    {AK155 Why this piece is needed is not immediately clear. Seems
  all this is already done in CopyI. But actually it is needed for
  subdirectories. Of course it would be more direct to do this only for
  subdirectories, but this way is also fine - only one extra operation }
-      if not CopyPrn then
+    if not CopyPrn then
+      begin
+      CheckMkDir(Dest);
+      if not Abort then
+        SetFileAttr(Dest, Attr and not Directory);
+      ClrIO;
+      end;
+    {/AK155}
+    lFindFirst(Source+DnSep+'*.*', AnyFileDir, SR); {JO}
+    while (DosError = 0) and not Abort and not CopyCancel do
+      begin
+      if  (SR.SR.Attr and Directory <> 0) and
+        {!!!} not IsDummyDir(SR.SR.Name)
+      then
         begin
-        CheckMkDir(Dest);
-        if not Abort then
-          SetFileAttr(Dest, Attr and not Directory);
-        ClrIO;
-        end;
-      {/AK155}
-      lFindFirst(Source+DnSep+'*.*', AnyFileDir, SR); {JO}
-      while (DosError = 0) and not Abort and not CopyCancel do
+        { a link to a directory is copied as a link: its target is not entered (a loop of links would never end) }
+        LinkRC := -1;
+        if (SR.SR.Attr and SysLinkAttr <> 0) and not CopyPrn then
+          LinkRC := CopyLinkOf(MakeNormName(Source, SR.FullName), MakeNormName(Dest, SR.FullName));
+        if LinkRC < 0 then
+          CopyI(Dest, MakeNormName(Source, SR.FullName), SR.FullName,
+             nil,
+            CopyIt, SR.SR.Attr)
+        end
+      else
         begin
-        if  (SR.SR.Attr and Directory <> 0) and
-          {!!!} not IsDummyDir(SR.SR.Name)
-        then
+        ToDo := ToDo+SR.FullSize;
+        ToDoCopy := ToDoCopy+SR.FullSize;
+        if SR.FullSize > 0 then
           begin
-          { a link to a directory is copied as a link: its target is not entered (a loop of links would never end) }
-          LinkRC := -1;
-          if (SR.SR.Attr and SysLinkAttr <> 0) and not CopyPrn then
-            LinkRC := CopyLinkOf(MakeNormName(Source, SR.FullName), MakeNormName(Dest, SR.FullName));
-          if LinkRC < 0 then
-            CopyI(Dest, MakeNormName(Source, SR.FullName), SR.FullName,
-               nil,
-              CopyIt, SR.SR.Attr)
-          end
-        else
-          begin
-          ToDo := ToDo+SR.FullSize;
-          ToDoCopy := ToDoCopy+SR.FullSize;
-          if SR.FullSize > 0 then
-            begin
-            ToDoClusCopyTemp := SR.FullSize div BytesPerCluster;
-            ToDoClusCopy := ToDoClusCopy+
-                ( {Round}(ToDoClusCopyTemp)+
-                Byte( {Round}(ToDoClusCopyTemp)-ToDoClusCopyTemp <> 0)
-                )*BytesPerCluster;
-            end;
+          ToDoClusCopyTemp := SR.FullSize div BytesPerCluster;
+          ToDoClusCopy := ToDoClusCopy+
+              ( {Round}(ToDoClusCopyTemp)+
+              Byte( {Round}(ToDoClusCopyTemp)-ToDoClusCopyTemp <> 0)
+              )*BytesPerCluster;
           end;
-        ClrIO;
-        //Dispatch;
-        if not CopyCancel then
-          lFindNext(SR);
         end;
-      {AK155 If when copying a directory or selected files
+      ClrIO;
+      //Dispatch;
+      if not CopyCancel then
+        lFindNext(SR);
+      end;
+    {AK155 If when copying a directory or selected files
  a read error arises, a message must be shown, not
  simply silently stop copying. But the loop ends normally
  when there are no more files, and under all
  OSes DosError=18 then. Error 3 arises on a directory
  that was successfully moved as a whole.
  }
-      if  (DosError = 18 {ERROR_NO_MORE_FILES}) or
-          (DosError = 3 {PATH_NOT_FOUND})
-      then
-        DosError := 0;
-      if DosError <> 0 then
-        begin
-        Drive := Byte('');
-        if HasDriveLetter(Source) then
-          Drive := Byte(Source[1]);
-        SysErrorFunc(DosError, Drive-Byte('A'));
-        {Abort will be set then}
-        end;
-      {/AK155}
-      lFindClose(SR);
-      end { CopyF };
-
-    label 1;
-
-    function NoCheck(P_: Pointer): Boolean;
-    var P: TDirName absolute P_;
+    if  (DosError = 18 {ERROR_NO_MORE_FILES}) or
+        (DosError = 3 {PATH_NOT_FOUND})
+    then
+      DosError := 0;
+    if DosError <> 0 then
       begin
-      Inc(FrPos);
-      NoCheck := not P.Check;
+      Drive := Byte('');
+      if HasDriveLetter(Source) then
+        Drive := Byte(Source[1]);
+      SysErrorFunc(DosError, Drive-Byte('A'));
+      {Abort will be set then}
       end;
+    {/AK155}
+    lFindClose(SR);
+    end { CopyF };
 
-    function IsNetworkPath(const Path: String): Boolean; {KV}
-      begin
-      IsNetworkPath := ((Length(Path) > 2) and (Path[1] = DnSep) and
-             (Path[2] = DnSep));
-      end;
+  function NoCheck(P_: Pointer): Boolean;
+  var P: TDirName absolute P_;
+    begin
+    Inc(FrPos);
+    NoCheck := not P.Check;
+    end;
 
-    label
-      TryGetInfo;
+  function IsNetworkPath(const Path: String): Boolean; {KV}
+    begin
+    IsNetworkPath := ((Length(Path) > 2) and (Path[1] = DnSep) and
+           (Path[2] = DnSep));
+    end;
+
+  procedure MakeDirectories;
+    label 1, TryGetInfo;
+    var
+      P: PFileRec;
+      PD: TDirName;
+      I: Integer;
+      
+
     begin { MakeDirectories }
     if not CopyPrn then
       begin
