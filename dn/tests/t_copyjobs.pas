@@ -126,5 +126,18 @@ begin
   Check(JobFinish(A) and JobGet(A, J) and (JobLine(J) = '[done] a.iso'), 'a done job is [done]');
   Check(JobCancel(E) and (JobsClearEnded = 5), 'the jobs of the list part are cleared');
 
+  { dn#88 step 2a: the short state of the background copy }
+  Check(JobsStatusText('Copy') = '', 'no jobs: no state');
+  A := JobAdd('a.iso', 0);
+  B := JobAdd('b.log', 0);
+  C := JobAdd('c.txt', 0);
+  Check(JobStart(A) and (JobsStatusText('Copy') = ''), 'a copy in the foreground: no state');
+  Check(JobSetBackground(A, True) and (JobsStatusText('Copy') = 'Copy +2'), 'a background copy of unknown size: the word and the waiting jobs');
+  Check(JobSetTotal(A, 1000) and JobProgress(A, 370) and (JobsStatusText('Copy') = 'Copy 37% +2'), 'the percent once Total is known');
+  Check(JobCancel(B) and (JobsStatusText('Copy') = 'Copy 37% +1'), 'one waiting job: +1');
+  Check(JobCancel(C) and (JobsStatusText('Kopie') = 'Kopie 37%'), 'no waiting jobs: no +N; the word is the caller''s');
+  Check(JobFinish(A) and (JobsStatusText('Copy') = ''), 'a finished copy: no state');
+  Check(JobsClearEnded = 3, 'the jobs of the state part are cleared');
+
 Finish;
 end.

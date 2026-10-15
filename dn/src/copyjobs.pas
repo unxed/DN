@@ -87,6 +87,12 @@ function JobsClearEnded: Integer;
   "[failed] b.log: disk full". The window shows the rows in the order of JobAt. }
 function JobLine(const Job: TCopyJob): String;
 
+{ The short state of the background copy for a place that is always on the screen (dn#88 step 2a): '' when no copy runs in the
+  background; otherwise Name with the percent ("Copy 37%"; Name alone while Total is unknown) and "+N" when N more jobs wait
+  ("Copy 37% +2"). A copy that was not sent to the background and the jobs that have ended give ''. Name comes from the caller, so
+  that the word is translated. }
+function JobsStatusText(const Name: String): String;
+
 { True for a command that must not run while a background copy runs: it would change the files the copy reads or writes (a new copy,
   move, delete, make directory, attributes, rename, archive, a change of the directory or a re-read of a panel), or quit before the
   user can cancel the copy from the jobs list. The copy loop clears such a command instead of passing it to the panels. Navigation,
@@ -343,6 +349,29 @@ begin
   Result := Result + Job.Title;
   if (Job.State = jsFailed) and (Job.Error <> '') then
     Result := Result + ': ' + Job.Error;
+end;
+
+function JobsStatusText(const Name: String): String;
+var
+  Id: LongInt;
+  Job: TCopyJob;
+  N: String;
+begin
+  Result := '';
+  Id := JobRunning;
+  if (Id = 0) or not JobGet(Id, Job) or not Job.Background then
+    Exit;
+  Result := Name;
+  if Job.Total > 0 then
+  begin
+    Str(JobPercent(Id), N);
+    Result := Result + ' ' + N + '%';
+  end;
+  if JobsActive > 1 then
+  begin
+    Str(JobsActive - 1, N);
+    Result := Result + ' +' + N;
+  end;
 end;
 
 const
