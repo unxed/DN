@@ -171,7 +171,10 @@ def background_copy(out, d):
     dst = os.path.join(w, 'destination')
     os.makedirs(src)
     os.makedirs(dst)
-    payload = os.urandom(64 * 1024)
+    # Keep the copy active long enough for the pty test to select Background
+    # even on fast runners; smaller payloads can finish before the progress
+    # dialog is rendered, making the test timing-dependent.
+    payload = os.urandom(256 * 1024)
     for i in range(512):
         with open(os.path.join(src, 'file%03d.dat' % i), 'wb') as f:
             f.write(payload)
