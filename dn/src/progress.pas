@@ -346,6 +346,7 @@ procedure TWhileView.HandleEvent(var Event: TEvent);
   var
     P: TPoint;
     R: TRect;
+    ToBg: Boolean;
 
   procedure MoveView;
     begin
@@ -367,11 +368,30 @@ procedure TWhileView.HandleEvent(var Event: TEvent);
   case Event.What of
     evKeyDown:
       case DNKeyCode(Event) of
+        kbTab, kbShiftTab:
+          { dn#40: while "Background" is offered, Tab moves the default button (Enter) between "Stop" and "Background" }
+          if BackgroundOffered and (BgBut <> nil) and (But <> nil) then
+            begin
+            BgBut.AmDefault := not BgBut.AmDefault;
+            But.AmDefault := not BgBut.AmDefault;
+            But.DrawView;
+            BgBut.DrawView;
+            ClearEvent(Event);
+            end;
         kbESC, kbEnter:
           begin
+          ToBg := (DNKeyCode(Event) = kbEnter) and BackgroundOffered and (BgBut <> nil) and BgBut.AmDefault;
           Event.What := evCommand;
-          Event.Message.Command := cmCancel;
-          Event.Message.InfoPtr := But;
+          if ToBg then
+            begin
+            Event.Message.Command := cmCopyBackground;
+            Event.Message.InfoPtr := BgBut;
+            end
+          else
+            begin
+            Event.Message.Command := cmCancel;
+            Event.Message.InfoPtr := But;
+            end;
           if Application <> nil then
             Application.PutEvent(Event);
           ClearEvent(Event);
@@ -561,6 +581,13 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
     Event: TEvent;
   begin
   Application.GetEvent(Event);
+  { Panel function keys arrive here as evKeyDown; they have not yet become the
+    evCommand checked below. Drop the direct copy/move/delete keys while the
+    background job owns its source and destination. }
+  if (Event.What = evKeyDown) and
+    ((DNKeyCode(Event) = kbF5) or (DNKeyCode(Event) = kbF6) or
+     (DNKeyCode(Event) = kbF8)) then
+    ClearEvent(Event);
   if  (Event.What = evCommand) and (Event.Message.Command = cmCancel) and
       (Event.Message.InfoPtr = InfoView.But) or
       (Event.What = evKeyDown) and (DNKeyCode(Event) = kbESC)

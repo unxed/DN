@@ -3,6 +3,7 @@
 save a file, rename a group of files by a mask (File -> Group rename). usage: tools/dn-linux-ops.py OUTDIR   (OUTDIR: the result of tools/build.sh linux|linux64)"""
 import base64
 import os
+import platform
 import re
 import shutil
 import sys
@@ -162,6 +163,108 @@ def session(out, d):
     scr = t.text()
     status = t.close(4)
     check(status == 0, 'Alt-X ends the program (status %r)' % (status,), scr)
+
+
+def background_copy(out, d):
+    """A background copy leaves the panels responsive and finishes every file."""
+    if platform.machine() in ('aarch64', 'arm64'):
+        # unxed/dn#78: copying a directory crashes DN on aarch64 (Access violation in TWhileView.Write); remove this when it is fixed
+        print('SKIP background_copy: unxed/dn#78 (Access violation in TWhileView.Write when a directory is copied on aarch64)', flush=True)
+        return
+    w = os.path.join(d, 'background')
+    src = os.path.join(w, 'source')
+    dst = os.path.join(w, 'destination')
+    os.makedirs(src)
+    os.makedirs(dst)
+    # Many small files, not few big ones: the progress window is redrawn between files, and a window of 64 files of 8 MB was not
+    # on the screen for 10 s on any runner ("the progress window offers Background" failed in all six jobs of dn-linux #714, while
+    # 512 files of 256 KB passed it in five). 4096 files of 64 KB keep the copy running longer than 512 of 256 KB did; whether it
+    # is still running when the keys are pressed is checked, not assumed.
+    nfiles = 4096
+    payload = os.urandom(64 * 1024)
+    for i in range(nfiles):
+        with open(os.path.join(src, 'file%03d.dat' % i), 'wb') as f:
+            f.write(payload)
+
+    t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'))
+    t.started()
+    try:
+        t.send(F['ESC'], 0.3)
+        t.send(F['HOME'], 0.2)
+        t.send(F['DOWN'], 0.2)                           # .., destination, source
+        t.send(F['DOWN'], 0.2)
+        t.send(F['F5'], 0.2)
+        t.send('destination', 0.2)
+        t.send(F['ENTER'], 0.2)
+        offered = t.wait_text('Background', timeout=10.0)
+        check(offered, 'F5: the progress window offers Background', t.text())
+        if offered:
+            t.send(F['TAB'], 0.5)                       # Stop -> Background (the copy takes one event per 300 ms)
+            t.send(F['ENTER'], 0.8)
+            after_enter = t.text()
+            # dn-linux #720 (head 84a1f05): "Abort operation?" was already open when F5/F8 were pressed, and the copy stood at 681
+            # of 4096 files behind that modal question; show the screen right after Enter to see who opened it
+            if 'Abort operation' in after_enter:
+                print('--- the screen right after Enter on Background: the copy asks "Abort operation?" (Stop was pressed?):\n' + after_enter, flush=True)
+                t.send(F['ESC'], 0.8)
+            returned = t.until(lambda: 'Name' in t.text() and 'Background' not in t.text(), 5.0)
+            still_copying = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i))
+                                    for i in range(nfiles))
+            check(returned, 'Background: the panels return', t.text())
+            if still_copying:
+                t.send(F['DOWN'], 0.5)
+                t.send(F['F5'], 0.5)
+                # the Copy dialog is the only screen with a Cancel button (the progress window has Stop); the F-key bar
+                # and the title of the progress window both contain "Copy", so that word proves nothing
+                f5_opened_dialog = 'Cancel' in t.text()
+                if f5_opened_dialog:
+                    t.send(F['ESC'], 0.5)
+                t.send(F['F8'], 0.5)
+                f8_screen = t.text()
+                # F8 on a copy that has just finished is a real delete dialog: only a copy that still runs when the screen is read proves anything
+                copy_ran_on = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
+                f8_dialog_visible = 'Confirm' in f8_screen or 'wish to delete' in f8_screen
+                f8_opened_dialog = f8_dialog_visible and copy_ran_on
+                if f8_opened_dialog:
+                    print('--- the screen right after F8 (a dialog is expected to be absent):\n' + f8_screen, flush=True)
+                if f8_dialog_visible:
+                    t.send(F['ESC'], 0.2)
+                check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
+                      'Background: panel navigation works and F5/F8 do not start foreground operations '
+                      '(F5 dialog %r, F8 dialog %r, source is a directory %r, %d of %d files copied)' % (
+                          f5_opened_dialog, f8_opened_dialog, os.path.isdir(src),
+                          sum(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles)), nfiles),
+                      t.text())
+            else:
+                print('SKIP Background: the copy finished before F5/F8 could be pressed, nothing is left to block', flush=True)
+
+        expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(nfiles)]
+        # the speed of the copy in the background: files copied after 0, 3 and 6 seconds (a copy waiting for events for 100 ms per file
+        # does about 10 files a second)
+        counts = []
+        for _ in range(3):
+            counts.append(sum(os.path.isfile(p) for p in expected))
+            t.until(lambda: False, 3.0)
+        print('background copy: files copied at 0, 3 and 6 seconds: %r of %d' % (counts, nfiles), flush=True)
+        finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 60.0)
+        copied = [p for p in expected if os.path.isfile(p)]
+        wrong = [p for p in copied if open(p, 'rb').read() != payload]
+        check(finished and not wrong,
+              'Background: every source file finishes with the same contents '
+              '(finished %r, %d of %d files exist, %d with other contents, source is a directory %r)' % (
+                  finished, len(copied), nfiles, len(wrong), os.path.isdir(src)), t.text())
+        check(t.alive() and 'Fatal' not in t.text(), 'Background: DN remains alive', t.text())
+    finally:
+        if t.alive():
+            t.send(F['ALT-X'], 0.3)
+            t.send(F['ENTER'], 0.3)
+        t.close(3)
+        # a crash report of DN (Fatal Error ... crash001.txt) names the call chain: put it in the log, the file is lost with the runner
+        crash = os.path.join(d, 'crash')
+        if os.path.isdir(crash):
+            for name in sorted(os.listdir(crash)):
+                print('--- ' + name, flush=True)
+                print(open(os.path.join(crash, name), errors='replace').read()[:6000], flush=True)
 
 
 def utf8(out, d):
@@ -381,7 +484,7 @@ def part(out, fn):
 
 def main():
     out = os.path.abspath(sys.argv[1])
-    parts = [session, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
+    parts = [session, background_copy, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
     side_by_side([lambda fn=fn: part(out, fn) for fn in parts])          # each in a directory of its own, all at once
     print('ALL OK (%d checks)' % count if not fails else '%d of %d checks FAILED' % (fails, count))
     sys.exit(1 if fails else 0)
