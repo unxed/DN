@@ -212,8 +212,15 @@ def background_copy(out, d):
                 t.send(F['F5'], 0.5)
                 # the Copy dialog is the only screen with a Cancel button (the progress window has Stop); the F-key bar
                 # and the title of the progress window both contain "Copy", so that word proves nothing
-                f5_opened_dialog = 'Cancel' in t.text()
+                f5_screen = t.text()
+                # F5 on a copy that has just finished is a real Copy dialog (dn-linux #736: 4096 of 4096 files were copied when F5 was
+                # pressed): only a copy that still runs when the screen is read proves anything, as for F8 below
+                copy_ran_f5 = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
+                f5_dialog_visible = 'Cancel' in f5_screen
+                f5_opened_dialog = f5_dialog_visible and copy_ran_f5
                 if f5_opened_dialog:
+                    print('--- the screen right after F5 (a dialog is expected to be absent):\n' + f5_screen, flush=True)
+                if f5_dialog_visible:
                     t.send(F['ESC'], 0.5)
                 t.send(F['F8'], 0.5)
                 f8_screen = t.text()
