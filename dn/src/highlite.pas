@@ -370,102 +370,102 @@ procedure Highlites(Len: Integer; S: PChar; const Params: THighliteParams);
     ParseChars := j-I;
     end { ParseChars };
 
-  function CheckNumber(I: Integer): Integer;
-
-    function ParseNumber(Max: Integer; Mode: Char; Options: Word;
-         const Digits: TCharSet): Integer;
-      const
-        strSuffix: String[1] = 'X';
-        strAmpersandPrefix: String[2] = '&X';
-        strAmpersandText: String[3] = '&X''';
-        strPrefix: String[2] = 'X''';
-      var
-        j: Integer;
+  function ParseNumber(I, Max: Integer; Mode: Char; Options: Word;
+       const Digits: TCharSet): Integer;
+    const
+      strSuffix: String[1] = 'X';
+      strAmpersandPrefix: String[2] = '&X';
+      strAmpersandText: String[3] = '&X''';
+      strPrefix: String[2] = 'X''';
+    var
+      j: Integer;
+    begin
+    if  ( (hoSuffix and Options) <> 0) and (S[i] in DecDigits) then
       begin
-      if  ( (hoSuffix and Options) <> 0) and (S[i] in DecDigits) then
-        begin
-        strSuffix[1] := Mode;
-        j := ParseChars(i, '', Digits, strSuffix);
-        if j > Max then
-          Max := j;
-        end;
-      if  (hoAmpersandPrefix and Options) <> 0 then
-        begin
-        strAmpersandPrefix[2] := Mode;
-        j := ParseChars(i, strAmpersandPrefix, Digits, '');
-        if j > Max then
-          Max := j;
-        end;
-      if  (hoAmpersandText and Options) <> 0 then
-        begin
-        strAmpersandText[2] := Mode;
-        j := ParseChars(i, strAmpersandText, Digits, '''');
-        if j > Max then
-          Max := j;
-        end;
-      if  (hoPrefix and Options) <> 0 then
-        begin
-        strPrefix[1] := Mode;
-        j := ParseChars(i, strPrefix, Digits, '');
-        if j > Max then
-          Max := j;
-        end;
-      if  (hoPrefixText and Options) <> 0 then
-        begin
-        strPrefix[1] := Mode;
-        j := ParseChars(i, strPrefix, Digits, '''');
-        if j > Max then
-          Max := j;
-        end;
-      ParseNumber := Max;
-      end { ParseNumber };
-
-    function ParseFloat: Integer;
-      var
-        max: Integer;
-        j: Integer;
-        k: Integer;
+      strSuffix[1] := Mode;
+      j := ParseChars(i, '', Digits, strSuffix);
+      if j > Max then
+        Max := j;
+      end;
+    if  (hoAmpersandPrefix and Options) <> 0 then
       begin
-      ParseFloat := 0;
-      j := i;
+      strAmpersandPrefix[2] := Mode;
+      j := ParseChars(i, strAmpersandPrefix, Digits, '');
+      if j > Max then
+        Max := j;
+      end;
+    if  (hoAmpersandText and Options) <> 0 then
+      begin
+      strAmpersandText[2] := Mode;
+      j := ParseChars(i, strAmpersandText, Digits, '''');
+      if j > Max then
+        Max := j;
+      end;
+    if  (hoPrefix and Options) <> 0 then
+      begin
+      strPrefix[1] := Mode;
+      j := ParseChars(i, strPrefix, Digits, '');
+      if j > Max then
+        Max := j;
+      end;
+    if  (hoPrefixText and Options) <> 0 then
+      begin
+      strPrefix[1] := Mode;
+      j := ParseChars(i, strPrefix, Digits, '''');
+      if j > Max then
+        Max := j;
+      end;
+    ParseNumber := Max;
+    end { ParseNumber };
+
+  function ParseFloat(I: Integer): Integer;
+    var
+      max: Integer;
+      j: Integer;
+      k: Integer;
+    begin
+    ParseFloat := 0;
+    j := i;
+    while (j < len) and (S[j] in DecDigits) do
+      Inc(j);
+    if  (i = j) and ((Params.GenFlags and hoAllowShortFloat) = 0) then
+      Exit;
+    max := j-i;
+    k := j;
+    if S[j] = '.' then
+      Inc(j)
+    else if j = i then
+      begin
+      ParseFloat := max;
+      Exit;
+      end;
+    if j > k then
+      begin
+      k := j;
       while (j < len) and (S[j] in DecDigits) do
         Inc(j);
-      if  (i = j) and ((Params.GenFlags and hoAllowShortFloat) = 0) then
-        Exit;
-      max := j-i;
-      k := j;
-      if S[j] = '.' then
-        Inc(j)
-      else if j = i then
+      if j = k then
         begin
         ParseFloat := max;
         Exit;
         end;
-      if j > k then
-        begin
-        k := j;
-        while (j < len) and (S[j] in DecDigits) do
-          Inc(j);
-        if j = k then
-          begin
-          ParseFloat := max;
-          Exit;
-          end;
-        end;
-      max := j-i;
-      if S[j] in ['e', 'E'] then
-        begin
+      end;
+    max := j-i;
+    if S[j] in ['e', 'E'] then
+      begin
+      Inc(j);
+      if  (j < len) and (S[j] in ['+', '-']) then
         Inc(j);
-        if  (j < len) and (S[j] in ['+', '-']) then
-          Inc(j);
-        k := j;
-        while (j < len) and (S[j] in DecDigits) do
-          Inc(j);
-        if j > k then
-          max := j-i;
-        end;
-      ParseFloat := max;
-      end { ParseFloat: };
+      k := j;
+      while (j < len) and (S[j] in DecDigits) do
+        Inc(j);
+      if j > k then
+        max := j-i;
+      end;
+    ParseFloat := max;
+    end { ParseFloat: };
+
+  function CheckNumber(I: Integer): Integer;
 
     var
       max: Integer;
@@ -475,7 +475,7 @@ procedure Highlites(Len: Integer; S: PChar; const Params: THighliteParams);
     {Default is float or decimal}
 
     if  (hoFloatNumbers and Params.GenFlags) <> 0 then
-      max := ParseFloat
+      max := ParseFloat(I)
     else
       max := ParseChars(I, '', DecDigits, '');
 
@@ -500,27 +500,27 @@ procedure Highlites(Len: Integer; S: PChar; const Params: THighliteParams);
     {Hex numbers}
 
     if Params.HexFlags <> 0 then
-      max := ParseNumber(max, 'H', Params.HexFlags, HexDigits);
+      max := ParseNumber(I, max, 'H', Params.HexFlags, HexDigits);
 
     {Decimal numbers}
 
     if Params.DecFlags <> 0 then
-      max := ParseNumber(max, 'D', Params.DecFlags, DecDigits);
+      max := ParseNumber(I, max, 'D', Params.DecFlags, DecDigits);
 
     {Octal numbers Q}
 
     if Params.OctFlagsQ <> 0 then
-      max := ParseNumber(max, 'Q', Params.OctFlagsQ, OctDigits);
+      max := ParseNumber(I, max, 'Q', Params.OctFlagsQ, OctDigits);
 
     {Octal numbers O}
 
     if Params.OctFlagsO <> 0 then
-      max := ParseNumber(max, 'O', Params.OctFlagsO, OctDigits);
+      max := ParseNumber(I, max, 'O', Params.OctFlagsO, OctDigits);
 
     {Binary numbers}
 
     if Params.BinFlags <> 0 then
-      max := ParseNumber(max, 'B', Params.BinFlags, BinDigits);
+      max := ParseNumber(I, max, 'B', Params.BinFlags, BinDigits);
 
     CheckNumber := max;
 
