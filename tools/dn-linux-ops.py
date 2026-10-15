@@ -209,7 +209,10 @@ def background_copy(out, d):
                 if f5_opened_dialog:
                     t.send(F['ESC'], 0.2)
                 t.send(F['F8'], 0.2)
-                f8_opened_dialog = 'Confirm' in t.text() or 'wish to delete' in t.text()
+                f8_screen = t.text()
+                f8_opened_dialog = 'Confirm' in f8_screen or 'wish to delete' in f8_screen
+                if f8_opened_dialog:
+                    print('--- the screen right after F8 (a dialog is expected to be absent):\n' + f8_screen, flush=True)
                 if f8_opened_dialog:
                     t.send(F['ESC'], 0.2)
                 check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
@@ -222,6 +225,13 @@ def background_copy(out, d):
                 print('SKIP Background: the copy finished before F5/F8 could be pressed, nothing is left to block', flush=True)
 
         expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(nfiles)]
+        # the speed of the copy in the background: files copied after 0, 3 and 6 seconds (a copy waiting for events for 100 ms per file
+        # does about 10 files a second)
+        counts = []
+        for _ in range(3):
+            counts.append(sum(os.path.isfile(p) for p in expected))
+            t.until(lambda: False, 3.0)
+        print('background copy: files copied at 0, 3 and 6 seconds: %r of %d' % (counts, nfiles), flush=True)
         finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 60.0)
         copied = [p for p in expected if os.path.isfile(p)]
         wrong = [p for p in copied if open(p, 'rb').read() != payload]
