@@ -1830,24 +1830,85 @@ function IsOnDesktop(P: TView): Boolean;
   until V = Desktop.Last;
   end;
 
-{ The list of the copy jobs (dn#40 part 4): one row per job (CopyJobs.JobLine), or a note that there are none. }
+{ The list of the copy jobs (dn#40 part 4): a dialog with one row per job (CopyJobs.JobLine), the buttons "Cancel job" (the focused
+  job), "Clear" (the ended jobs) and OK. With no jobs it only says so. The dialog is built again after each button, so the rows
+  and the ids behind them always come from CopyJobs. }
 procedure ShowCopyJobs;
 var
-  I: Integer;
+  D: TDialog;
+  P: TView;
+  R: TRect;
+  L: TCollection;
+  Ids: array of LongInt;
+  I, Cmd, Focus: Integer;
   Job: TCopyJob;
-  S: String;
-begin
-  S := '';
-  for I := 0 to JobCount - 1 do
-    if JobAt(I, Job) then
-    begin
-      if S <> '' then
-        S := S + ^M;
-      S := S + JobLine(Job);
+  Row: PString;
+  {$PUSH}{$PACKRECORDS DEFAULT} { the layout of TvList.TListBoxRec }
+  Data: record
+    List: Pointer {TCollection};
+    Focused: Word;
     end;
-  if S = '' then
-    S := GetString(dlCopyJobsNone);
-  MessageBox(GetString(dlCopyJobsTitle) + ^M + ^M + S, nil, mfInformation + mfOKButton);
+  {$POP}
+begin
+  Focus := 0;
+  repeat
+    if JobCount = 0 then
+    begin
+      MessageBox(GetString(dlCopyJobsTitle) + ^M + ^M + GetString(dlCopyJobsNone), nil, mfInformation + mfOKButton);
+      Exit;
+    end;
+    L := TCollection.Create(5, 5);
+    SetLength(Ids, 0);
+    for I := 0 to JobCount - 1 do
+      if JobAt(I, Job) then
+      begin
+        L.Insert(NewStr(JobLine(Job)));
+        SetLength(Ids, Length(Ids) + 1);
+        Ids[High(Ids)] := Job.Id;
+      end;
+
+    R := TRect.Create(1, 1, 57, 17);
+    D := TDialog.Create(R, GetString(dlCopyJobsTitle));
+    D.Options := D.Options or ofCentered;
+
+    R := TRect.Create(53, 2, 54, 12);
+    P := TScrollBar.Create(R);
+    P.Options := P.Options or ofPostProcess;
+    D.Insert(P);
+
+    R := TRect.Create(2, 2, 53, 12);
+    P := TListBox.Create(R, 1, TScrollBar(P));
+    D.Insert(P);
+
+    R := TRect.Create(2, 13, 18, 15);
+    D.Insert(TButton.Create(R, GetString(dlCopyJobCancel), cmYes, bfDefault));
+    R := TRect.Create(19, 13, 31, 15);
+    D.Insert(TButton.Create(R, GetString(dlCopyJobClear), cmNo, bfNormal));
+    R := TRect.Create(32, 13, 42, 15);
+    D.Insert(TButton.Create(R, GetString(dlOKButton), cmOK, bfNormal));
+    D.SelectNext(False);
+
+    if Focus >= L.Count then
+      Focus := L.Count - 1;
+    Data.List := L;
+    Data.Focused := Focus;
+    D.SetData(Data);
+    Cmd := MainApp.Desktop.ExecView(D);
+    D.GetData(Data);
+    Focus := Data.Focused;
+    D.Free;
+    for I := 0 to L.Count - 1 do
+    begin
+      Row := PString(L.At(I));
+      DisposeStr(Row);
+    end;
+    L.Free; { DN: the owner of the list disposes it (mainapp.pas, ListBoxOwnsList) }
+
+    if (Cmd = cmYes) and (Focus >= 0) and (Focus < Length(Ids)) then
+      JobCancel(Ids[Focus])
+    else if Cmd = cmNo then
+      JobsClearEnded;
+  until (Cmd <> cmYes) and (Cmd <> cmNo);
 end;
 
 procedure TDNApplication.HandleCommand(var Event: TEvent);

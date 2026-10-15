@@ -521,6 +521,8 @@ dlStop,                    '~С~топ'
 dlCopyBackground,          'В ~ф~оне'
 dlCopyJobsTitle,          'Задания копирования'
 dlCopyJobsNone,           'Заданий копирования пока нет'
+dlCopyJobCancel,          '~О~тменить'
+dlCopyJobClear,           'О~ч~истить'
 dlStoreColorPal,           'Запомнить цветовую палитру'
 
 dlSystemInfo               'Системная информация'
