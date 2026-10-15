@@ -10,6 +10,8 @@ A port of DOS Navigator to Free Pascal.
 
 When a stretch of real use goes by without crash/hang reports, the label moves to beta. Feature gaps that are already known (for example archive browsing) are tracked in issues and will be fixed after the class migration settles.
 
+For candidate external archive tools and their command forms, see [`docs/ARCHIVE-WRAPPERS.md`](docs/ARCHIVE-WRAPPERS.md).
+
 The repository holds two independent projects with different licenses and one shared toolset:
 
 | Directory | What it is | License | Where the code comes from |
