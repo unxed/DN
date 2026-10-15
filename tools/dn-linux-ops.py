@@ -221,10 +221,13 @@ def background_copy(out, d):
                     t.send(F['ESC'], 0.5)
                 t.send(F['F8'], 0.5)
                 f8_screen = t.text()
-                f8_opened_dialog = 'Confirm' in f8_screen or 'wish to delete' in f8_screen
+                # F8 on a copy that has just finished is a real delete dialog: only a copy that still runs when the screen is read proves anything
+                copy_ran_on = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
+                f8_dialog_visible = 'Confirm' in f8_screen or 'wish to delete' in f8_screen
+                f8_opened_dialog = f8_dialog_visible and copy_ran_on
                 if f8_opened_dialog:
                     print('--- the screen right after F8 (a dialog is expected to be absent):\n' + f8_screen, flush=True)
-                if f8_opened_dialog:
+                if f8_dialog_visible:
                     t.send(F['ESC'], 0.2)
                 check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
                       'Background: panel navigation works and F5/F8 do not start foreground operations '
