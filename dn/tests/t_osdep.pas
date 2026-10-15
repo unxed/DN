@@ -100,7 +100,8 @@ begin
   Q := SysDiskSizeLongX(P);
   Check(Q > 0, 'the size of the current disk is known');
   Check((SysDiskFreeLongX(P) >= 0) and (SysDiskFreeLongX(P) <= Q), 'free space is between 0 and the size');
-  Check(SysDiskFreeLong(0) = SysDiskFreeLongX(P), 'the same by the drive number 0');
+  { the two calls are not atomic: files written meanwhile (the parallel builds of the tests) change the free space }
+  Check(Abs(SysDiskFreeLong(0) - SysDiskFreeLongX(P)) < 64 * 1024 * 1024, 'the same by the drive number 0');
   Drives := SysGetValidDrives;
   Check(Drives <> 0, 'some drive exists');
 {$IFDEF GO32V2}
