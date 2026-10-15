@@ -154,9 +154,9 @@ procedure MyApp.GetEvent(var Event: TEvent);
         ScreenGrabber(False);
         Exit
         end;
-      { Far UX mode: in the file manager window Alt+F9 changes the screen mode, Alt+F10 opens the folder tree and Alt+F12
-        the folder history, as in Far (in DN they are the game, user mode 1 and the language). The editor and the
-        other windows keep their own Alt+F keys. }
+      { Far UX mode: in the file manager window Alt+F9 changes the screen mode, Alt+F10 opens the folder tree, Alt+F11
+        the history of viewed and edited files and Alt+F12 the folder history, as in Far (in DN they are the game, user
+        mode 1, the plugins and the language). The editor and the other windows keep their own Alt+F keys. }
       if FarUxEnabled and (not MacroPlaying) and (Pointer(Current) = Pointer(MainApp.Desktop))
         and (MainApp.Desktop.Current is TXDoubleWindow)
       then
@@ -164,6 +164,7 @@ procedure MyApp.GetEvent(var Event: TEvent);
         case DNKeyCode(Event) of
           kbAltF9: W := cmChScreenMode;
           kbAltF10: W := cmDirTree;
+          kbAltF11: W := cmViewHistory;
           kbAltF12: W := cmDirHistory;
           else W := 0;
         end {case};
