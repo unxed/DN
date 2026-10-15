@@ -9,6 +9,7 @@ on:
       - bootstrap/**
       - tools/check-layout.sh
       - tools/check-platform.py
+      - tools/safe-census.py
       - tools/ci-par.sh
       - tools/tests/**
       - .github/workflows/layout.yml
@@ -25,5 +26,6 @@ jobs:
           CMDS: |
             tools/check-layout.sh
             python3 tools/check-platform.py
+            python3 tools/safe-census.py
             python3 -B -m unittest discover -s tools/tests -p 'test_*.py'
         run: tools/ci-par.sh
