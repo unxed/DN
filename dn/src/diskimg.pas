@@ -106,6 +106,25 @@ function UnpackImage(const FName, DestDir: String; PInfo: TWhileView)
     F: TBufStream;
     Error, Cancel: Boolean;
     Tmr: TEventTimer;
+    BRec: PBootRec;
+    FAT: PByteArray absolute BRec;
+
+    Reserved: Word;
+    FatCopies: Byte;
+    SectPerClust: Byte;
+    BytesPerClu: Word;
+    SectPerFAT: Word;
+    SectLen: Word;
+    FirstClust: Word;
+    RootEntries: Word;
+    TotalClu: Word;
+    FATSize: LongInt;
+    NumSectors: LongInt;
+
+    VolumeLabel: String[13];
+    fPos: LongInt;
+    SearchVolume: Boolean; {piwamoto}
+    DSKoffset: AWord; {piwamoto}
 
   procedure CheckCancel;
     begin
@@ -122,280 +141,259 @@ function UnpackImage(const FName, DestDir: String; PInfo: TWhileView)
       end;
     end;
 
-  procedure DoIt;
+  procedure fSeek(Pos: LongInt);
+    begin
+    if fPos = Pos then
+      Exit;
+    fPos := Pos;
+    F.Seek(Pos);
+    end;
+
+  procedure fRead(var Buf; Count: LongInt);
+    begin
+    F.Read(Buf, Count);
+    Inc(fPos, Count);
+    end;
+
+  function NextFAT(N: Word): Word;
     var
-      BRec: PBootRec;
-      FAT: PByteArray absolute BRec;
-
-      Reserved: Word;
-      FatCopies: Byte;
-      SectPerClust: Byte;
-      BytesPerClu: Word;
-      SectPerFAT: Word;
-      SectLen: Word;
-      FirstClust: Word;
-      RootEntries: Word;
-      TotalClu: Word;
-      FATSize: LongInt;
-      NumSectors: LongInt;
-
-      VolumeLabel: String[13];
-      fPos: LongInt;
-      SearchVolume: Boolean; {piwamoto}
-      DSKoffset: AWord; {piwamoto}
-
-    procedure fSeek(Pos: LongInt);
+      D: Word;
+    begin
+    if Error or (N < 2) or (N > TotalClu+2) then
       begin
-      if fPos = Pos then
+      Error := True;
+      Exit
+      end;
+    D := (N*3) shr 1;
+    D := FAT^[D]+FAT^[D+1] shl 8;
+    if N and 1 = 0 then
+      D := D and $FFF
+    else
+      D := D shr 4;
+    NextFAT := D;
+    end;
+
+  function Fat2Sec(W: Word): LongInt;
+    begin
+    Fat2Sec := LongInt(FirstClust+(W-2)*SectPerClust);
+    end;
+
+  procedure Cpy(B: TBufStream; CpyBuf: PByteArray; var Clus: Word;
+      var len: LongInt);
+    var
+      A: Word;
+      LocErr: Boolean;
+    begin
+    if Error or Cancel then
+      Exit;
+    CtrlBreakHit := False;
+    LocErr := True;
+    repeat
+      CheckCancel;
+      if Cancel then
+        Break;
+      if F.Status <> stOK then
         Exit;
-      fPos := Pos;
-      F.Seek(Pos);
-      end;
-
-    procedure fRead(var Buf; Count: LongInt);
-      begin
-      F.Read(Buf, Count);
-      Inc(fPos, Count);
-      end;
-
-    function NextFAT(N: Word): Word;
-      var
-        D: Word;
-      begin
-      if Error or (N < 2) or (N > TotalClu+2) then
-        begin
-        Error := True;
-        Exit
-        end;
-      D := (N*3) shr 1;
-      D := FAT^[D]+FAT^[D+1] shl 8;
-      if N and 1 = 0 then
-        D := D and $FFF
-      else
-        D := D shr 4;
-      NextFAT := D;
-      end;
-
-    function Fat2Sec(W: Word): LongInt;
-      begin
-      Fat2Sec := LongInt(FirstClust+(W-2)*SectPerClust);
-      end;
-
-    procedure WriteFile(const ADir: String; const ANm: Str12; Clus: Word;
-        len, Date: LongInt; Attr: Byte);
-      var
-        B: TBufStream;
-        Dir, FName: String;
-
-      procedure TryInit;
-        begin
-        B := TBufStream.Create(FName, stCreate, $8000);
-        if B.Status <> stOK then
-          begin
-          B.Free;
-          B := nil;
-          end;
-        end;
-
-      var
-        CpyBuf: PByteArray;
-
-      procedure Cpy;
-        var
-          A: Word;
-          LocErr: Boolean;
-        begin
-        if Error or Cancel then
-          Exit;
-        CtrlBreakHit := False;
-        LocErr := True;
-        repeat
-          CheckCancel;
-          if Cancel then
-            Break;
-          if F.Status <> stOK then
-            Exit;
-          fSeek(Fat2Sec(Clus)*SectLen+DskOffset);
-          if F.Status <> stOK then
-            Exit;
-          A := Min(len, BytesPerClu);
-          Dec(len, A);
-          fRead(CpyBuf^, A);
-          if F.Status <> stOK then
-            Exit;
-          B.Write(CpyBuf^, A);
-          if B.Status <> stOK then
-            Exit;
-          if len = 0 then
-            begin
-            LocErr := False;
-            Break;
-            end;
-          Clus := NextFAT(Clus);
-        until Error;
-        Error := Error or LocErr;
-        end { Cpy };
-
-      procedure SetFData;
-        var
-          F: lFile;
-        begin
-        FileMode := $22 {open_access_ReadWrite + open_share_DenyWrite};
-        lAssignFile(F, FName);
-        lResetFile(F, 1);
-        SetFTime(F, Date);
-        Close(F.F);
-        if Attr <> Archive then
-          lSetFAttr(F, Attr);
-        end;
-
-      begin { WriteFile }
-      if Error then
+      fSeek(Fat2Sec(Clus)*SectLen+DskOffset);
+      if F.Status <> stOK then
         Exit;
-      Dir := FmtStr(ADir, VolumeLabel);
-      FName := MakeNormName(Dir, ANm);
-      PInfo.Write(3, LowStrg(GetName(FName)));
+      A := Min(len, BytesPerClu);
+      Dec(len, A);
+      fRead(CpyBuf^, A);
+      if F.Status <> stOK then
+        Exit;
+      B.Write(CpyBuf^, A);
+      if B.Status <> stOK then
+        Exit;
+      if len = 0 then
+        begin
+        LocErr := False;
+        Break;
+        end;
+      Clus := NextFAT(Clus);
+    until Error;
+    Error := Error or LocErr;
+    end { Cpy };
+
+  procedure WriteFile(const ADir: String; const ANm: Str12; Clus: Word;
+      len, Date: LongInt; Attr: Byte);
+    var
+      B: TBufStream;
+      Dir, FName: String;
+
+    procedure TryInit;
+      begin
+      B := TBufStream.Create(FName, stCreate, $8000);
+      if B.Status <> stOK then
+        begin
+        B.Free;
+        B := nil;
+        end;
+      end;
+
+    var
+      CpyBuf: PByteArray;
+
+    procedure SetFData;
+      var
+        F: lFile;
+      begin
+      FileMode := $22 {open_access_ReadWrite + open_share_DenyWrite};
+      lAssignFile(F, FName);
+      lResetFile(F, 1);
+      SetFTime(F, Date);
+      Close(F.F);
+      if Attr <> Archive then
+        lSetFAttr(F, Attr);
+      end;
+
+    begin { WriteFile }
+    if Error then
+      Exit;
+    Dir := FmtStr(ADir, VolumeLabel);
+    FName := MakeNormName(Dir, ANm);
+    PInfo.Write(3, LowStrg(GetName(FName)));
+    TryInit;
+    if B = nil then
+      begin
+      CreateDirInheritance(Dir, False);
       TryInit;
       if B = nil then
-        begin
-        CreateDirInheritance(Dir, False);
-        TryInit;
-        if B = nil then
-          Exit;
-        end;
-      GetMem(CpyBuf, BytesPerClu);
-      Cpy;
-      FreeMem(CpyBuf, BytesPerClu);
-      B.Free;
-      B := nil;
-      if Error then
-        EraseFile(FName)
-      else
-        SetFData;
-      end { WriteFile };
+        Exit;
+      end;
+    GetMem(CpyBuf, BytesPerClu);
+    Cpy(B, CpyBuf, Clus, len);
+    FreeMem(CpyBuf, BytesPerClu);
+    B.Free;
+    B := nil;
+    if Error then
+      EraseFile(FName)
+    else
+      SetFData;
+    end { WriteFile };
 
-    procedure ProcessDir(const Dir: String; Ofst: Word;
-         OfstIsCluster: Boolean);
-      var
-        _Dir: PByteArray;
-        DR: TDirRec;
-        Nm: Str12;
-        J, I, FileCount, MemSize: Word;
-      begin
-      CtrlBreakHit := False;
-      if OfstIsCluster then
-        begin {subdir}
-        MemSize := 0;
-        FileCount := Ofst;
-        {use FileCount for counting subdir's FAT entries}
-        repeat
-          {calc memsize for this subdir}
-          FileCount := NextFAT(FileCount);
-          Inc(MemSize);
-        until (FileCount > $ff7);
-        MemSize := MemSize*BytesPerClu;
-        GetMem(_Dir, MemSize);
-        if _Dir = nil then
-          Exit;
-        I := 0;
-        repeat
-          fSeek(Fat2Sec(Ofst)*SectLen+DskOffset);
-          fRead(_Dir^[I], BytesPerClu);
-          if F.Status <> stOK then
-            Exit;
-          I := I+BytesPerClu;
-          Ofst := NextFAT(Ofst);
-        until (Ofst > $ff7);
-        FileCount := I div 32;
-        end
-      else
-        begin {root dir}
-        fSeek(LongInt(Ofst)*SectLen+DskOffset);
-        MemSize := RootEntries*32;
-        GetMem(_Dir, MemSize);
-        fRead(_Dir^, MemSize);
+  procedure ProcessDir(const Dir: String; Ofst: Word;
+       OfstIsCluster: Boolean);
+    var
+      _Dir: PByteArray;
+      DR: TDirRec;
+      Nm: Str12;
+      J, I, FileCount, MemSize: Word;
+    begin
+    CtrlBreakHit := False;
+    if OfstIsCluster then
+      begin {subdir}
+      MemSize := 0;
+      FileCount := Ofst;
+      {use FileCount for counting subdir's FAT entries}
+      repeat
+        {calc memsize for this subdir}
+        FileCount := NextFAT(FileCount);
+        Inc(MemSize);
+      until (FileCount > $ff7);
+      MemSize := MemSize*BytesPerClu;
+      GetMem(_Dir, MemSize);
+      if _Dir = nil then
+        Exit;
+      I := 0;
+      repeat
+        fSeek(Fat2Sec(Ofst)*SectLen+DskOffset);
+        fRead(_Dir^[I], BytesPerClu);
         if F.Status <> stOK then
           Exit;
-        FileCount := RootEntries;
-        end;
-      for I := 0 to FileCount-1 do
-        begin
-        CheckCancel;
-        if Error or Cancel then
-          Break;
-        Move(_Dir^[I*SizeOf(DR)], DR, SizeOf(DR));
-        case DR.Name[0] of
-          #$E5:
-            Continue;
-          #0:
-            Break;
-          #5:
-            DR.Name[0] := #$E5;
-        end {case};
-        if DR.Attr and (VolumeID+SysFile+Hidden+ReadOnly) = VolumeID
-        then
-          {LFN bugfix by piwamoto}
-          if SearchVolume then
-            begin
-            SetLength(VolumeLabel, 11); {VolumeLabel[0] := #11}
-            Move(DR.Name[0], VolumeLabel[1], 11);
-            DelRight(VolumeLabel);
-            VolumeLabel := VolumeLabel+DnSep;
-            Break;
-            end
-          else
-            Continue;
-        if SearchVolume then
-          Continue;
-        if DR.Attr and VolumeID <> 0 then
-          Continue; {i'll skip VFAT names}
-        SetLength(Nm, 12); {Nm[0] := #12;}
-        Nm[9] := '.';
-        Move(DR.Name[0], Nm[1], 8);
-        Move(DR.Name[8], Nm[10], 3);
-        J := 8;
-        while (J > 0) and (Nm[J] = ' ') do
-          begin
-          Delete(Nm, J, 1);
-          Dec(J);
-          end;
-        while Nm[Length(Nm)] = ' ' do
-          SetLength(Nm, Length(Nm)-1); {Dec(Nm[0]);}
-        if Nm[Length(Nm)] = '.' then
-          SetLength(Nm, Length(Nm)-1); {Dec(Nm[0]);}
-
-        if DR.Attr and Directory <> 0 then
-          begin
-          if not IsDummyDir(Nm) then
-            ProcessDir(Dir+Nm+DnSep, DR.Clus, True); {JO}
-          Continue;
-          end;
-        WriteFile(Dir, Nm, DR.Clus, DR.len, DR.Date, DR.Attr);
-        end;
-      FreeMem(_Dir, MemSize);
-      _Dir := nil;
-      end { ProcessDir };
-
-    procedure ChkValid;
-      begin
-      if Error then
+        I := I+BytesPerClu;
+        Ofst := NextFAT(Ofst);
+      until (Ofst > $ff7);
+      FileCount := I div 32;
+      end
+    else
+      begin {root dir}
+      fSeek(LongInt(Ofst)*SectLen+DskOffset);
+      MemSize := RootEntries*32;
+      GetMem(_Dir, MemSize);
+      fRead(_Dir^, MemSize);
+      if F.Status <> stOK then
         Exit;
-      Error := True;
-      case SectLen of
-        128, 256, 512, 1024, 2048, 4096:
-          ;
-        else {case}
-          Exit
-      end {case};
-      case FatCopies of
-        1, 2:
-          ;
-        else {case}
-          Exit
-      end {case};
-      Error := False;
+      FileCount := RootEntries;
       end;
+    for I := 0 to FileCount-1 do
+      begin
+      CheckCancel;
+      if Error or Cancel then
+        Break;
+      Move(_Dir^[I*SizeOf(DR)], DR, SizeOf(DR));
+      case DR.Name[0] of
+        #$E5:
+          Continue;
+        #0:
+          Break;
+        #5:
+          DR.Name[0] := #$E5;
+      end {case};
+      if DR.Attr and (VolumeID+SysFile+Hidden+ReadOnly) = VolumeID
+      then
+        {LFN bugfix by piwamoto}
+        if SearchVolume then
+          begin
+          SetLength(VolumeLabel, 11); {VolumeLabel[0] := #11}
+          Move(DR.Name[0], VolumeLabel[1], 11);
+          DelRight(VolumeLabel);
+          VolumeLabel := VolumeLabel+DnSep;
+          Break;
+          end
+        else
+          Continue;
+      if SearchVolume then
+        Continue;
+      if DR.Attr and VolumeID <> 0 then
+        Continue; {i'll skip VFAT names}
+      SetLength(Nm, 12); {Nm[0] := #12;}
+      Nm[9] := '.';
+      Move(DR.Name[0], Nm[1], 8);
+      Move(DR.Name[8], Nm[10], 3);
+      J := 8;
+      while (J > 0) and (Nm[J] = ' ') do
+        begin
+        Delete(Nm, J, 1);
+        Dec(J);
+        end;
+      while Nm[Length(Nm)] = ' ' do
+        SetLength(Nm, Length(Nm)-1); {Dec(Nm[0]);}
+      if Nm[Length(Nm)] = '.' then
+        SetLength(Nm, Length(Nm)-1); {Dec(Nm[0]);}
 
+      if DR.Attr and Directory <> 0 then
+        begin
+        if not IsDummyDir(Nm) then
+          ProcessDir(Dir+Nm+DnSep, DR.Clus, True); {JO}
+        Continue;
+        end;
+      WriteFile(Dir, Nm, DR.Clus, DR.len, DR.Date, DR.Attr);
+      end;
+    FreeMem(_Dir, MemSize);
+    _Dir := nil;
+    end { ProcessDir };
+
+  procedure ChkValid;
+    begin
+    if Error then
+      Exit;
+    Error := True;
+    case SectLen of
+      128, 256, 512, 1024, 2048, 4096:
+        ;
+      else {case}
+        Exit
+    end {case};
+    case FatCopies of
+      1, 2:
+        ;
+      else {case}
+        Exit
+    end {case};
+    Error := False;
+    end;
+  procedure DoIt;
     begin { DoIt }
     VolumeLabel := '';
     fPos := 0;
