@@ -256,10 +256,16 @@ def background_copy(out, d):
             t.send('\x1bu', 0.8)                        # Alt-U: Utilities
             t.send('j', 1.0)                            # Copy ~j~obs...
             jobs_screen = t.text()
+            # a copy that has just finished leaves an empty list (dn-linux #38749777724: 3963 of 4096 files at 6 seconds, then 1.8 seconds
+            # of keys before the screen was read): only a copy that still runs when the screen is read proves anything, as for F5/F8 above
+            copy_ran_jobs = not all(os.path.isfile(p) for p in expected)
             run = re.search(r'\[run (\d+)%\]', jobs_screen)
-            check(run is not None and int(run.group(1)) > 0,
-                  'Background: Utilities, Copy jobs shows the running copy with a percent above 0 (%s)' % (
-                      run.group(0) if run else 'no "[run N%]" on the screen'), jobs_screen)
+            if run is not None or copy_ran_jobs:
+                check(run is not None and int(run.group(1)) > 0,
+                      'Background: Utilities, Copy jobs shows the running copy with a percent above 0 (%s)' % (
+                          run.group(0) if run else 'no "[run N%]" on the screen'), jobs_screen)
+            else:
+                print('SKIP Copy jobs: the copy finished before the list was read, nothing is left to show', flush=True)
             t.send(F['ESC'], 0.5)                       # Esc closes the list; Enter would press the default button, Cancel job
         else:
             print('SKIP Copy jobs: the copy finished (or did not reach 2%) before the list could be opened', flush=True)
