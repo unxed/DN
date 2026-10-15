@@ -194,21 +194,27 @@ def background_copy(out, d):
         offered = t.wait_text('Background', timeout=10.0)
         check(offered, 'F5: the progress window offers Background', t.text())
         if offered:
-            t.send(F['TAB'], 0.1)                       # Stop -> Background
-            t.send(F['ENTER'], 0.2)
+            t.send(F['TAB'], 0.5)                       # Stop -> Background (the copy takes one event per 300 ms)
+            t.send(F['ENTER'], 0.8)
+            after_enter = t.text()
+            # dn-linux #720 (head 84a1f05): "Abort operation?" was already open when F5/F8 were pressed, and the copy stood at 681
+            # of 4096 files behind that modal question; show the screen right after Enter to see who opened it
+            if 'Abort operation' in after_enter:
+                print('--- the screen right after Enter on Background: the copy asks "Abort operation?" (Stop was pressed?):\n' + after_enter, flush=True)
+                t.send(F['ESC'], 0.8)
             returned = t.until(lambda: 'Name' in t.text() and 'Background' not in t.text(), 5.0)
             still_copying = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i))
                                     for i in range(nfiles))
             check(returned, 'Background: the panels return', t.text())
             if still_copying:
-                t.send(F['DOWN'], 0.2)
-                t.send(F['F5'], 0.2)
+                t.send(F['DOWN'], 0.5)
+                t.send(F['F5'], 0.5)
                 # the Copy dialog is the only screen with a Cancel button (the progress window has Stop); the F-key bar
                 # and the title of the progress window both contain "Copy", so that word proves nothing
                 f5_opened_dialog = 'Cancel' in t.text()
                 if f5_opened_dialog:
-                    t.send(F['ESC'], 0.2)
-                t.send(F['F8'], 0.2)
+                    t.send(F['ESC'], 0.5)
+                t.send(F['F8'], 0.5)
                 f8_screen = t.text()
                 f8_opened_dialog = 'Confirm' in f8_screen or 'wish to delete' in f8_screen
                 if f8_opened_dialog:
