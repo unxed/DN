@@ -1402,6 +1402,8 @@ DIALOG dlgPanelShowSetup, 76, 22, 'Вигляд файлової панелі'
       ITEM '~З~аголовки стовпчиків'
     END
     Label 38, 13, 'Різне', ofPostProcess, ofPreProcess
+    InputLine 54, 16, 57, 17, 1, 0
+    Label 38, 16, 'Стовпчиків імен', ofPostProcess, ofPreProcess
 
 #4  Button 59, 17, 72, 19, 'За~п~исати', 0, bfNormal
     Button 37, 19, 47, 21, '~О~К', cmOK, bfDefault, ofPostProcess, ofPreProcess

@@ -2752,6 +2752,8 @@ DIALOG dlgPanelShowSetup, 74, 22, 'File Panel appearance'
       ITEM 'Colu~m~n titles'
     END
     Label 38, 13, 'Misc. options', ofPostProcess, ofPreProcess
+    InputLine 51, 16, 54, 17, 1, 0
+    Label 38, 16, 'Name columns', ofPostProcess, ofPreProcess
 
 #4  Button 62, 17, 73, 19, 'St~o~re', 0, bfNormal
     Button 43, 19, 51, 21, 'O~K~', cmOK, bfDefault, ofPostProcess, ofPreProcess

@@ -231,6 +231,11 @@ uses DnPath,
   {$ENDIF}
   ;
 
+const
+  MinFixedColumnName = 8;
+    {` the narrowest name of a fixed number of columns: when the panel is too narrow for the
+      number asked for, the names keep this width and as many columns as fit are drawn `}
+
 procedure TFilePanelRoot.IncDrawDisabled;
   begin
   Inc(DrawDisableLvl);
@@ -3257,7 +3262,23 @@ function TFilePanelRoot.CalcNameLength: Integer;
   end;
 
 function TFilePanelRoot.CalcLength: Integer;
+  var
+    N, W: Integer;
   begin
+  { a fixed number of columns (dn#19): the name takes what the width of the panel leaves to each of them }
+  if PanSetup <> nil then
+    begin
+    N := FixedColumns(PanSetup^.Show);
+    if (N > 0) and (Size.X > 0) then
+      begin
+      W := (Size.X+1) div N-1-CalcLengthWithoutName;
+      if W < MinFixedColumnName then
+        W := MinFixedColumnName;
+      if W > 249 then
+        W := 249; { 250 and more is the layout "the name after the other columns" }
+      LFNLen := W;
+      end;
+    end;
   Result := Min(CalcNameLength+1+CalcLengthWithoutName, MaxViewWidth);
   end;
 
@@ -3421,6 +3442,7 @@ procedure TFilePanelRoot.SetupPanelFromDrive;
   LFNLonger250 := (LFNLen >= 250)
     
     and (PanSetup.Show.ColumnsMask and psLFN_InColumns <> 0)
+    and (FixedColumns(PanSetup.Show) = 0)
     ;
     {JO: if the name column width is more than 250 characters,
      show it after the other columns}

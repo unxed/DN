@@ -97,6 +97,34 @@ try:
     check('[X] Size' in t.text(), 'after the next start the stored setup has the column Size on', t.text())
     t.send('\x1b', 0.3)
     t.close(0.3)
+
+    # a fixed number of columns (dn#19): in a window of 100 the default setup has three columns of names in a panel;
+    # "Name columns" 2 (the field after "Misc. options": five Shift-Tab from the first control) leaves two, wider, in the
+    # active panel, the other one keeps three
+    def names(text):
+        # the columns of names of the left and of the right panel, by the line of the column titles ("Nam": a narrow
+        # last column cuts its title)
+        for line in text.split('\n'):
+            if line.count('Nam') >= 4:
+                half = len(line) // 2
+                return line[:half].count('Nam'), line[half:].count('Nam')
+        return -1, -1
+
+    d, w = install(out); dirs.append(d)
+    t = DnTerm(['./dn'], 100, 25, cwd=w, exe=os.path.join(d, 'dn'), env={'DNLNG': 'ENGLISH', 'DN2': d})
+    t.started()
+    t.send('\x1b', 0.5)
+    until(t, lambda x: names(x)[0] > 0)
+    check(names(t.text()) == (3, 3), 'a window of 100: three columns of names in each panel by default', t.text())
+    t.send('\x1bk', 0.5)
+    until(t, lambda x: 'Name columns' in x)
+    check('Name columns' in t.text(), 'the dialog has the field "Name columns"', t.text())
+    t.send('\x1b[Z' * 5, 0.5)
+    t.send('2', 0.3)
+    t.send('\r', 0.5)
+    until(t, lambda x: 'File Panel appearance' not in x and sorted(names(x)) == [2, 3])
+    check(sorted(names(t.text())) == [2, 3], '"Name columns" 2: the active panel shows two columns, the other one three', t.text())
+    t.close(0.3)
 finally:
     for d in dirs:
         shutil.rmtree(d, ignore_errors=True)
