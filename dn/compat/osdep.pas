@@ -35,6 +35,9 @@ const
   Open_Share_DenyNone      = $40;
   { the attribute of a found entry that is a symbolic link (Unix): the bit of a device in DOS, which is never found by a search }
   SysLinkAttr              = $40;
+  { set by the panels in the file record of a symbolic link whose target does not exist (Unix, SysLinkIsBroken); not a bit of
+    DOS, never found by a search }
+  SysBrokenLinkAttr        = $2000;
 
 { --- files -------------------------------------------------------------------- }
 { The result is 0 when done, else the error code of the system (DOS codes: 2 no such file, 3 no such
@@ -102,6 +105,8 @@ function SysFileTimeToDos(T: LongInt): LongInt;
 function SysFindFirst(Path: PChar; Attr: LongInt; var F: TOSSearchRec; IsPChar: Boolean): LongInt;
 function SysFindNext(var F: TOSSearchRec; IsPChar: Boolean): LongInt;
 function SysFindClose(var F: TOSSearchRec): LongInt;
+{ Is Name a symbolic link whose target does not exist (a dangling link)? Always False where the system has no links. }
+function SysLinkIsBroken(const Name: string): Boolean;
 { Is the directory Name of the directory ParentDir one that a scan of a tree must not enter? On Unix the pseudo file systems of the root (/proc, /sys): thousands of
   entries that change as they are read; elsewhere never. }
 function SysSkipInTree(const ParentDir, Name: string): Boolean;
@@ -475,6 +480,21 @@ begin
   F.Handle := 0;
   Result := 0;
 end;
+
+function SysLinkIsBroken(const Name: string): Boolean;
+{$IFDEF UNIX}
+var
+  P: string;
+  St: Stat;
+begin
+  P := SysOsPath(Name);
+  Result := (fpLStat(P, St) = 0) and fpS_ISLNK(St.st_mode) and (fpStat(P, St) <> 0);
+end;
+{$ELSE}
+begin
+  Result := False;
+end;
+{$ENDIF}
 
 function SysSkipInTree(const ParentDir, Name: string): Boolean;
 begin

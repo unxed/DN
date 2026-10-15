@@ -3352,6 +3352,8 @@ procedure TFilePanelRoot.FormatName(P: PFileRec; var S: String; var L: Integer);
     Hidden+SysFile:
       NFM := nfmHiddenSystem;
   end {case}; { <- Pavel Anufrikov}
+  if P^.Attr and SysBrokenLinkAttr <> 0 then
+    NFM := nfmBrokenLink;
 
   if P^.Attr and Directory <> 0 then
     begin

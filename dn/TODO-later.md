@@ -77,7 +77,9 @@ converted at every idle even when nobody reads it (cheap: 2000 cells).
 - UTF-8 file names are shown as bytes in the code page (garbage instead of "file.txt"): solved by moving to UTF-8 inside DN (PLAN, item 4).
 - Dot files (`.hidden`) and broken symbolic links are not visible in the panel: `FindFirst` returns them (except broken links), so DN itself hides them
   (check the panel setting "hidden files" and the comparison `Name[1] = '.'` in the directory parse); Unix permissions and links are not shown in `Attr`.
-  (Checked 2026-10-08: the broken links are listed (`tools/dn-linux-fsattrs.py`); the dot files are the hidden files of the RTL and DN shows
+  (Checked 2026-10-08: the broken links are listed (`tools/dn-linux-fsattrs.py`); since 2026-10-12 a link whose target does not exist has the
+  mark `!` where the dot of the name stands, like the shades of hidden and system files (dn#20: `SysLinkIsBroken`, `SysBrokenLinkAttr` of
+  `osdep`, set by `TDrive.GetDirectory`; tests `t_osdep`, `tools/dn-linux-fsattrs.py`; a colour of its own needs an entry of the palette, not done); the dot files are the hidden files of the RTL and DN shows
   them when the setting "show hidden files" of the panels (`fmsShowHidden`) is on. Owner, 2026-10-08: it is on by default on Unix builds
   (`ShowHiddenByDefault` of `startup.pas`), off on DOS and Windows as in DN; a saved setup keeps its own value (`tools/dn-linux-fsattrs.py`).)
   **Fixed 2026-10-08** (`tools/dn-linux-dotfiles.py`, `dn/tests/t_dotname.pas`): a dot file was shown as an empty name with an extension (`.bashrc`:
