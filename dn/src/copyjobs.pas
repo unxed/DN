@@ -82,6 +82,11 @@ function JobRunning: LongInt;
 { Removes the jobs that have ended (done, failed, cancelled) and returns how many. The order of the others is kept. }
 function JobsClearEnded: Integer;
 
+{ The row of the jobs list (part 4b-5) for a job: its state in brackets (running with the percent when Total is known), the title,
+  and for a failed job the reason after a colon. "[wait] a.iso", "[run 25%] a.iso", "[run] b.log", "[done] a.iso", "[cancelled] a.iso",
+  "[failed] b.log: disk full". The window shows the rows in the order of JobAt. }
+function JobLine(const Job: TCopyJob): String;
+
 { True for a command that must not run while a background copy runs: it would change the files the copy reads or writes (a new copy,
   move, delete, make directory, attributes, rename, archive, a change of the directory or a re-read of a panel), or quit before the
   user can cancel the copy from the jobs list. The copy loop clears such a command instead of passing it to the panels. Navigation,
@@ -315,6 +320,29 @@ begin
     end;
   Result := Length(Jobs) - K;
   SetLength(Jobs, K);
+end;
+
+function JobLine(const Job: TCopyJob): String;
+var
+  P: String;
+begin
+  case Job.State of
+    jsQueued: Result := '[wait] ';
+    jsRunning:
+      if Job.Total > 0 then
+      begin
+        Str(JobPercent(Job.Id), P);
+        Result := '[run ' + P + '%] ';
+      end
+      else
+        Result := '[run] ';
+    jsDone: Result := '[done] ';
+    jsFailed: Result := '[failed] ';
+    jsCancelled: Result := '[cancelled] ';
+  end;
+  Result := Result + Job.Title;
+  if (Job.State = jsFailed) and (Job.Error <> '') then
+    Result := Result + ': ' + Job.Error;
 end;
 
 const

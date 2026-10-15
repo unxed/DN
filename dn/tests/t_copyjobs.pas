@@ -111,5 +111,20 @@ begin
   Check(BackgroundCopyBlocks(cmQuit), 'quitting is blocked while a background copy runs');
   Check(not BackgroundCopyBlocks(0), 'command 0 passes');
 
+  { part 4b-5: the rows of the jobs list }
+  A := JobAdd('a.iso', 1000);
+  B := JobAdd('b.log', 0);
+  C := JobAdd('c.txt', 0);
+  D := JobAdd('d.txt', 0);
+  E := JobAdd('e.txt', 0);
+  Check(JobGet(A, J) and (JobLine(J) = '[wait] a.iso'), 'a queued job is [wait]');
+  Check(JobStart(A) and JobProgress(A, 250) and JobGet(A, J) and (JobLine(J) = '[run 25%] a.iso'), 'a running job shows the percent');
+  Check(JobStart(B) and JobGet(B, J) and (JobLine(J) = '[run] b.log'), 'a running job of unknown size shows no percent');
+  Check(JobFail(B, 'disk full') and JobGet(B, J) and (JobLine(J) = '[failed] b.log: disk full'), 'a failed job shows the reason');
+  Check(JobStart(C) and JobFail(C, '') and JobGet(C, J) and (JobLine(J) = '[failed] c.txt'), 'a failed job without a reason has no colon');
+  Check(JobCancel(D) and JobGet(D, J) and (JobLine(J) = '[cancelled] d.txt'), 'a cancelled job is [cancelled]');
+  Check(JobFinish(A) and JobGet(A, J) and (JobLine(J) = '[done] a.iso'), 'a done job is [done]');
+  Check(JobCancel(E) and (JobsClearEnded = 5), 'the jobs of the list part are cleared');
+
 Finish;
 end.
