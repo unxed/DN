@@ -108,19 +108,19 @@ function TValuesHolder.GetType(ID: String): TTypeHolder;
   end;
 
 function TValuesHolder.GetValue(S: String; var Complete: Boolean): LongInt;
+  function DoScan(P_: Pointer): Boolean;
+  var P: TLngWord absolute P_;
+    begin
+    if P.Name = S then
+      begin
+      GetValue := P.l;
+      DoScan := True;
+      end
+    else
+      DoScan := False
+    end;
   function DoScanValue(P_: Pointer): Boolean;
   var P: TTypeHolder absolute P_;
-    function DoScan(P_: Pointer): Boolean;
-    var P: TLngWord absolute P_;
-      begin
-      if P.Name = S then
-        begin
-        GetValue := P.l;
-        DoScan := True;
-        end
-      else
-        DoScan := False
-      end;
     begin
     DoScanValue := P.FirstThat(DoScan) <> nil;
     end;
