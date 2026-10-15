@@ -2736,6 +2736,7 @@ MENU dlgMainMenu
     MenuItem '~П~амять команд', main.HistoryList
     MenuItem 'Память ~р~едактирования файлов', main.EditHistory
     MenuItem 'Память просмотра ~ф~айлов', main.ViewHistory
+    MenuItem 'Зада~н~ия копирования...', main.CopyJobs
 ;$IFDEF PLUGINRES
     MenuLine
     MenuItem 'Управление плагинами', main.Plugins

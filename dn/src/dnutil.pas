@@ -261,7 +261,7 @@ uses DnPath, DnActReg,
   DNRun,
   Dos, Lfn, HelpKern, Menus, FileCopy, Math,
   DNHelp, DnIni, iniengine, cfgstate, DNErrLog, histories,
-  VideoMan, panelwin, Messages, HistList, FileFind,
+  VideoMan, panelwin, Messages, HistList, FileFind, CopyJobs,
   
   {$IFNDEF DN_MINI}
   Phones, 
@@ -1830,6 +1830,26 @@ function IsOnDesktop(P: TView): Boolean;
   until V = Desktop.Last;
   end;
 
+{ The list of the copy jobs (dn#40 part 4): one row per job (CopyJobs.JobLine), or a note that there are none. }
+procedure ShowCopyJobs;
+var
+  I: Integer;
+  Job: TCopyJob;
+  S: String;
+begin
+  S := '';
+  for I := 0 to JobCount - 1 do
+    if JobAt(I, Job) then
+    begin
+      if S <> '' then
+        S := S + ^M;
+      S := S + JobLine(Job);
+    end;
+  if S = '' then
+    S := GetString(dlCopyJobsNone);
+  MessageBox(GetString(dlCopyJobsTitle) + ^M + ^M + S, nil, mfInformation + mfOKButton);
+end;
+
 procedure TDNApplication.HandleCommand(var Event: TEvent);
 
   var
@@ -2661,6 +2681,8 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
       EditHistoryMenu;
     cmViewHistory:
       ViewHistoryMenu;
+    cmCopyJobs:
+      ShowCopyJobs;
     
     cmXEditFile:
       OpenEditor;

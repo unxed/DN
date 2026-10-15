@@ -166,6 +166,7 @@ ACTION main.DirHistory,                     cmDirHistory, kbNoKey, 'Alt-BkSp', h
 ACTION main.HistoryList,                    cmHistoryList, kbAltF8, 'Alt-F8', hcUtilMenu
 ACTION main.EditHistory,                    cmEditHistory, kbAltPgUp, 'Alt-PgUp', hcUtilMenu
 ACTION main.ViewHistory,                    cmViewHistory, kbAltPgDn, 'Alt-PgDn', hcUtilMenu
+ACTION main.CopyJobs,                       cmCopyJobs, kbNoKey, '', hcUtilMenu
 ACTION main.Plugins,                        cmPlugins, kbAltF11, 'Alt-F11', hcPluginManager
 ACTION main.MakeList,                       cmMakeList, kbAltL, 'Alt-L', hcPanelMenu
 ACTION main.PanelMakeList,                  cmPanelMakeList, kbAltV, 'Alt-V', hcPanelMenu
