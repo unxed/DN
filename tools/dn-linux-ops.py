@@ -3,6 +3,7 @@
 save a file, rename a group of files by a mask (File -> Group rename). usage: tools/dn-linux-ops.py OUTDIR   (OUTDIR: the result of tools/build.sh linux|linux64)"""
 import base64
 import os
+import platform
 import re
 import shutil
 import sys
@@ -166,6 +167,10 @@ def session(out, d):
 
 def background_copy(out, d):
     """A background copy leaves the panels responsive and finishes every file."""
+    if platform.machine() in ('aarch64', 'arm64'):
+        # unxed/dn#78: copying a directory crashes DN on aarch64 (Access violation in TWhileView.Write); remove this when it is fixed
+        print('SKIP background_copy: unxed/dn#78 (Access violation in TWhileView.Write when a directory is copied on aarch64)', flush=True)
+        return
     w = os.path.join(d, 'background')
     src = os.path.join(w, 'source')
     dst = os.path.join(w, 'destination')
