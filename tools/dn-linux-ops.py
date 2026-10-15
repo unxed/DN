@@ -171,10 +171,12 @@ def background_copy(out, d):
     dst = os.path.join(w, 'destination')
     os.makedirs(src)
     os.makedirs(dst)
-    # Keep the copy active long enough for the pty test to select Background even on fast runners (512 MB in 64 files: the first
-    # version, 128 MB, was over before the pty looked at the screen). Whether the copy is still running is checked, not assumed.
-    nfiles = 64
-    payload = os.urandom(8 * 1024 * 1024)
+    # Many small files, not few big ones: the progress window is redrawn between files, and a window of 64 files of 8 MB was not
+    # on the screen for 10 s on any runner ("the progress window offers Background" failed in all six jobs of dn-linux #714, while
+    # 512 files of 256 KB passed it in five). 4096 files of 64 KB keep the copy running longer than 512 of 256 KB did; whether it
+    # is still running when the keys are pressed is checked, not assumed.
+    nfiles = 4096
+    payload = os.urandom(64 * 1024)
     for i in range(nfiles):
         with open(os.path.join(src, 'file%03d.dat' % i), 'wb') as f:
             f.write(payload)
