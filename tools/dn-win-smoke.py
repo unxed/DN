@@ -80,6 +80,27 @@ class WinTerm:
             pass
 
 
+def body(text):
+    """the screen without the top line, where the clock runs"""
+    return text.split('\n')[1:]
+
+
+def esc_back(t, home, tries=4):
+    """Esc one at a time until the screen is the panels again: each Esc is sent only after the last one
+    changed the screen, so the console never gets an Esc together with the next key (ESC + ESC[18~ would
+    be Alt+F7, the find dialog, instead of F7)"""
+    for _ in range(tries):
+        if body(t.text()) == body(home):
+            return True
+        before = body(t.text())
+        t.p.write('\x1b')
+        end = time.time() + 5.0
+        while time.time() < end and body(t.text()) == before:
+            time.sleep(0.2)
+        time.sleep(0.3)
+    return body(t.text()) == body(home)
+
+
 def shot(t, name):
     """the screen as text between markers (the log of CI; tools/dn-win-smoke.py > dist/win64/screenshots)"""
     print('=== SCREEN %s ===' % name)
@@ -111,18 +132,18 @@ def main():
         t.wait_for('txt', 10)
         check('Name' in t.text() and re.search(r'a\s+txt', t.text()), 'start: the panel shows the files of the directory', t.text())
         shot(t, 'start')
-        t.send('\x1b', 0.5)
+        t.send('\x1b', 1.0)
+        panels = t.text()
         shot(t, 'panels')
         t.send('\x1b[21~', 0.5)                       # F10: the menu bar
         t.send('\r', 1.0)                            # Enter: the first menu
         shot(t, 'menu')
-        t.send('\x1b', 0.5)
-        t.send('\x1b', 0.5)
+        esc_back(t, panels)
         t.send('\x1bOP', 1.0)                         # F1: help
         shot(t, 'f1help')
-        for _ in range(3):
-            t.send('\x1b', 0.5)
+        esc_back(t, panels)
         t.send('\x1b[18~', 1.0)                       # F7
+        t.wait_for('Make directory', 10)
         shot(t, 'f7mkdir')
         t.send('newdir', 0.5)
         t.send('\r', 1.5)

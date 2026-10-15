@@ -4,7 +4,8 @@ FarUxMode=1, so that the Far UX mode does not take them away: F1-F8 and F10,
 Shift+F1/F2/F5/F6/F8 and Alt+F1/F2/F7/F8 open their window, dialog or menu
 over the panels, Esc (F10 for the menus) returns to the panels and DN stays
 alive; Ctrl+Enter in the command history (Alt+F8) puts the command into the
-command line. The keys go over the win32 input mode (TV_WIN32_INPUT=1).
+command line; Alt+F11 opens the history of viewed files (with the mode off it
+does not). The keys go over the win32 input mode (TV_WIN32_INPUT=1).
 usage: tools/dn-linux-farkeys.py OUTDIR"""
 import os
 import shutil
@@ -22,7 +23,7 @@ def w32(vk, uc=0, cs=0, sc=0):
     return '\x1b[%d;%d;%d;1;%d;1_\x1b[%d;%d;%d;0;%d;1_' % (vk, sc, uc, cs, vk, sc, uc, cs)
 
 
-def start(out):
+def start(out, farux=True):
     d = tempfile.mkdtemp(prefix='dnfark-')
     for f in os.listdir(out):
         if f == 'dn' or f.upper().endswith(('.LNG', '.DLG', '.HLP')):
@@ -30,7 +31,7 @@ def start(out):
         elif f == 'xlt':
             shutil.copytree(os.path.join(out, f), os.path.join(d, f))
     with open(os.path.join(d, 'dn.ini'), 'w') as f:
-        f.write('[FilePanels]\nFarUxMode=1\n')
+        f.write('[FilePanels]\nFarUxMode=%d\n' % (1 if farux else 0))
     w = os.path.join(d, 'work')
     os.makedirs(w)
     open(os.path.join(w, 'alpha1.txt'), 'w').write('first\n')
@@ -122,7 +123,26 @@ try:
     check('farkeys1' in cmdline_row(t),
           'FarUx on: Ctrl+Enter in the history puts the command into the command line', t)
     t.send(w32(0x1B), 0.6)                       # Esc clears the command line
+    t.send(w32(0x7A, 0, ALT), 1.5)               # Alt+F11: F3 above viewed alpha1.txt
+    check('File View History' in t.text() and 'work/alpha1.txt' in t.text(),
+          'FarUx on: Alt+F11 opens the file view history with alpha1.txt', t)
+    t.send(w32(0x1B), 1.0)                       # Esc closes it
+    check(t.alive() and 'File View History' not in t.text() and 'beta' in t.text(),
+          'FarUx on: Esc after Alt+F11 returns to the panels', t)
     check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+d, t = start(out, False)
+try:
+    to_alpha1(t)
+    t.send(w32(0x72), 1.5)                       # F3 views alpha1.txt
+    t.send(w32(0x1B), 1.0)                       # Esc leaves the viewer
+    t.send(w32(0x7A, 0, ALT), 1.5)               # Alt+F11
+    check(t.alive() and 'File View History' not in t.text(),
+          'FarUx off: Alt+F11 does not open the file view history', t)
+    t.send(w32(0x1B), 1.0)
+    check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
 
