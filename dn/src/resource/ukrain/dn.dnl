@@ -519,6 +519,8 @@ dlStartingSector,          '~П~очатковий сектор'
 dlStdDlgManyFiles,         ^C'Багато файлів.'
 dlStop,                    '~С~топ'
 dlCopyBackground,          'У ~ф~оні'
+dlCopyJobsTitle,          'Завдання копіювання'
+dlCopyJobsNone,           'Завдань копіювання поки немає'
 dlStoreColorPal,           'Запам''ятати палітру кольорів'
 
 dlSystemInfo               'Системна інформація'
