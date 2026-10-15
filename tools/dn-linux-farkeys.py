@@ -4,8 +4,8 @@ FarUxMode=1, so that the Far UX mode does not take them away: F1-F8 and F10,
 Shift+F1/F2/F5/F6/F8 and Alt+F1/F2/F7/F8 open their window, dialog or menu
 over the panels, Esc (F10 for the menus) returns to the panels and DN stays
 alive; Ctrl+Enter in the command history (Alt+F8) puts the command into the
-command line; Alt+F11 opens the history of viewed files (with the mode off it
-does not). The keys go over the win32 input mode (TV_WIN32_INPUT=1).
+command line; Alt+F11 opens the history of viewed files and Shift+Del in the
+command history deletes the record (with the mode off neither does). The keys go over the win32 input mode (TV_WIN32_INPUT=1).
 usage: tools/dn-linux-farkeys.py OUTDIR"""
 import os
 import shutil
@@ -51,6 +51,23 @@ def quit_dn(t):
 def cmdline_row(t):
     return '\n'.join(''.join(c for c, _ in row)
                      for row in t.screen.cells[27:29])
+
+
+def run_cmd(t, cmd):
+    t.send(cmd, 0.5)
+    t.send(w32(0x0D, 13), 2.0)                   # Enter runs it
+    t.send(w32(0x0D, 13), 1.5)                   # Enter brings the panels back
+
+
+def shift_del_in_history(t, keep, last):
+    """Alt+F8, then Shift+Del on the focused (the last) record: (both listed before, keep listed
+    after, last listed after)"""
+    t.send(w32(0x77, 0, ALT), 1.5)               # Alt+F8: the command history
+    listed = keep in t.text() and last in t.text()
+    t.send(w32(0x2E, 0, SHIFT), 1.0)             # Shift+Del
+    after = t.text()
+    t.send(w32(0x1B), 1.0)                       # Esc closes the history
+    return listed, keep in after, last in after
 
 
 def to_alpha1(t):
@@ -129,6 +146,10 @@ try:
     t.send(w32(0x1B), 1.0)                       # Esc closes it
     check(t.alive() and 'File View History' not in t.text() and 'beta' in t.text(),
           'FarUx on: Esc after Alt+F11 returns to the panels', t)
+    run_cmd(t, 'echo farkeys2')
+    listed, kept, last = shift_del_in_history(t, 'farkeys1', 'farkeys2')
+    check(listed, 'FarUx on: the command history lists farkeys1 and farkeys2', t)
+    check(kept and not last, 'FarUx on: Shift+Del in the command history deletes farkeys2, farkeys1 stays', t)
     check(quit_dn(t) == 0, 'FarUx on: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
@@ -142,6 +163,10 @@ try:
     check(t.alive() and 'File View History' not in t.text(),
           'FarUx off: Alt+F11 does not open the file view history', t)
     t.send(w32(0x1B), 1.0)
+    run_cmd(t, 'echo farkeys3')
+    run_cmd(t, 'echo farkeys4')
+    listed, kept, last = shift_del_in_history(t, 'farkeys3', 'farkeys4')
+    check(listed and kept and last, 'FarUx off: Shift+Del in the command history deletes nothing', t)
     check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)

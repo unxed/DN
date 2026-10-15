@@ -191,6 +191,7 @@ uses DnPath, FlightRec,
   FViewer, CmdLine, panelsetup, editcore
   , panelroot {for ActivePanel}
   , calcwin 
+  , farux {FarUxEnabled}
   ;
 
 procedure FreeLastUnmarked(C: TCollection);
@@ -740,6 +741,10 @@ procedure TTHistList.HandleEvent(var Event: TEvent);
     case DNKeyCode(Event) of
       kbDel:
         goto 1;
+      kbShiftDel:
+        { Far UX mode: Shift+Del deletes the record, as in the histories of Far }
+        if FarUxEnabled then
+          goto 1;
       kbShiftDown:
         if {(ShiftState and 3 <> 0) and}(Focused < List.Count-1) then
           SwapItems(Focused);
