@@ -164,6 +164,62 @@ def session(out, d):
     check(status == 0, 'Alt-X ends the program (status %r)' % (status,), scr)
 
 
+def background_copy(out, d):
+    """A background copy leaves the panels responsive and finishes every file."""
+    w = os.path.join(d, 'background')
+    src = os.path.join(w, 'source')
+    dst = os.path.join(w, 'destination')
+    os.makedirs(src)
+    os.makedirs(dst)
+    payload = os.urandom(64 * 1024)
+    for i in range(512):
+        with open(os.path.join(src, 'file%03d.dat' % i), 'wb') as f:
+            f.write(payload)
+
+    t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'))
+    t.started()
+    try:
+        t.send(F['ESC'], 0.3)
+        t.send(F['HOME'], 0.2)
+        t.send(F['DOWN'], 0.2)                           # .., destination, source
+        t.send(F['DOWN'], 0.2)
+        t.send(F['F5'], 0.2)
+        t.send('destination', 0.2)
+        t.send(F['ENTER'], 0.2)
+        offered = t.wait_text('Background', timeout=10.0)
+        check(offered, 'F5: the progress window offers Background', t.text())
+        if offered:
+            t.send(F['TAB'], 0.1)                       # Stop -> Background
+            t.send(F['ENTER'], 0.2)
+            returned = t.until(lambda: 'Name' in t.text() and 'Background' not in t.text(), 5.0)
+            still_copying = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i))
+                                    for i in range(512))
+            check(returned and still_copying,
+                  'Background: the panels return while the copy continues', t.text())
+            t.send(F['DOWN'], 0.2)
+            t.send(F['F5'], 0.1)
+            f5_opened_dialog = 'Copy' in t.text() or 'Destination' in t.text()
+            if f5_opened_dialog:
+                t.send(F['ESC'], 0.1)
+            t.send(F['F8'], 0.1)
+            f8_opened_dialog = 'Delete' in t.text() or 'Erase' in t.text()
+            if f8_opened_dialog:
+                t.send(F['ESC'], 0.1)
+            check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
+                  'Background: panel navigation works and F5/F8 do not start foreground operations', t.text())
+
+        expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(512)]
+        finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 30.0)
+        check(finished and all(open(p, 'rb').read() == payload for p in expected),
+              'Background: every source file finishes with the same contents', t.text())
+        check(t.alive() and 'Fatal' not in t.text(), 'Background: DN remains alive', t.text())
+    finally:
+        if t.alive():
+            t.send(F['ALT-X'], 0.3)
+            t.send(F['ENTER'], 0.3)
+        t.close(3)
+
+
 def utf8(out, d):
     """the build with -dDNUTF8 (UTF-8 inside): what the legacy build cannot show"""
     u = os.path.join(d, 'u8')
@@ -381,7 +437,7 @@ def part(out, fn):
 
 def main():
     out = os.path.abspath(sys.argv[1])
-    parts = [session, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
+    parts = [session, background_copy, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
     side_by_side([lambda fn=fn: part(out, fn) for fn in parts])          # each in a directory of its own, all at once
     print('ALL OK (%d checks)' % count if not fails else '%d of %d checks FAILED' % (fails, count))
     sys.exit(1 if fails else 0)
