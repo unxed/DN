@@ -47,6 +47,7 @@ jobs:
             cmds: |
               python3 tools/dn-linux-ops.py out/dn
               python3 tools/dn-linux-win32.py out/dn
+              python3 tools/dn-linux-locale.py out/dn
     steps:
       - uses: actions/checkout@v4
         with:
