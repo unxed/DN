@@ -2399,6 +2399,7 @@ qqqq:
   else
     Info.Top := GetString(dlFCCopy);
   Desktop.Insert(Info);
+  Info.OfferBackground(True); { dn#40: the button "Background", see progress.SendToBackground }
   Files.ForEach(DoReset);
   if  ( (SystemData.Options shl 3) and ossRemoveCD_RO <> 0)
   then

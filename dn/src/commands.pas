@@ -1711,6 +1711,7 @@ const
   cmDirBranch = 186;
   cmChangeNameCase = 187;
   cmGroupRename = 211; { the group rename by a mask (paneldlgs.CM_GroupRename) }
+  cmCopyBackground = 212; { the "Background" button of the copy window (progress.TWhileView, dn#40 part 4) }
   cmSetEALongname = 188;
   cmSelectPreset = 230; {JO}
   cmDirBranchFull = 231; {JO}
@@ -2055,6 +2056,7 @@ type
     dlClear,
     dlOpen,
     dlStop,
+    dlCopyBackground, { the "Background" button of the copy window (dn#40 part 4) }
     dlReplace,
     dlWarning,
     dlCloseButton,
