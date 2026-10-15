@@ -561,6 +561,11 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
     Event: TEvent;
   begin
   Application.GetEvent(Event);
+  { Panel function keys arrive here as evKeyDown; they have not yet become the
+    evCommand checked below. Drop the direct copy/move/delete keys while the
+    background job owns its source and destination. }
+  if (Event.What = evKeyDown) and (DNKeyCode(Event) in [kbF5, kbF6, kbF8]) then
+    ClearEvent(Event);
   if  (Event.What = evCommand) and (Event.Message.Command = cmCancel) and
       (Event.Message.InfoPtr = InfoView.But) or
       (Event.What = evKeyDown) and (DNKeyCode(Event) = kbESC)
