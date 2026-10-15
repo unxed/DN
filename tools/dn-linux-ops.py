@@ -213,14 +213,22 @@ def background_copy(out, d):
                 if f8_opened_dialog:
                     t.send(F['ESC'], 0.2)
                 check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
-                      'Background: panel navigation works and F5/F8 do not start foreground operations', t.text())
+                      'Background: panel navigation works and F5/F8 do not start foreground operations '
+                      '(F5 dialog %r, F8 dialog %r, source is a directory %r, %d of %d files copied)' % (
+                          f5_opened_dialog, f8_opened_dialog, os.path.isdir(src),
+                          sum(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles)), nfiles),
+                      t.text())
             else:
                 print('SKIP Background: the copy finished before F5/F8 could be pressed, nothing is left to block', flush=True)
 
         expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(nfiles)]
         finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 60.0)
-        check(finished and all(open(p, 'rb').read() == payload for p in expected),
-              'Background: every source file finishes with the same contents', t.text())
+        copied = [p for p in expected if os.path.isfile(p)]
+        wrong = [p for p in copied if open(p, 'rb').read() != payload]
+        check(finished and not wrong,
+              'Background: every source file finishes with the same contents '
+              '(finished %r, %d of %d files exist, %d with other contents, source is a directory %r)' % (
+                  finished, len(copied), nfiles, len(wrong), os.path.isdir(src)), t.text())
         check(t.alive() and 'Fatal' not in t.text(), 'Background: DN remains alive', t.text())
     finally:
         if t.alive():
