@@ -10,6 +10,8 @@ on:
       - tools/check-layout.sh
       - tools/check-platform.py
       - tools/safe-census.py
+      - tools/net-audit.sh
+      - tools/net-audit.allow
       - tools/ci-par.sh
       - tools/tests/**
       - .github/workflows/layout.yml
@@ -21,11 +23,12 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-      - name: The layout, the platform boundary of DN (no platform unit or target conditional outside the backends), the tests of the tools and of the text policy, side by side
+      - name: The layout, the platform boundary of DN (no platform unit or target conditional outside the backends), the network audit (no network code in dn/ outside the units listed in tools/net-audit.allow), the tests of the tools and of the text policy, side by side
         env:
           CMDS: |
             tools/check-layout.sh
             python3 tools/check-platform.py
             python3 tools/safe-census.py
+            tools/net-audit.sh
             python3 -B -m unittest discover -s tools/tests -p 'test_*.py'
         run: tools/ci-par.sh
