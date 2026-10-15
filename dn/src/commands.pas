@@ -2060,6 +2060,8 @@ type
     dlCopyBackground, { the "Background" button of the copy window (dn#40 part 4) }
     dlCopyJobsTitle, { the head of the list of the copy jobs (dn#40 part 4) }
     dlCopyJobsNone, { no copy jobs yet }
+    dlCopyJobCancel, { the "Cancel job" button of the list of the copy jobs (dn#40 part 4) }
+    dlCopyJobClear, { the "Clear" button of the list of the copy jobs (dn#40 part 4) }
     dlReplace,
     dlWarning,
     dlCloseButton,
