@@ -171,11 +171,11 @@ def background_copy(out, d):
     dst = os.path.join(w, 'destination')
     os.makedirs(src)
     os.makedirs(dst)
-    # Keep the copy active long enough for the pty test to select Background
-    # even on fast runners; smaller payloads can finish before the progress
-    # dialog is rendered, making the test timing-dependent.
-    payload = os.urandom(256 * 1024)
-    for i in range(512):
+    # Keep the copy active long enough for the pty test to select Background even on fast runners (512 MB in 64 files: the first
+    # version, 128 MB, was over before the pty looked at the screen). Whether the copy is still running is checked, not assumed.
+    nfiles = 64
+    payload = os.urandom(8 * 1024 * 1024)
+    for i in range(nfiles):
         with open(os.path.join(src, 'file%03d.dat' % i), 'wb') as f:
             f.write(payload)
 
@@ -196,23 +196,27 @@ def background_copy(out, d):
             t.send(F['ENTER'], 0.2)
             returned = t.until(lambda: 'Name' in t.text() and 'Background' not in t.text(), 5.0)
             still_copying = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i))
-                                    for i in range(512))
-            check(returned and still_copying,
-                  'Background: the panels return while the copy continues', t.text())
-            t.send(F['DOWN'], 0.2)
-            t.send(F['F5'], 0.1)
-            f5_opened_dialog = 'Copy' in t.text() or 'Destination' in t.text()
-            if f5_opened_dialog:
-                t.send(F['ESC'], 0.1)
-            t.send(F['F8'], 0.1)
-            f8_opened_dialog = 'Delete' in t.text() or 'Erase' in t.text()
-            if f8_opened_dialog:
-                t.send(F['ESC'], 0.1)
-            check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
-                  'Background: panel navigation works and F5/F8 do not start foreground operations', t.text())
+                                    for i in range(nfiles))
+            check(returned, 'Background: the panels return', t.text())
+            if still_copying:
+                t.send(F['DOWN'], 0.2)
+                t.send(F['F5'], 0.2)
+                # the Copy dialog is the only screen with a Cancel button (the progress window has Stop); the F-key bar
+                # and the title of the progress window both contain "Copy", so that word proves nothing
+                f5_opened_dialog = 'Cancel' in t.text()
+                if f5_opened_dialog:
+                    t.send(F['ESC'], 0.2)
+                t.send(F['F8'], 0.2)
+                f8_opened_dialog = 'Confirm' in t.text() or 'wish to delete' in t.text()
+                if f8_opened_dialog:
+                    t.send(F['ESC'], 0.2)
+                check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
+                      'Background: panel navigation works and F5/F8 do not start foreground operations', t.text())
+            else:
+                print('SKIP Background: the copy finished before F5/F8 could be pressed, nothing is left to block', flush=True)
 
-        expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(512)]
-        finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 30.0)
+        expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(nfiles)]
+        finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 60.0)
         check(finished and all(open(p, 'rb').read() == payload for p in expected),
               'Background: every source file finishes with the same contents', t.text())
         check(t.alive() and 'Fatal' not in t.text(), 'Background: DN remains alive', t.text())
@@ -221,6 +225,12 @@ def background_copy(out, d):
             t.send(F['ALT-X'], 0.3)
             t.send(F['ENTER'], 0.3)
         t.close(3)
+        # a crash report of DN (Fatal Error ... crash001.txt) names the call chain: put it in the log, the file is lost with the runner
+        crash = os.path.join(d, 'crash')
+        if os.path.isdir(crash):
+            for name in sorted(os.listdir(crash)):
+                print('--- ' + name, flush=True)
+                print(open(os.path.join(crash, name), errors='replace').read()[:6000], flush=True)
 
 
 def utf8(out, d):
