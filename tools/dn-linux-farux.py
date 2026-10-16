@@ -2,7 +2,7 @@
 """Far UX fast find (Alt+letters) in a pty, checked on the screen: with
 [FilePanels] FarUxMode=1 Alt+A moves the cursor to alpha1 (no menu opens),
 Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
-the search, Alt+F10 opens the folder tree and Alt+F12 the folder history;
+the search, Alt+B (held by the status line of DN) is fast find too, Alt+F10 opens the folder tree and Alt+F12 the folder history;
 Ctrl+F6..F10 sort by size, no sort, creation time, access time and description;
 repeating the current sort reverses its order;
 Shift+Gray+/- select/deselect all, Ctrl+Gray+/- select/deselect the files
@@ -133,6 +133,11 @@ try:
           'FarUx on: Ctrl+Shift+Enter moves back', t)
     t.send(w32(0x1B), 1.0)                       # Esc
     check('Search:' not in t.text(), 'FarUx on: Esc leaves the search', t)
+    t.send(w32(0x42, ord('b'), 2), 1.0)           # Alt+B: the sort menu of DN's status line
+    check('Search:' in t.text() and cursor_file(t) is not None and 'beta' in cursor_file(t),
+          'FarUx on: Alt+B is fast find (the cursor on beta), not the sort menu', t)
+    t.send(w32(0x1B), 1.0)                       # Esc
+    check('Search:' not in t.text(), 'FarUx on: Esc leaves the search after Alt+B', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(len(selected_files(t)) == 4, 'FarUx on: Shift+Gray+ selects all', t)
     t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub

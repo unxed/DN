@@ -102,7 +102,9 @@ const
 { Far UX mode: Ctrl+F3..F10 sort the focused panel by name, extension, modification time, size, no sort, creation time, access time and
   description; Ctrl+F6..F10 again reverses the mode, another mode starts in ascending order. Ctrl+F12 becomes the command of the sort
   menu (cmSortBy) and goes on to the panel, as in Far (in DN it is the calendar). Ctrl+H shows or hides the hidden files as Alt+' does
-  (in DN it is "Directory Branch"; the panel never sees the key as kbCtrlH, see kbCtrlH8). TProgram.GetEvent calls it before
+  (in DN it is "Directory Branch"; the panel never sees the key as kbCtrlH, see kbCtrlH8). Alt with a Latin letter goes to the panel
+  first: there it is fast find (filepanel.pas), as in Far, and the status line no longer takes Alt+B, C, L, R and S for the commands
+  of DN. Alt+X stays the exit of DN: F10 opens the menu here, not the exit of Far (unxed/dn#38). TProgram.GetEvent calls it before
   the status line, which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
 function FarUxSortKey(var Event: TEvent): Boolean;
   var
@@ -123,6 +125,12 @@ function FarUxSortKey(var Event: TEvent): Boolean;
     SetDNKeyCode(Event, K);
     Exit;
   end;
+  if UpCase(FarFastFindChar(DNKeyCode(Event))) in ['A'..'W', 'Y', 'Z'] then
+    begin
+    ActivePanel.HandleEvent(Event);
+    FarUxSortKey := Event.What = evNothing;
+    Exit;
+    end;
   if DNKeyCode(Event) = kbCtrlF12 then
     begin
     Event.What := evCommand;
