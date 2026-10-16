@@ -194,6 +194,7 @@ def background_copy(out, d):
         t.send(F['ENTER'], 0.2)
         offered = t.wait_text('Background', timeout=10.0)
         check(offered, 'F5: the progress window offers Background', t.text())
+        went_background = False                          # the copy was sent to the background (the panels came back)
         if offered:
             t.send(F['TAB'], 0.5)                       # Stop -> Background (the copy takes one event per 300 ms)
             t.send(F['ENTER'], 0.8)
@@ -207,6 +208,7 @@ def background_copy(out, d):
             still_copying = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i))
                                     for i in range(nfiles))
             check(returned, 'Background: the panels return', t.text())
+            went_background = bool(returned)
             if still_copying:
                 t.send(F['DOWN'], 0.5)
                 t.send(F['F5'], 0.5)
@@ -284,6 +286,12 @@ def background_copy(out, d):
               'Background: every source file finishes with the same contents '
               '(finished %r, %d of %d files exist, %d with other contents, source is a directory %r)' % (
                   finished, len(copied), nfiles, len(wrong), os.path.isdir(src)), t.text())
+        if went_background:
+            # dn#88 step 3: a copy that ran in the background says that it is done; the message waits for Enter
+            announced = t.wait_text('Copy finished', timeout=15.0)
+            check(announced, 'Background: the end of the copy is announced ("Copy finished")', t.text())
+            if announced:
+                t.send(F['ENTER'], 0.5)
         clock_back = t.until(lambda: re.search(r'\bCopy\b', t.text().split('\n')[0]) is None, 5.0)
         check(clock_back, 'Background: the clock comes back when the copy ends (%r)' % t.text().split('\n')[0].strip()[-24:],
               t.text())
