@@ -57,6 +57,18 @@ class PaletteTests(unittest.TestCase):
         size = pal[1 + n]
         self.assertEqual(pal[1 + n + 1 + size:1 + n + 1 + size + 4], b'VGAP')
 
+    def test_broken_link_color_is_a_distinct_panel_palette_entry(self):
+        table = ccolor()
+        panel = (ROOT / 'dn/src/filepanel.pas').read_text(encoding='utf-8')
+        self.assertEqual(len(table), 229)
+        self.assertIn('+#$E5', re.search(r'\bCPanel\s*=(.*?);', panel, re.S).group(1))
+        self.assertIn('CC := GetColorW(20)', panel)
+        self.assertEqual(table[228] & 15, 4, 'broken links use red text')
+        for path in (ROOT / 'dn/data/colors').glob('*.pal'):
+            pal = path.read_bytes()
+            self.assertEqual(pal[0], 229, path.name)
+            self.assertEqual(pal[1 + pal[0] + 1 + pal[1 + pal[0]]:][:4], b'VGAP', path.name)
+
 
 if __name__ == '__main__':
     unittest.main()
