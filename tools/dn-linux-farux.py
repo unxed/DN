@@ -70,10 +70,13 @@ def has_file(s):
 
 
 def cursor_file(t):
+    # the text under the cursor bar only: the row also holds the other panel, whose
+    # first entry must not be taken for the cursor file (the focused panel may be the right one)
     for row in t.screen.cells:
         s = ''.join(c for c, _ in row)
         if has_file(s) and CURSOR in set(a for _, a in row):
-            return s.strip()[:12]
+            runs = ''.join(c if a == CURSOR else '\0' for c, a in row).split('\0')
+            return ' | '.join(r.strip() for r in runs if r.strip())
     return None
 
 
