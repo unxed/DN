@@ -201,7 +201,9 @@ d, t = start(out, True, sort_files=True)
 try:
     for key, expected, message in (
             (0x75, 'zeta', 'Ctrl+F6 sorts by size'),
-            (0x77, 'zeta', 'Ctrl+F8 sorts by creation time'),
+            # the Linux build knows no creation time (CorrectSearchRec in lfn.pas sets it to 0), so the order falls back to the name
+            # (dn-linux #782: able, alpha1, alpha2, beta, gamma, zeta); the key is checked to be handled, not to order by a time
+            (0x77, 'able', 'Ctrl+F8 sorts by creation time (none on Linux: the name order)'),
             (0x78, 'able', 'Ctrl+F9 sorts by access time'),
             (0x79, 'able', 'Ctrl+F10 sorts by description, then name')):
         t.send(w32(key, 0, 4), 0.8)
