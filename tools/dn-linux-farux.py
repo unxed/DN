@@ -9,7 +9,8 @@ Shift+Gray+/- select/deselect all, Ctrl+Gray+/- select/deselect the files
 with the extension of the current one, Ctrl+Gray* inverts; with the mode
 off Alt+A starts no search and the gray keys select nothing; the check box "Far UX
 mode" of the File Manager setup switches the mode on at once and in dn.ini. Ctrl+F3/F4/F5
-sort the focused panel by name, extension and modification time. The exact keys go over the
+sort the focused panel by name, extension and modification time, Ctrl+F12 opens the sort menu
+(with the mode off it stays the calendar). The exact keys go over the
 win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
@@ -192,6 +193,10 @@ try:
         t.send('\x1b[B', 0.5)                      # first file in the sorted panel
         current = cursor_file(t)
         check(current is not None and expected in current, message, t)
+    t.send(w32(0x7B, 0, 4), 1.2)                  # Ctrl+F12: the sort menu, as in Far (the calendar in DN)
+    check('Unsorted' in t.text() and 'Calendar' not in t.text(), 'FarUx on: Ctrl+F12 opens the sort menu', t)
+    t.send(w32(0x1B), 0.8)                       # Esc closes it
+    check('Unsorted' not in t.text() and t.alive(), 'FarUx on: Esc closes the sort menu', t)
     check(quit_dn(t) == 0, 'FarUx sort keys: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
@@ -248,6 +253,9 @@ try:
     current = cursor_file(t)
     check(current is not None and 'zeta' in current,
           'FarUx off: Ctrl+F3 does not sort the panel', t)
+    t.send(w32(0x7B, 0, 4), 1.2)                  # Ctrl+F12: the calendar of DN
+    check('Calendar' in t.text() and 'Unsorted' not in t.text(), 'FarUx off: Ctrl+F12 keeps the calendar', t)
+    t.send(w32(0x1B), 0.8)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
     t.send(w32(0x6B, ord('+'), 8), 1.0)          # Ctrl+NumpadAdd
