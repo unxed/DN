@@ -176,6 +176,30 @@ procedure MyApp.GetEvent(var Event: TEvent);
           Exit;
           end;
         end;
+      { In Far UX mode, Ctrl+F3/F4/F5 sort the focused panel by name,
+        extension and modification time. Handle these before QuickExecExternal
+        and the status line, which otherwise consume Ctrl+function keys. }
+      if FarUxEnabled and (not MacroPlaying)
+        and (Pointer(Current) = Pointer(MainApp.Desktop))
+        and (MainApp.Desktop.Current is TXDoubleWindow)
+        and (ActivePanel <> nil) and ActivePanel.GetState(sfFocused)
+      then
+        begin
+        case DNKeyCode(Event) of
+          kbCtrlF3: W := psmLongName;
+          kbCtrlF4: W := psmLongExt;
+          kbCtrlF5: W := psmTime;
+          else W := $FFFF;
+        end;
+        if W <> $FFFF then
+          begin
+          ActivePanel.PanSetup^.Sort.SortMode := W;
+          ActivePanel.Reorder;
+          ActivePanel.RedrawPanelInfoDir;
+          Event.What := evNothing;
+          Exit;
+          end;
+        end;
       if  (Event.KeyDown.CharScan.ScanCode >= ((kbCtrlF1 shr 8) and $FF))
              and (Event.KeyDown.CharScan.ScanCode <= ((kbCtrlF10 shr 8) and $FF))
         and (Pointer(Current) = Pointer(MainApp.Desktop))

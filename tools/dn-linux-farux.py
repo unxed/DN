@@ -6,8 +6,9 @@ the search, Alt+F10 opens the folder tree and Alt+F12 the folder history;
 Shift+Gray+/- select/deselect all, Ctrl+Gray+/- select/deselect the files
 with the extension of the current one, Ctrl+Gray* inverts; with the mode
 off Alt+A starts no search and the gray keys select nothing; the check box "Far UX
-mode" of the File Manager setup switches the mode on at once and in dn.ini. The exact keys go
-over the win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
+mode" of the File Manager setup switches the mode on at once and in dn.ini. Ctrl+F3/F4/F5
+sort the focused panel by name, extension and modification time. The exact keys go over the
+win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
 import re
@@ -27,7 +28,7 @@ def w32(vk, uc=0, cs=0, sc=0):
     return '\x1b[%d;%d;%d;1;%d;1_\x1b[%d;%d;%d;0;%d;1_' % (vk, sc, uc, cs, vk, sc, uc, cs)
 
 
-def start(out, farux):
+def start(out, farux, sort_files=False):
     d = tempfile.mkdtemp(prefix='dnfar-')
     for f in os.listdir(out):
         if f == 'dn' or f.upper().endswith(('.LNG', '.DLG', '.HLP')):
@@ -44,6 +45,13 @@ def start(out, farux):
     open(os.path.join(w, 'beta.txt'), 'w').write('third\n')
     # another extension, sorted (by the extension, the default) after the .txt files
     open(os.path.join(w, 'gamma.xyz'), 'w').write('fourth\n')
+    if sort_files:
+        open(os.path.join(w, 'zeta.aaa'), 'w').write('first by extension\n')
+        open(os.path.join(w, 'able.zzz'), 'w').write('first by name and time\n')
+        for name, mtime in (('zeta.aaa', 1500000000), ('alpha1.txt', 1600000000),
+                            ('alpha2.txt', 1600000000), ('beta.txt', 1600000000),
+                            ('gamma.xyz', 1600000000), ('able.zzz', 1700000000)):
+            os.utime(os.path.join(w, name), (mtime, mtime))
     t = PtyTerm(['./dn'], 100, 30, env={'TV_WIN32_INPUT': '1'}, cwd=w, exe=os.path.join(d, 'dn'))
     t.pump(1.5, 6)
     t.send(w32(0x1B), 1.0)                       # Esc closes the start box
@@ -51,7 +59,7 @@ def start(out, farux):
 
 
 def has_file(s):
-    return 'alpha' in s or 'beta' in s or 'gamma' in s
+    return any(name in s for name in ('alpha', 'beta', 'gamma', 'zeta', 'able'))
 
 
 def cursor_file(t):
@@ -163,10 +171,31 @@ try:
 finally:
     shutil.rmtree(d, ignore_errors=True)
 
-d, t = start(out, False)
+d, t = start(out, True, sort_files=True)
+try:
+    for key, expected, message in (
+            (0x72, 'able.zzz', 'Ctrl+F3 sorts the focused panel by name'),
+            (0x73, 'zeta.aaa', 'Ctrl+F4 sorts the focused panel by extension'),
+            (0x74, 'able.zzz', 'Ctrl+F5 sorts the focused panel by modification time')):
+        t.send(w32(key, 0, 4), 0.8)                # Ctrl+F3 / Ctrl+F4 / Ctrl+F5
+        t.send('\x1b[H', 0.3)                      # Home -> parent entry
+        t.send('\x1b[B', 0.5)                      # first file in the sorted panel
+        current = cursor_file(t)
+        check(current is not None and expected in current, message, t)
+    check(quit_dn(t) == 0, 'FarUx sort keys: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+d, t = start(out, False, sort_files=True)
 try:
     t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
     check('Search:' not in t.text(), 'FarUx off: Alt+A starts no search', t)
+    t.send(w32(0x72, 0, 4), 0.8)                 # Ctrl+F3
+    t.send('\x1b[H', 0.3)                       # Home -> parent entry
+    t.send('\x1b[B', 0.5)                       # first file, still extension-sorted
+    current = cursor_file(t)
+    check(current is not None and 'zeta.aaa' in current,
+          'FarUx off: Ctrl+F3 keeps the existing behavior', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
     t.send(w32(0x6B, ord('+'), 8), 1.0)          # Ctrl+NumpadAdd
