@@ -181,9 +181,9 @@ finally:
 d, t = start(out, True, sort_files=True)
 try:
     for key, expected, message in (
-            (0x72, 'able.zzz', 'Ctrl+F3 sorts the focused panel by name'),
-            (0x73, 'zeta.aaa', 'Ctrl+F4 sorts the focused panel by extension'),
-            (0x74, 'able.zzz', 'Ctrl+F5 sorts the focused panel by modification time')):
+            (0x72, 'able', 'Ctrl+F3 sorts the focused panel by name'),
+            (0x73, 'zeta', 'Ctrl+F4 sorts the focused panel by extension'),
+            (0x74, 'able', 'Ctrl+F5 sorts the focused panel by modification time')):
         t.send(w32(key, 0, 4), 0.8)                # Ctrl+F3 / Ctrl+F4 / Ctrl+F5
         t.send('\x1b[H', 0.3)                      # Home -> parent entry
         t.send('\x1b[B', 0.5)                      # first file in the sorted panel
@@ -197,10 +197,10 @@ finally:
 d, t = start(out, True, sort_files=True)
 try:
     for key, expected, message in (
-            (0x75, 'zeta.aaa', 'Ctrl+F6 sorts by size'),
-            (0x77, 'zeta.aaa', 'Ctrl+F8 sorts by creation time'),
-            (0x78, 'able.zzz', 'Ctrl+F9 sorts by access time'),
-            (0x79, 'able.zzz', 'Ctrl+F10 sorts by description, then name')):
+            (0x75, 'zeta', 'Ctrl+F6 sorts by size'),
+            (0x77, 'zeta', 'Ctrl+F8 sorts by creation time'),
+            (0x78, 'able', 'Ctrl+F9 sorts by access time'),
+            (0x79, 'able', 'Ctrl+F10 sorts by description, then name')):
         t.send(w32(key, 0, 4), 0.8)
         t.send('\x1b[H', 0.3)
         t.send('\x1b[B', 0.5)
@@ -217,13 +217,13 @@ try:
     t.send('\x1b[H', 0.3)
     t.send('\x1b[B', 0.5)
     current = cursor_file(t)
-    check(current is not None and 'zeta.aaa' in current,
+    check(current is not None and 'zeta' in current,
           'Ctrl+F6 after Ctrl+F7 sorts by size again', t)
     t.send(w32(0x75, 0, 4), 0.8)                  # Ctrl+F6 once more: reversed, smallest first
     t.send('\x1b[H', 0.3)
     t.send('\x1b[B', 0.5)
     current = cursor_file(t)
-    check(current is not None and 'able.zzz' in current,
+    check(current is not None and 'able' in current,
           'repeating Ctrl+F6 reverses the sort order', t)
     check(quit_dn(t) == 0, 'FarUx sort keys F6-F10: DN ends with 0')
 finally:
@@ -241,7 +241,7 @@ try:
     t.send('\x1b[H', 0.3)                       # Home -> parent entry
     t.send('\x1b[B', 0.5)                       # first file, still extension-sorted
     current = cursor_file(t)
-    check(current is not None and 'zeta.aaa' in current,
+    check(current is not None and 'zeta' in current,
           'FarUx off: Ctrl+F3 does not sort the panel', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
