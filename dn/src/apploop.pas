@@ -107,6 +107,7 @@ const
 function FarUxSortKey(var Event: TEvent): Boolean;
   var
     W: Word;
+    K: LongInt;
     Reverses: Boolean;
   begin
   FarUxSortKey := False;
@@ -116,6 +117,12 @@ function FarUxSortKey(var Event: TEvent): Boolean;
       and (ActivePanel <> nil) and ActivePanel.GetState(sfFocused))
   then
     Exit;
+  K := FarAltGrayKey(DNKeyCode(Event), Event.KeyDown.VirtualKey);
+  if K <> 0 then
+  begin
+    SetDNKeyCode(Event, K);
+    Exit;
+  end;
   if DNKeyCode(Event) = kbCtrlF12 then
     begin
     Event.What := evCommand;
