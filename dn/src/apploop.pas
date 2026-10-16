@@ -95,8 +95,9 @@ procedure PostQuitMessage;
 
 
 { Far UX mode: Ctrl+F3..F10 sort the focused panel by name, extension, modification time, size, no sort, creation time, access time and
-  description; Ctrl+F6..F10 again reverses the mode, another mode starts in ascending order. TProgram.GetEvent calls it before the
-  status line, which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
+  description; Ctrl+F6..F10 again reverses the mode, another mode starts in ascending order. Ctrl+F12 becomes the command of the sort
+  menu (cmSortBy) and goes on to the panel, as in Far (in DN it is the calendar). TProgram.GetEvent calls it before the status line,
+  which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
 function FarUxSortKey(var Event: TEvent): Boolean;
   var
     W: Word;
@@ -109,6 +110,13 @@ function FarUxSortKey(var Event: TEvent): Boolean;
       and (ActivePanel <> nil) and ActivePanel.GetState(sfFocused))
   then
     Exit;
+  if DNKeyCode(Event) = kbCtrlF12 then
+    begin
+    Event.What := evCommand;
+    Event.Message.Command := cmSortBy;
+    Event.Message.InfoPtr := nil;
+    Exit;
+    end;
   Reverses := True;
   case DNKeyCode(Event) of
     kbCtrlF3: begin W := psmLongName; Reverses := False; end;
