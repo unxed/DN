@@ -37,6 +37,10 @@ function FarCtrlGrayKey(KeyCode: LongInt; VirtualKey: Word): Char;
   the character with pure Ctrl and no scan: it counts unless VirtualKey
   names another key (Ctrl with '-' of the main keyboard is VK_OEM_MINUS). `}
 
+function FarAltGrayKey(KeyCode: LongInt; VirtualKey: Word): LongInt;
+{` In Far UX mode, normalize terminal Alt+numpad +/- to the BIOS key codes.
+   A terminal event needs its VirtualKey to distinguish the numpad from Alt+'-'. `}
+
 implementation
 
 uses
@@ -91,6 +95,32 @@ begin
   end;
   if (VirtualKey = 0) or (VirtualKey = Vk) then
     Result := C;
+end;
+
+function FarAltGrayKey(KeyCode: LongInt; VirtualKey: Word): LongInt;
+const
+  VkAdd = $6B;
+  VkSubtract = $6D;
+var
+  C: Char;
+begin
+  Result := 0;
+  if not FarUxMode then
+    Exit;
+  if (KeyCode = kbAltGPlus) or (KeyCode = kbAltGMinus) then
+  begin
+    Result := KeyCode;
+    Exit;
+  end;
+  if (KeyCode shr 16) <> 8 then { pure Alt }
+    Exit;
+  if (KeyCode and $FF00) <> 0 then { terminal key: no BIOS scan }
+    Exit;
+  C := Char(KeyCode and $FF);
+  if (C = '+') and (VirtualKey = VkAdd) then
+    Result := kbAltGPlus
+  else if (C = '-') and (VirtualKey = VkSubtract) then
+    Result := kbAltGMinus;
 end;
 
 end.

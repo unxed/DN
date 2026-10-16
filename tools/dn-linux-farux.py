@@ -146,6 +146,12 @@ try:
     t.send(w32(0x6D, ord('-'), 8), 1.0)          # Ctrl+NumpadSub
     check(selected_files(t) == [],
           'FarUx on: Ctrl+Gray- deselects the files with the extension of the current one', t)
+    t.send(w32(0x6B, ord('+'), 2), 1.0)         # Alt+NumpadAdd
+    sel = selected_files(t)
+    check(len(sel) == 3 and not any('gamma' in f for f in sel),
+          'FarUx on: terminal Alt+Gray+ selects the files with the extension of the current one', t)
+    t.send(w32(0x6D, ord('-'), 2), 1.0)         # Alt+NumpadSubtract
+    check(selected_files(t) == [], 'FarUx on: terminal Alt+Gray- deselects the current extension', t)
     t.send(w32(0x6A, ord('*'), 8), 1.0)          # Ctrl+NumpadMultiply
     check(len(selected_files(t)) == 4, 'FarUx on: Ctrl+Gray* inverts the selection', t)
     t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub
@@ -275,6 +281,8 @@ try:
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
     t.send(w32(0x6B, ord('+'), 8), 1.0)          # Ctrl+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: the terminal Ctrl+Gray+ selects nothing', t)
+    t.send(w32(0x6B, ord('+'), 2), 1.0)          # Alt+NumpadAdd
+    check(selected_files(t) == [], 'FarUx off: the terminal Alt+Gray+ selects nothing', t)
     t.send('\x1b[H', 0.5)                       # Home
     t.send('\x1b[B', 0.5)                       # Down -> alpha1
     t.send('q', 0.8)

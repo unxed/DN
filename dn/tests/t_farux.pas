@@ -30,8 +30,17 @@ begin
   Check(FarCtrlGrayKey($03002B, $6B) = #0, 'Shift with + of the numpad is not a Ctrl gray key');
   Check(FarCtrlGrayKey($0C002B, $6B) = #0, 'Ctrl+Alt with + is not a Ctrl gray key');
   Check(FarCtrlGrayKey(kbCtrlA, 0) = #0, 'Ctrl+A is not a gray key');
+  Check(FarAltGrayKey(kbAltGPlus, 0) = kbAltGPlus, 'the BIOS Alt+Gray+ keeps its key code');
+  Check(FarAltGrayKey($08002B, $6B) = kbAltGPlus, 'terminal Alt+numpad + maps to Alt+Gray+');
+  Check(FarAltGrayKey($08002D, $6D) = kbAltGMinus, 'terminal Alt+numpad - maps to Alt+Gray-');
+  Check(FarAltGrayKey($08002D, $BD) = 0, 'Alt and - on the main keyboard is not Alt+Gray-');
+  Check(FarAltGrayKey($08002D, 0) = 0, 'an unknown terminal key is not guessed to be a gray key');
+  Check(FarAltGrayKey($0C002B, $6B) = 0, 'Ctrl+Alt+numpad + is not Alt+Gray+');
+  Check(FarAltGrayKey($0B002B, $6B) = 0, 'Shift+Alt+numpad + is not Alt+Gray+');
   FarUxMode := False;
   Check(FarCtrlGrayKey(kbCtrlGPlus, 0) = #0, 'no Ctrl gray key while the mode is off');
   Check(FarCtrlGrayKey($04002B, $6B) = #0, 'no terminal Ctrl gray key while the mode is off');
+  Check(FarAltGrayKey(kbAltGPlus, 0) = 0, 'no Alt gray key while the mode is off');
+  Check(FarAltGrayKey($08002B, $6B) = 0, 'no terminal Alt gray key while the mode is off');
   Finish;
 end.
