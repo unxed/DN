@@ -113,7 +113,7 @@ implementation
 uses
   Tree, Messages, mainapp, basics, strutil, fileutil, TvGlyphs,
    {AK155}
-  FilesCol, Startup, DnIni, FileCopy, Eraser, Commands
+  FilesCol, Startup, DnIni, FileCopy, Eraser, Commands, CopyJobs
   {$IFNDEF DN_MINI}
   , Calendar 
   {$ENDIF}
@@ -234,6 +234,15 @@ function TClockView.ClockText: AnsiString;
     Result := '>MACRO<';
     if Size.X > Length(Result) then
       Result := Result+StringOfChar(' ', Size.X-Length(Result));
+    Exit;
+    end;
+  { a copy sent to the background: its state stands in the place of the clock
+    while it runs ("Copy 37%", "+1" for each queued job), the time comes back
+    when it ends (dn#88 step 2b) }
+  SS := JobsStatusText(GetString(dlCopyStatus));
+  if SS <> '' then
+    begin
+    Result := ' '+SS+' ';
     Exit;
     end;
   if ShiftState and 7 = 0 then

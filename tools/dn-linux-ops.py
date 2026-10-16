@@ -249,6 +249,14 @@ def background_copy(out, d):
             counts.append(sum(os.path.isfile(p) for p in expected))
             t.until(lambda: False, 3.0)
         print('background copy: files copied at 0, 3 and 6 seconds: %r of %d' % (counts, nfiles), flush=True)
+        # the state of the background copy stands in the place of the clock, on the top line (dn#88 step 2b); only a copy that
+        # still runs when the screen is read proves anything, as for F5/F8 above
+        top = t.text().split('\n')[0]
+        if not all(os.path.isfile(p) for p in expected):
+            check(re.search(r'\bCopy \d+%', top) is not None,
+                  'Background: the place of the clock shows "Copy N%%" while the copy runs (%r)' % top.strip()[-24:], t.text())
+        else:
+            print('SKIP clock: the copy finished before the top line was read', flush=True)
         # Utilities, Copy jobs shows how far the running copy is (dn#88 step 1). The percent is whole, and in the background the copy
         # does about 10 files a second, so the list is opened only when 2% of the files are there.
         two_percent = t.until(lambda: sum(os.path.isfile(p) for p in expected) >= nfiles // 50, 30.0)
@@ -276,6 +284,9 @@ def background_copy(out, d):
               'Background: every source file finishes with the same contents '
               '(finished %r, %d of %d files exist, %d with other contents, source is a directory %r)' % (
                   finished, len(copied), nfiles, len(wrong), os.path.isdir(src)), t.text())
+        clock_back = t.until(lambda: re.search(r'\bCopy\b', t.text().split('\n')[0]) is None, 5.0)
+        check(clock_back, 'Background: the clock comes back when the copy ends (%r)' % t.text().split('\n')[0].strip()[-24:],
+              t.text())
         check(t.alive() and 'Fatal' not in t.text(), 'Background: DN remains alive', t.text())
     finally:
         if t.alive():

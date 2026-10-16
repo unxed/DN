@@ -523,6 +523,7 @@ dlCopyJobsTitle,          'Задания копирования'
 dlCopyJobsNone,           'Заданий копирования пока нет'
 dlCopyJobCancel,          '~О~тменить'
 dlCopyJobClear,           'О~ч~истить'
+dlCopyStatus,             'Копия'
 dlStoreColorPal,           'Запомнить цветовую палитру'
 
 dlSystemInfo               'Системная информация'
