@@ -12,7 +12,8 @@ mode" of the File Manager setup switches the mode on at once and in dn.ini. Ctrl
 sort the focused panel by name, extension and modification time, Ctrl+F12 opens the sort menu
 (with the mode off it stays the calendar). The exact keys go over the
 win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
-over a plain ESC prefix. usage: tools/dn-linux-farux.py OUTDIR"""
+over a plain ESC prefix. Ctrl+H toggles hidden files in the focused panel
+only when FarUxMode is on. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
 import re
 import shutil
@@ -32,7 +33,7 @@ def w32(vk, uc=0, cs=0, sc=0):
     return '\x1b[%d;%d;%d;1;%d;1_\x1b[%d;%d;%d;0;%d;1_' % (vk, sc, uc, cs, vk, sc, uc, cs)
 
 
-def start(out, farux, sort_files=False):
+def start(out, farux, sort_files=False, hidden_files=False):
     d = tempfile.mkdtemp(prefix='dnfar-')
     for f in os.listdir(out):
         if f == 'dn' or f.upper().endswith(('.LNG', '.DLG', '.HLP')):
@@ -49,6 +50,8 @@ def start(out, farux, sort_files=False):
     open(os.path.join(w, 'beta.txt'), 'w').write('third\n')
     # another extension, sorted (by the extension, the default) after the .txt files
     open(os.path.join(w, 'gamma.xyz'), 'w').write('fourth\n')
+    if hidden_files:
+        open(os.path.join(w, '.secret'), 'w').write('hidden\n')
     if sort_files:
         open(os.path.join(w, 'able.zzz'), 'w').write('small')
         time.sleep(2.1)
@@ -240,6 +243,18 @@ finally:
     shutil.rmtree(d, ignore_errors=True)
 
 
+d, t = start(out, True, hidden_files=True)
+try:
+    check('.secret' in t.text(), 'FarUx on: hidden files are initially shown', t)
+    t.send(w32(0x48, ord('h'), 4), 1.0)            # Ctrl+H
+    check('.secret' not in t.text(), 'FarUx on: Ctrl+H hides hidden files', t)
+    t.send(w32(0x48, ord('h'), 4), 1.0)            # Ctrl+H again
+    check('.secret' in t.text(), 'FarUx on: Ctrl+H shows hidden files again', t)
+    check(quit_dn(t) == 0, 'FarUx Ctrl+H: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
 d, t = start(out, False, sort_files=True)
 try:
     t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
@@ -267,6 +282,16 @@ try:
     check('alpha1' not in cmdline_row(t),
           'FarUx off: Ctrl+Ins with text still goes to the clipboard', t)
     check(quit_dn(t) == 0, 'FarUx off: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
+d, t = start(out, False, hidden_files=True)
+try:
+    check('.secret' in t.text(), 'FarUx off: hidden files are initially shown', t)
+    t.send(w32(0x48, ord('h'), 4), 1.0)            # Ctrl+H
+    check('.secret' in t.text(), 'FarUx off: Ctrl+H does not toggle hidden files', t)
+    check(quit_dn(t) == 0, 'FarUx off Ctrl+H: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
 
