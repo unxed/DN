@@ -94,10 +94,16 @@ procedure PostQuitMessage;
   end;
 
 
+const
+  { Ctrl+H of a terminal that tells it from Backspace (the win32 input mode, Kitty): DNKeyCode leaves the code 8 as it is (8, 9 and 13 are
+    Backspace, Tab and Enter), so the BIOS form kbCtrlH never comes }
+  kbCtrlH8 = $040008;
+
 { Far UX mode: Ctrl+F3..F10 sort the focused panel by name, extension, modification time, size, no sort, creation time, access time and
   description; Ctrl+F6..F10 again reverses the mode, another mode starts in ascending order. Ctrl+F12 becomes the command of the sort
-  menu (cmSortBy) and goes on to the panel, as in Far (in DN it is the calendar). TProgram.GetEvent calls it before the status line,
-  which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
+  menu (cmSortBy) and goes on to the panel, as in Far (in DN it is the calendar). Ctrl+H shows or hides the hidden files as Alt+' does
+  (in DN it is "Directory Branch"; the panel never sees the key as kbCtrlH, see kbCtrlH8). TProgram.GetEvent calls it before
+  the status line, which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
 function FarUxSortKey(var Event: TEvent): Boolean;
   var
     W: Word;
@@ -115,6 +121,14 @@ function FarUxSortKey(var Event: TEvent): Boolean;
     Event.What := evCommand;
     Event.Message.Command := cmSortBy;
     Event.Message.InfoPtr := nil;
+    Exit;
+    end;
+  if (DNKeyCode(Event) = kbCtrlH) or (DNKeyCode(Event) = kbCtrlH8) then
+    begin
+    Startup.FMSetup.Show := Startup.FMSetup.Show xor fmsShowHidden;
+    Startup.ConfigModified := True;
+    Message(Application, evCommand, cmUpdateConfig, nil);
+    FarUxSortKey := True;
     Exit;
     end;
   Reverses := True;

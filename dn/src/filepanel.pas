@@ -2203,15 +2203,6 @@ GotoKb:
             OldDelta := -1;
             ScrollBar.SetValue(Files.Count-1)
             end;
-          kbCtrlH:
-            if FarUxEnabled then
-              begin
-              FMSetup.Show := FMSetup.Show xor fmsShowHidden;
-              ConfigModified := True;
-              Message(Application, evCommand, cmUpdateConfig, nil)
-              end
-            else
-              CommandHandle(Event);
           kbUp, kbDown, kbCtrlUp, kbCtrlDown, kbCtrlShiftUp,
            kbCtrlShiftDown, kbUpUp, kbDownUp
           :
