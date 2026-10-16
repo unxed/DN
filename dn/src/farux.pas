@@ -15,6 +15,15 @@ uses
 function FarUxEnabled: Boolean;
 {` True while the Far UX mode setting is on (default: False). `}
 
+type
+  TFarUxKeyHook = function(var Event: TEvent): Boolean;
+{` A key of the Far UX mode that is dealt with before the status line sees it: it returns True when the key is used up. `}
+
+var
+  FarUxEarlyKey: TFarUxKeyHook;
+{` Set by the application loop (apploop.pas); TProgram.GetEvent calls it before the status line, which turns some
+  Ctrl+function keys into commands of its own (Ctrl+F3 is "create panel"). nil: no such keys. `}
+
 function FarFastFindChar(KeyCode: LongInt): Char;
 {` In Far UX mode: the letter of an Alt+letter key for fast find
   (as in Far: hold Alt and type the start of the name), else #0.

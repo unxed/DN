@@ -116,7 +116,7 @@ var
 
 implementation
 
-uses basics, fileutil, langid, Videoman, osdep, OSStartScreen, dnscreen, TvHist, TvUtf8, TvCodePg, TvLocale, palettes, DNRun, DosHarness, TvCluster, TvKeys, TvSys, TvUtil, TvMsgBox;
+uses basics, fileutil, langid, Videoman, osdep, OSStartScreen, dnscreen, TvHist, TvUtf8, TvCodePg, TvLocale, palettes, DNRun, DosHarness, TvCluster, TvKeys, TvSys, TvUtil, TvMsgBox, farux;
 
 constructor TBackground.Create(const Bounds: TRect; APattern: Byte);
 begin
@@ -280,6 +280,10 @@ begin
     else if EnterTogglesCheck and (DNKeyCode(Event) = Commands.kbEnter) and FocusedIsCluster(Self) then
       { G.2b: Enter on a check box or a radio button toggles it (it becomes Space); from the other controls it presses the default button }
       MakeKeyEvent(Event, Word(Commands.kbSpace), 0);
+  { the keys of the Far UX mode that the status line would turn into its own commands are used up before it (apploop.pas) }
+  if (Event.What = evKeyDown) and Assigned(FarUxEarlyKey) then
+    if FarUxEarlyKey(Event) then
+      Event.What := evNothing;
   { as in Turbo Vision: the status line sees the keys and the clicks on it }
   if (Event.What <> evNothing) and (MainApp.StatusLine <> nil) then
     if ((Event.What and evKeyDown) <> 0) or
