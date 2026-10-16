@@ -94,11 +94,13 @@ procedure PostQuitMessage;
   end;
 
 
-{ Far UX mode: Ctrl+F3/F4/F5 sort the focused panel by name, extension and modification time. TProgram.GetEvent calls it before
-  the status line, which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
+{ Far UX mode: Ctrl+F3..F10 sort the focused panel by name, extension, modification time, size, no sort, creation time, access time and
+  description; Ctrl+F6..F10 again reverses the mode, another mode starts in ascending order. TProgram.GetEvent calls it before the
+  status line, which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
 function FarUxSortKey(var Event: TEvent): Boolean;
   var
     W: Word;
+    Reverses: Boolean;
   begin
   FarUxSortKey := False;
   if  not (FarUxEnabled and (MyApplication <> nil)
@@ -107,14 +109,28 @@ function FarUxSortKey(var Event: TEvent): Boolean;
       and (ActivePanel <> nil) and ActivePanel.GetState(sfFocused))
   then
     Exit;
+  Reverses := True;
   case DNKeyCode(Event) of
-    kbCtrlF3: W := psmLongName;
-    kbCtrlF4: W := psmLongExt;
-    kbCtrlF5: W := psmTime;
+    kbCtrlF3: begin W := psmLongName; Reverses := False; end;
+    kbCtrlF4: begin W := psmLongExt; Reverses := False; end;
+    kbCtrlF5: begin W := psmTime; Reverses := False; end;
+    kbCtrlF6: W := psmSize;
+    kbCtrlF7: W := psmUnsorted;
+    kbCtrlF8: W := psmCrTime;
+    kbCtrlF9: W := psmLATime;
+    kbCtrlF10: W := psmDIZ;
     else
       Exit;
   end;
-  ActivePanel.PanSetup^.Sort.SortMode := W;
+  if  Reverses and (ActivePanel.PanSetup^.Sort.SortMode = W) then
+    ActivePanel.PanSetup^.Sort.SortFlags :=
+      ActivePanel.PanSetup^.Sort.SortFlags xor psfInverted
+  else
+    begin
+    ActivePanel.PanSetup^.Sort.SortMode := W;
+    ActivePanel.PanSetup^.Sort.SortFlags :=
+      ActivePanel.PanSetup^.Sort.SortFlags and not psfInverted;
+    end;
   ActivePanel.Reorder;
   ActivePanel.RedrawPanelInfoDir;
   FarUxSortKey := True;

@@ -3,6 +3,8 @@
 [FilePanels] FarUxMode=1 Alt+A moves the cursor to alpha1 (no menu opens),
 Ctrl+Enter goes to the next match, Ctrl+Shift+Enter goes back, Esc leaves
 the search, Alt+F10 opens the folder tree and Alt+F12 the folder history;
+Ctrl+F6..F10 sort by size, no sort, creation time, access time and description;
+repeating the current sort reverses its order;
 Shift+Gray+/- select/deselect all, Ctrl+Gray+/- select/deselect the files
 with the extension of the current one, Ctrl+Gray* inverts; with the mode
 off Alt+A starts no search and the gray keys select nothing; the check box "Far UX
@@ -15,6 +17,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pty_screen import PtyTerm
@@ -46,12 +49,16 @@ def start(out, farux, sort_files=False):
     # another extension, sorted (by the extension, the default) after the .txt files
     open(os.path.join(w, 'gamma.xyz'), 'w').write('fourth\n')
     if sort_files:
-        open(os.path.join(w, 'zeta.aaa'), 'w').write('first by extension\n')
-        open(os.path.join(w, 'able.zzz'), 'w').write('first by name and time\n')
-        for name, mtime in (('zeta.aaa', 1500000000), ('alpha1.txt', 1600000000),
-                            ('alpha2.txt', 1600000000), ('beta.txt', 1600000000),
-                            ('gamma.xyz', 1600000000), ('able.zzz', 1700000000)):
+        open(os.path.join(w, 'able.zzz'), 'w').write('small')
+        time.sleep(2.1)
+        open(os.path.join(w, 'zeta.aaa'), 'w').write('largest file by size\n' * 8)
+        for name, mtime in (('alpha1.txt', 1600000000), ('alpha2.txt', 1600000000),
+                            ('beta.txt', 1600000000), ('gamma.xyz', 1600000000),
+                            ('able.zzz', 1700000000)):
             os.utime(os.path.join(w, name), (mtime, mtime))
+        time.sleep(2.1)
+        # utime also changes ctime; zeta goes last to keep the newest creation time
+        os.utime(os.path.join(w, 'zeta.aaa'), (1500000000, 1500000000))
     t = PtyTerm(['./dn'], 100, 30, env={'TV_WIN32_INPUT': '1'}, cwd=w, exe=os.path.join(d, 'dn'))
     t.pump(1.5, 6)
     t.send(w32(0x1B), 1.0)                       # Esc closes the start box
@@ -185,6 +192,43 @@ try:
     check(quit_dn(t) == 0, 'FarUx sort keys: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
+
+
+d, t = start(out, True, sort_files=True)
+try:
+    for key, expected, message in (
+            (0x75, 'zeta.aaa', 'Ctrl+F6 sorts by size'),
+            (0x77, 'zeta.aaa', 'Ctrl+F8 sorts by creation time'),
+            (0x78, 'able.zzz', 'Ctrl+F9 sorts by access time'),
+            (0x79, 'able.zzz', 'Ctrl+F10 sorts by description, then name')):
+        t.send(w32(key, 0, 4), 0.8)
+        t.send('\x1b[H', 0.3)
+        t.send('\x1b[B', 0.5)
+        current = cursor_file(t)
+        check(current is not None and expected in current, message, t)
+    unsorted_first = os.listdir(os.path.join(d, 'work'))[0].split('.')[0]
+    t.send(w32(0x76, 0, 4), 0.8)                  # Ctrl+F7
+    t.send('\x1b[H', 0.3)
+    t.send('\x1b[B', 0.5)
+    current = cursor_file(t)
+    check(current is not None and unsorted_first in current,
+          'Ctrl+F7 restores the directory order', t)
+    t.send(w32(0x75, 0, 4), 0.8)                  # Ctrl+F6: by size again, largest first
+    t.send('\x1b[H', 0.3)
+    t.send('\x1b[B', 0.5)
+    current = cursor_file(t)
+    check(current is not None and 'zeta.aaa' in current,
+          'Ctrl+F6 after Ctrl+F7 sorts by size again', t)
+    t.send(w32(0x75, 0, 4), 0.8)                  # Ctrl+F6 once more: reversed, smallest first
+    t.send('\x1b[H', 0.3)
+    t.send('\x1b[B', 0.5)
+    current = cursor_file(t)
+    check(current is not None and 'able.zzz' in current,
+          'repeating Ctrl+F6 reverses the sort order', t)
+    check(quit_dn(t) == 0, 'FarUx sort keys F6-F10: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
 
 d, t = start(out, False, sort_files=True)
 try:
