@@ -524,6 +524,8 @@ dlCopyJobsNone,           'Завдань копіювання поки нема
 dlCopyJobCancel,          '~С~касувати'
 dlCopyJobClear,           'Оч~и~стити'
 dlCopyStatus,             'Копія'
+dlCopyFinished,           'Копіювання завершено:'
+dlCopyFailed,             'Копіювання не вдалося:'
 dlStoreColorPal,           'Запам''ятати палітру кольорів'
 
 dlSystemInfo               'Системна інформація'

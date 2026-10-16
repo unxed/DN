@@ -464,6 +464,9 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     UserStop: Boolean;  { the copy was stopped by an answer of the user (Cancel), not by an error }
     JobMsg: String;     { why the copy failed, when it stopped without a Cancel answer }
     JobStopped: Boolean; { the copy loop ended by a Cancel or by an error (CopyCancel can be cleared to write the rest) }
+    EndJob: TCopyJob;   { the record of this copy after it ended, for the message of a background copy (dn#88 step 3) }
+    EndMsg: String;     { the message that tells how a copy sent to the background ended; empty for any other copy }
+    EndFlags: Word;     { the buttons and the kind of that message }
 
   function MkName(const Nm: String): String;
     var
@@ -2483,6 +2486,22 @@ qqqq:
     JobEnd(JobId, True, False, JobMsg)
   else
     JobEnd(JobId, CopyCancel or JobStopped, UserStop, 'copy stopped by an error');
+  { dn#88 step 3: a copy that ran in the background tells how it ended, after the panels are redrawn (the end of this procedure).
+    A copy that was not sent to the background, and a copy that the user stopped, say nothing more than they did before. }
+  EndMsg := '';
+  if JobGet(JobId, EndJob) and EndJob.Background then
+    case EndJob.State of
+      jsDone:
+        begin
+        EndMsg := ^C + GetString(dlCopyFinished) + ^M^C + Cut(EndJob.Title, 40);
+        EndFlags := mfInformation + mfOKButton;
+        end;
+      jsFailed:
+        begin
+        EndMsg := ^C + GetString(dlCopyFailed) + ^M^C + Cut(EndJob.Title, 40) + ^M^C + EndJob.Error;
+        EndFlags := mfError + mfOKButton;
+        end;
+    end;
   
   Flush := ((SystemData.Options shl 3) and ossFlushDsk <> 0);
   if Flush then
@@ -2527,6 +2546,8 @@ the results of what happened after the last timer tick.
     SysDiskReset;
     Info.Free;
     end;
+  if EndMsg <> '' then
+    MessageBox(EndMsg, nil, EndFlags);
   
   end { FilesCopy };
 {-DataCompBoy-}

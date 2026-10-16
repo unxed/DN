@@ -2063,6 +2063,8 @@ type
     dlCopyJobCancel, { the "Cancel job" button of the list of the copy jobs (dn#40 part 4) }
     dlCopyJobClear, { the "Clear" button of the list of the copy jobs (dn#40 part 4) }
     dlCopyStatus, { the word before the percent of a background copy in the place of the clock (dn#88 step 2b) }
+    dlCopyFinished, { the head of the message that a copy sent to the background is done (dn#88 step 3) }
+    dlCopyFailed, { the head of the message that a copy sent to the background has failed (dn#88 step 3) }
     dlReplace,
     dlWarning,
     dlCloseButton,
