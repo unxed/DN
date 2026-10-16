@@ -150,7 +150,7 @@ type
     {`}
 
 const
-  CPanel = #6#7#8#9#10#32#33#34#35#36#37#38#39#40#44#45#46#47#48; {JO}
+  CPanel = #6#7#8#9#10#32#33#34#35#36#37#38#39#40#44#45#46#47#48+#$E5; {JO; broken link}
   CTopView = #11#12;
   CInfoView = #25#26#27#28#29#30#31#49#50;
   CDriveLine = #41#42#43;
@@ -706,6 +706,8 @@ procedure TFilePanel.Draw;
       begin
       P := Files.At(Idx);
       CC := HLC[P^.TType];
+      if P^.Attr and SysBrokenLinkAttr <> 0 then
+        CC := GetColorW(20); { broken link }
       if  (Idx = CurPos) then
         begin
         LastCurPos.X := JJ;
@@ -2346,4 +2348,3 @@ begin
 end;
 
 end.
-
