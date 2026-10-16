@@ -190,12 +190,15 @@ d, t = start(out, False, sort_files=True)
 try:
     t.send(w32(0x41, ord('a'), 2), 1.0)           # Alt+A
     check('Search:' not in t.text(), 'FarUx off: Alt+A starts no search', t)
-    t.send(w32(0x72, 0, 4), 0.8)                 # Ctrl+F3
+    before = t.text()
+    t.send(w32(0x72, 0, 4), 0.8)                 # Ctrl+F3: "create panel" opens its list of drives
+    check(t.text() != before and t.alive(), 'FarUx off: Ctrl+F3 keeps the existing behavior', t)
+    t.send(w32(0x1B), 0.8)                       # Esc closes the list
     t.send('\x1b[H', 0.3)                       # Home -> parent entry
     t.send('\x1b[B', 0.5)                       # first file, still extension-sorted
     current = cursor_file(t)
     check(current is not None and 'zeta.aaa' in current,
-          'FarUx off: Ctrl+F3 keeps the existing behavior', t)
+          'FarUx off: Ctrl+F3 does not sort the panel', t)
     t.send(w32(0x6B, ord('+'), 16), 1.0)         # Shift+NumpadAdd
     check(selected_files(t) == [], 'FarUx off: Shift+Gray+ selects nothing', t)
     t.send(w32(0x6B, ord('+'), 8), 1.0)          # Ctrl+NumpadAdd

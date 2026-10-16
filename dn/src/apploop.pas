@@ -94,6 +94,33 @@ procedure PostQuitMessage;
   end;
 
 
+{ Far UX mode: Ctrl+F3/F4/F5 sort the focused panel by name, extension and modification time. TProgram.GetEvent calls it before
+  the status line, which holds these keys as commands of its own (Ctrl+F3 is "create panel"); the keys of a macro come later. }
+function FarUxSortKey(var Event: TEvent): Boolean;
+  var
+    W: Word;
+  begin
+  FarUxSortKey := False;
+  if  not (FarUxEnabled and (MyApplication <> nil)
+      and (Pointer(MyApplication.Current) = Pointer(MainApp.Desktop))
+      and (MainApp.Desktop.Current is TXDoubleWindow)
+      and (ActivePanel <> nil) and ActivePanel.GetState(sfFocused))
+  then
+    Exit;
+  case DNKeyCode(Event) of
+    kbCtrlF3: W := psmLongName;
+    kbCtrlF4: W := psmLongExt;
+    kbCtrlF5: W := psmTime;
+    else
+      Exit;
+  end;
+  ActivePanel.PanSetup^.Sort.SortMode := W;
+  ActivePanel.Reorder;
+  ActivePanel.RedrawPanelInfoDir;
+  FarUxSortKey := True;
+  end;
+
+
 procedure MyApp.GetEvent(var Event: TEvent);
   var
     W: Word;
@@ -173,30 +200,6 @@ procedure MyApp.GetEvent(var Event: TEvent);
           Event.What := evCommand;
           Event.Message.Command := W;
           Event.Message.InfoPtr := nil;
-          Exit;
-          end;
-        end;
-      { In Far UX mode, Ctrl+F3/F4/F5 sort the focused panel by name,
-        extension and modification time. Handle these before QuickExecExternal
-        and the status line, which otherwise consume Ctrl+function keys. }
-      if FarUxEnabled and (not MacroPlaying)
-        and (Pointer(Current) = Pointer(MainApp.Desktop))
-        and (MainApp.Desktop.Current is TXDoubleWindow)
-        and (ActivePanel <> nil) and ActivePanel.GetState(sfFocused)
-      then
-        begin
-        case DNKeyCode(Event) of
-          kbCtrlF3: W := psmLongName;
-          kbCtrlF4: W := psmLongExt;
-          kbCtrlF5: W := psmTime;
-          else W := $FFFF;
-        end;
-        if W <> $FFFF then
-          begin
-          ActivePanel.PanSetup^.Sort.SortMode := W;
-          ActivePanel.Reorder;
-          ActivePanel.RedrawPanelInfoDir;
-          Event.What := evNothing;
           Exit;
           end;
         end;
@@ -427,5 +430,8 @@ procedure MyApp.HandleEvent(var Event: TEvent);
       end {case};
   end {case};
   end { MyApp.HandleEvent };
+
+initialization
+  FarUxEarlyKey := @FarUxSortKey;
 
 end.
