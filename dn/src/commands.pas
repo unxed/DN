@@ -2062,6 +2062,7 @@ type
     dlCopyJobsNone, { no copy jobs yet }
     dlCopyJobCancel, { the "Cancel job" button of the list of the copy jobs (dn#40 part 4) }
     dlCopyJobClear, { the "Clear" button of the list of the copy jobs (dn#40 part 4) }
+    dlCopyStatus, { the word before the percent of a background copy in the place of the clock (dn#88 step 2b) }
     dlReplace,
     dlWarning,
     dlCloseButton,
