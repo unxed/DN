@@ -101,8 +101,6 @@ function FarAltGrayKey(KeyCode: LongInt; VirtualKey: Word): LongInt;
 const
   VkAdd = $6B;
   VkSubtract = $6D;
-var
-  C: Char;
 begin
   Result := 0;
   if not FarUxMode then
@@ -114,13 +112,16 @@ begin
   end;
   if (KeyCode shr 16) <> 8 then { pure Alt }
     Exit;
-  if (KeyCode and $FF00) <> 0 then { terminal key: no BIOS scan }
-    Exit;
-  C := Char(KeyCode and $FF);
-  if (C = '+') and (VirtualKey = VkAdd) then
-    Result := kbAltGPlus
-  else if (C = '-') and (VirtualKey = VkSubtract) then
-    Result := kbAltGMinus;
+  { The terminal gives the character ('+', '-') or, for the keys that tv/ names, the BIOS code of the main keyboard
+    key (Alt and '-' comes as kbAltMinus, $8200); the VirtualKey tells the numpad from it. }
+  case KeyCode and $FFFF of
+    $002B, $8300:
+      if VirtualKey = VkAdd then
+        Result := kbAltGPlus;
+    $002D, $8200:
+      if VirtualKey = VkSubtract then
+        Result := kbAltGMinus;
+  end;
 end;
 
 end.

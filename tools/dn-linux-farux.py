@@ -148,10 +148,11 @@ try:
           'FarUx on: Ctrl+Gray- deselects the files with the extension of the current one', t)
     t.send(w32(0x6B, ord('+'), 2), 1.0)         # Alt+NumpadAdd
     sel = selected_files(t)
-    check(len(sel) == 3 and not any('gamma' in f for f in sel),
-          'FarUx on: terminal Alt+Gray+ selects the files with the extension of the current one', t)
+    # DN selects by the name without the extension (the key of DN, kept in Far mode)
+    check(any('alpha1' in f for f in sel) and not any(('beta' in f or 'gamma' in f) for f in sel),
+          'FarUx on: terminal Alt+Gray+ selects the files with the name of the current one', t)
     t.send(w32(0x6D, ord('-'), 2), 1.0)         # Alt+NumpadSubtract
-    check(selected_files(t) == [], 'FarUx on: terminal Alt+Gray- deselects the current extension', t)
+    check(selected_files(t) == [], 'FarUx on: terminal Alt+Gray- deselects the files with the name of the current one', t)
     t.send(w32(0x6A, ord('*'), 8), 1.0)          # Ctrl+NumpadMultiply
     check(len(selected_files(t)) == 4, 'FarUx on: Ctrl+Gray* inverts the selection', t)
     t.send(w32(0x6D, ord('-'), 16), 1.0)         # Shift+NumpadSub
