@@ -261,6 +261,7 @@ def background_copy(out, d):
             print('SKIP clock: the copy finished before the top line was read', flush=True)
         # Utilities, Copy jobs shows how far the running copy is (dn#88 step 1). The percent is whole, and in the background the copy
         # does about 10 files a second, so the list is opened only when 2% of the files are there.
+        keys_met_end = False                             # the keys of the list were pressed after the copy had ended
         two_percent = t.until(lambda: sum(os.path.isfile(p) for p in expected) >= nfiles // 50, 30.0)
         if two_percent and not all(os.path.isfile(p) for p in expected):
             t.send('\x1bu', 0.8)                        # Alt-U: Utilities
@@ -276,6 +277,7 @@ def background_copy(out, d):
                           run.group(0) if run else 'no "[run N%]" on the screen'), jobs_screen)
             else:
                 print('SKIP Copy jobs: the copy finished before the list was read, nothing is left to show', flush=True)
+            keys_met_end = not copy_ran_jobs
             t.send(F['ESC'], 0.5)                       # Esc closes the list; Enter would press the default button, Cancel job
         else:
             print('SKIP Copy jobs: the copy finished (or did not reach 2%) before the list could be opened', flush=True)
@@ -286,7 +288,14 @@ def background_copy(out, d):
               'Background: every source file finishes with the same contents '
               '(finished %r, %d of %d files exist, %d with other contents, source is a directory %r)' % (
                   finished, len(copied), nfiles, len(wrong), os.path.isdir(src)), t.text())
-        if went_background:
+        if went_background and keys_met_end:
+            # the message waits for a key and the Esc that closed the list of jobs can have closed it (dn-linux #781, head 14f7f94, both jobs with this check:
+            # 3963 of 4096 files at 6 seconds, the copy ended while Alt-U, j and Esc were pressed): only a copy that still runs when the
+            # last key is pressed proves anything, as for the list of jobs above
+            print('SKIP Background: the end of the copy is announced: the copy ended while the keys of the list of jobs were pressed', flush=True)
+            if 'Copy finished' in t.text():
+                t.send(F['ENTER'], 0.5)
+        elif went_background:
             # dn#88 step 3: a copy that ran in the background says that it is done; the message waits for Enter
             announced = t.wait_text('Copy finished', timeout=15.0)
             check(announced, 'Background: the end of the copy is announced ("Copy finished")', t.text())
