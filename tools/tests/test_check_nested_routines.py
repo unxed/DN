@@ -127,6 +127,54 @@ end;
         self.assertNotIn("middle nested", result.stdout.lower())
         self.assertNotIn("fake", result.stdout.lower())
 
+    def test_reads_lists_only_names_taken_from_above_the_parent(self):
+        source = """unit Sample;
+interface
+implementation
+procedure Outer(Param: Integer);
+  var Top: Integer;
+  procedure Middle;
+    var Mid: Integer;
+    procedure Far;
+      var Own: Integer;
+      begin
+      Own := Param + Mid;
+      end;
+    procedure Near;
+      begin
+      Mid := Mid + 1;
+      Rec.Top := 1;
+      end;
+    function Calc: Integer;
+      procedure Deep;
+        begin
+        Calc := Top;
+        end;
+      begin
+      Result := 0;
+      end;
+    begin
+    end;
+  begin
+  end;
+begin
+end;
+end.
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            unit = Path(temporary) / "sample.pas"
+            unit.write_text(source, encoding="ascii")
+            result = subprocess.run(
+                ["python3", str(SCRIPT), "--reads", temporary],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        lines = [line.split(": ", 1)[1] for line in result.stdout.lower().strip().splitlines()]
+        # Far reads Param from Outer, two levels up; Near reads only Mid, its parent's, and the field `.Top`.
+        # Deep reads Top from Outer and the result of Calc, its own parent's.
+        self.assertEqual(lines, ["far nested in middle reads param (outer)", "deep nested in calc reads top (outer)"])
+
 
 if __name__ == "__main__":
     unittest.main()
