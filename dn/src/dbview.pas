@@ -991,6 +991,31 @@ procedure TDBViewer.HandleEvent(var Event: TEvent);
     DBFile.BaseFile.Write(p^[0], DBFile.RecLen);
     end { DeleteRecord };
 
+  procedure StoreField(var S: String; FldLen: AWord; P: PChar; PFR: PFieldRec);
+    begin
+    S := AddSpace(S, FldLen);
+    XLatStr(S, XCoder.XlatCP[FromAscii]); {John_SW 14-03-2003}
+    Move(S[1], P[PFR^.Pos], FldLen);
+    DBFile.Seek(Delta.Y);
+    DBFile.BaseFile.Seek(DBFile.BaseFile.GetPos+PFR^.Pos);
+    DBFile.BaseFile.Write(S[1], FldLen);
+    end;
+
+  function GetDig(const S: String; var II: Word): Word;
+    var
+      D: String;
+    begin
+    D := '';
+    while (II <= Length(S)) and ((S[II] < '0') or (S[II] > '9')) do
+      Inc(II);
+    while (II <= Length(S)) and ((S[II] >= '0') and (S[II] <= '9')) do
+      begin
+      AddStr(D, S[II]);
+      Inc(II);
+      end;
+    GetDig := StoI(D);
+    end;
+
   { -------- Eugeny Zvyagintzev ---------}
 
   procedure EditField;
@@ -1004,31 +1029,6 @@ procedure TDBViewer.HandleEvent(var Event: TEvent);
       II, N1, N2, N3: Word;
       LL: array[0..3] of PtrInt;
       FldLen: AWord; { Kirill }
-
-    procedure StoreField;
-      begin
-      S := AddSpace(S, FldLen);
-      XLatStr(S, XCoder.XlatCP[FromAscii]); {John_SW 14-03-2003}
-      Move(S[1], P[PFR^.Pos], FldLen);
-      DBFile.Seek(Delta.Y);
-      DBFile.BaseFile.Seek(DBFile.BaseFile.GetPos+PFR^.Pos);
-      DBFile.BaseFile.Write(S[1], FldLen);
-      end;
-
-    function GetDig: Word;
-      var
-        D: String;
-      begin
-      D := '';
-      while (II <= Length(S)) and ((S[II] < '0') or (S[II] > '9')) do
-        Inc(II);
-      while (II <= Length(S)) and ((S[II] >= '0') and (S[II] <= '9')) do
-        begin
-        AddStr(D, S[II]);
-        Inc(II);
-        end;
-      GetDig := StoI(D);
-      end;
 
     label redat;
     begin { EditField }
@@ -1068,7 +1068,7 @@ procedure TDBViewer.HandleEvent(var Event: TEvent);
               PFR^.Dec, S);
             S := PredSpace(S, FldLen);
             end;
-          StoreField;
+          StoreField(S, FldLen, P, PFR);
           end;
       'D':
         begin
@@ -1079,9 +1079,9 @@ redat:
         then
           begin
           II := 1;
-          N1 := GetDig;
-          N2 := GetDig;
-          N3 := GetDig;
+          N1 := GetDig(S, II);
+          N2 := GetDig(S, II);
+          N3 := GetDig(S, II);
           GetDate(II, MM, DD, YY);
           case CountryInfo.DateFmt of
             dfMDY:
@@ -1120,7 +1120,7 @@ redat:
             LL[2] := DD mod 100;
             FormatStr(S, '%04d%02d%02d', LL);
             end;
-          StoreField;
+          StoreField(S, FldLen, P, PFR);
           end;
         end;
       'L':
@@ -1129,7 +1129,7 @@ redat:
           S := 'F'
         else
           S := 'T';
-        StoreField;
+        StoreField(S, FldLen, P, PFR);
         end;
     end {case};
     end { EditField };
