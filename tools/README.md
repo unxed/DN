@@ -52,6 +52,7 @@ One table instead of reading every header. Arguments are mostly environment vari
 | `dn-linux-menusweep.py` | every item of the main menu, the submenus included, in the three languages, each opened from a fresh start: no fatal error (found the dialog of Alt-K and View as Hex) | dn-linux (job menusweep; `-j N`) |
 | `dn-linux-kitty.py` | keys in the encoding of the Kitty keyboard protocol: a press and a release are one character, a repeat is a key, the lock bits, Ctrl-Tab, Alt-X | dn-linux |
 | `dn-linux-embterm.py` | programs that read the terminal, run from the command line: a prompt and a typed line, the size of the terminal, raw mode (q, Up), Ctrl-C | dn-linux |
+| `dn-linux-ssh.py` | ssh from the command line (unxed/dn#90, step 1): a sshd of its own on localhost; `ssh host command` and an interactive `ssh host` with `exit` | dn-linux |
 | `dn-linux-locale-utf8.py` | the build with UTF-8 inside under C, POSIX, KOI8-R, ru_RU.UTF-8, en_US.UTF-8 and a Latin-1 locale: names, Russian typed into the command line and a dialog | dn-linux |
 | `dn-linux-clip.py` | the clipboard of DN in a pty: copy in the editor goes to the terminal by OSC 52, paste inside DN, bracketed paste into the editor and the command line, `TV_CLIPBOARD=0` | dn-linux |
 | `dn-linux-names.py` | `DN_RUN_PAUSE` 0/1/2, names with spaces (enter, F7, F5, F8, checked on the file system), a missing directory (`cd`, a directory removed under the panel), a zip in a zip | dn-linux |
