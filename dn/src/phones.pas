@@ -309,34 +309,34 @@ procedure TPhoneBox.SetList(Alpha: Boolean);
     S: TBufStream;
     Stream: TStream;
 
+  procedure InsertPhone(P_: Pointer);
+  var P: TPhone absolute P_;
+    var
+      PP: TPhoneDir;
+      I: LongInt;
+    begin
+    if P <> nil then
+      begin
+      FreeStr := UpStrg(P.Name);
+      if  (Length(FreeStr) = 2) and (FreeStr = '..') then
+        Exit;
+      PP := TPhoneDir.Create('', FreeStr[1], '', '');
+      if PC.Search(PP, I) then
+        begin
+        PP.Free;
+        PP := PC.At(I);
+        end
+      else
+        PC.AtInsert(I, PP);
+      if PP.Phones = nil then
+        PP.Phones := TPhoneCollection.Create(10, 10);
+      TSortedCollection(PP.Phones).Duplicates := True;
+      PP.Phones.Insert(P);
+      end;
+    end { InsertPhone };
+
   procedure DoPhones(Ph_: Pointer);
   var Ph: TPhoneDir absolute Ph_;
-
-    procedure InsertPhone(P_: Pointer);
-    var P: TPhone absolute P_;
-      var
-        PP: TPhoneDir;
-        I: LongInt;
-      begin
-      if P <> nil then
-        begin
-        FreeStr := UpStrg(P.Name);
-        if  (Length(FreeStr) = 2) and (FreeStr = '..') then
-          Exit;
-        PP := TPhoneDir.Create('', FreeStr[1], '', '');
-        if PC.Search(PP, I) then
-          begin
-          PP.Free;
-          PP := PC.At(I);
-          end
-        else
-          PC.AtInsert(I, PP);
-        if PP.Phones = nil then
-          PP.Phones := TPhoneCollection.Create(10, 10);
-        TSortedCollection(PP.Phones).Duplicates := True;
-        PP.Phones.Insert(P);
-        end;
-      end { InsertPhone };
 
     begin { DoPhones }
     if  (Ph <> nil) and (Ph.Phones <> nil)
@@ -698,19 +698,20 @@ procedure TPhoneBox.HandleEvent(var Event: TEvent);
       PC: TPhoneCollection;
       S: String;
 
+    procedure DoPhone(P_: Pointer);
+    var P: TPhone absolute P_;
+      var
+        I: Integer;
+      begin
+      if  (P <> nil)
+               and ((Pos(S, UpStrg(P.Name)) <> 0) or (Pos(S,
+                 UpStrg(P.Number^)) <> 0))
+      then
+        PC.Insert(P);
+      end;
+
     procedure SearchDir(Ph_: Pointer);
     var Ph: TPhoneDir absolute Ph_;
-      procedure DoPhone(P_: Pointer);
-      var P: TPhone absolute P_;
-        var
-          I: Integer;
-        begin
-        if  (P <> nil)
-                 and ((Pos(S, UpStrg(P.Name)) <> 0) or (Pos(S,
-                   UpStrg(P.Number^)) <> 0))
-        then
-          PC.Insert(P);
-        end;
       begin
       if  (Ph <> nil) and (Ph.Phones <> nil)
              and ((Ph.Password = '') or (Ph.Encrypted))
