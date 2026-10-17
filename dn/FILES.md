@@ -191,6 +191,7 @@ no silent gaps (post-class criterion A).
 | `inifiles.pas` | generic INI parse helpers under `iniengine` |
 | `listmakr.pas` | string-list maker used by the resource toolchain |
 | `messages.pas` | message boxes / `ErrMsg` wrappers over `tv/` |
+| `netproc.pas` (ours) | a child process with its three pipes, read with a time limit: the transport for the file systems that talk to a remote side through a program (unxed/dn#90); empty in DOS and DN_MINI |
 | `netsplit.pas` (ours) | an address `scheme://user:password@host:port/path` split into its parts and put together again, the percent coding (unxed/dn#90) |
 | `objtype.pas` | stream object-type numbers (`ot*`) for DN classes |
 | `pktview.pas` | FidoNet `.pkt` viewer |
