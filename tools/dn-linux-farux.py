@@ -13,7 +13,8 @@ sort the focused panel by name, extension and modification time, Ctrl+F12 opens 
 (with the mode off it stays the calendar). The exact keys go over the
 win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. Ctrl+H toggles hidden files in the focused panel
-only when FarUxMode is on. usage: tools/dn-linux-farux.py OUTDIR"""
+only when FarUxMode is on. With the mode on the keys DN shares with Far still work: Ctrl+R,
+Ctrl+PgDn/PgUp, Tab, Ctrl+U, Ctrl+Q and Ctrl+L. usage: tools/dn-linux-farux.py OUTDIR"""
 import os
 import re
 import shutil
@@ -263,6 +264,65 @@ try:
     t.send(w32(0x48, ord('h'), 4), 1.0)            # Ctrl+H again
     check('.secret' in t.text(), 'FarUx on: Ctrl+H shows hidden files again', t)
     check(quit_dn(t) == 0, 'FarUx Ctrl+H: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def screen_rows(t):
+    return [''.join(c for c, _ in row) for row in t.screen.cells]
+
+
+def focused_side(t):
+    # the focused panel draws its scroll bar: the up arrow ends the header row of that half
+    i = screen_rows(t)[2].find('\u25b2')
+    return None if i < 0 else ('left' if i < 50 else 'right')
+
+
+def panel_titles(t):
+    r = screen_rows(t)[1]
+    return r[:50], r[50:]
+
+
+# the keys of Far that DN already has as they are: with the mode on they still work (DN starts with the right panel focused)
+d, t = start(out, True)
+try:
+    w = os.path.join(d, 'work')
+    os.makedirs(os.path.join(w, 'sub'))
+    open(os.path.join(w, 'sub', 'inner.txt'), 'w').write('inner\n')
+
+    def shows_sub():
+        return any(r[50:].startswith('\u2551sub ') for r in screen_rows(t))
+
+    t.pump(1.0)
+    check(not shows_sub(), 'FarUx on: a new folder is not shown before the reread', t)
+    t.send(w32(0x52, 0x12, 8), 1.0)              # Ctrl+R
+    check(shows_sub(), 'FarUx on: Ctrl+R rereads the panel', t)
+    t.send('\x1b[H', 0.5)                       # Home
+    t.send('\x1b[B', 0.5)                       # Down -> sub
+    t.send(w32(0x22, 0, 8), 1.0)                 # Ctrl+PgDn
+    check('work/sub' in panel_titles(t)[1] and 'inner' in t.text(),
+          'FarUx on: Ctrl+PgDn enters the folder under the cursor', t)
+    t.send(w32(0x09, 9), 1.0)                    # Tab
+    check(focused_side(t) == 'left', 'FarUx on: Tab moves to the other panel', t)
+    t.send(w32(0x09, 9), 1.0)                    # Tab
+    check(focused_side(t) == 'right', 'FarUx on: Tab moves back', t)
+    t.send(w32(0x55, 0x15, 8), 1.0)              # Ctrl+U
+    left, right = panel_titles(t)
+    check('work/sub' in left and 'work/sub' not in right, 'FarUx on: Ctrl+U swaps the panels', t)
+    t.send(w32(0x55, 0x15, 8), 1.0)              # Ctrl+U
+    left, right = panel_titles(t)
+    check('work/sub' in right and 'work/sub' not in left, 'FarUx on: Ctrl+U swaps them back', t)
+    t.send(w32(0x21, 0, 8), 1.0)                 # Ctrl+PgUp
+    check('work/sub' not in panel_titles(t)[1] and cursor_file(t) == 'sub',
+          'FarUx on: Ctrl+PgUp goes to the parent folder, the cursor on the folder it left', t)
+    for vk, ch, what, mark in ((0x51, 0x11, 'Ctrl+Q shows the quick view in the other panel', 'files: 1'),
+                               (0x4C, 0x0C, 'Ctrl+L shows the information in the other panel', 'Current directory')):
+        t.send(w32(vk, ch, 8), 1.2)
+        check(mark in ''.join(r[:50] for r in screen_rows(t)), 'FarUx on: ' + what, t)
+        t.send(w32(vk, ch, 8), 1.2)
+        check('alpha1' in ''.join(r[:50] for r in screen_rows(t)),
+              'FarUx on: %s again gives the file panel back' % what.split()[0], t)
+    check(quit_dn(t) == 0, 'FarUx same keys: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
 
