@@ -135,7 +135,7 @@ a class to inherit from.
 - Do not change the copy dialog or the sub-shell (unxed/dn#88, unxed/dn#40); look at the open pull requests for
   `copyio.pas`/`copyjobs.pas` before step 8.
 - Third-party scripts (the FISH helper from unxed/f4, BSD-3-Clause) live in `dn/third-party/f4-fish/` with
-  their licence (step 5); the Pascal client is written from scratch.
+  their licence (step 5).
 
 ## 5. How to check this note
 

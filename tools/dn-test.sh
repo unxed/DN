@@ -11,7 +11,8 @@ w=$(cd "$w" && pwd)
 # opts KIND: the options of the compiler for the units of the kind (u8: UTF-8 inside, cp: the code page inside), run in dn/tests
 opts() {
     u8=-dDNUTF8; [ "$1" = cp ] && u8=-dNOTUTF8
-    echo "-Mdelphi -Sh- -Rintel -Se300 -dDPMI32 -dLINUX $u8 -Fu../compat/linux -Fu../compat -Fu../archives -Fu../src -Fu../lib/localecp
+    asmr=-Rintel; case $(uname -m) in x86_64|i?86) ;; *) asmr= ;; esac   # the Intel assembler reader exists only in the x86 compilers (ppca64: "Illegal parameter: -Rintel")
+    echo "-Mdelphi -Sh- $asmr -Se300 -dDPMI32 -dLINUX $u8 -Fu../compat/linux -Fu../compat -Fu../archives -Fu../src -Fu../lib/localecp
           -Fu../lib/zipcharset -Fu$w/shims -Fu../../tv/src -Fu../../tve/src -Fi../../tv/src -Fi. -Fi../compat/shims -Fi../src -Fi../lib/localecp"
 }
 kind() { if grep -q "DN_TEST: code page build" "$here/dn/tests/$1.pas"; then echo cp; else echo u8; fi; }

@@ -96,3 +96,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3
       - name: Build and run the tests
         run: tools/dn-test.sh
+
+  units-aarch64:
+    # The tests of the units of the network layer (unxed/dn#90) on ARM64 Linux, natively: FPC 3.2.2 for aarch64 has faults of its own (unxed/dn#80),
+    # so each new unit that has to work there names its test here; the whole set can follow when it is known to pass.
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3
+      - name: Build and run the tests
+        run: tools/dn-test.sh t_remotefs t_netsplit
