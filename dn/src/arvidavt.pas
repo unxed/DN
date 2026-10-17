@@ -426,188 +426,189 @@ function AvtDelFile(AvtDr: TArvidDrive; AName: String): Boolean;
       end
     end;
 
+  function AvtRestoreLeftBalance(Loc: LongInt;
+      const OldBalance: LongInt): LongInt;
+    var
+      LeftBalance: LongInt;
+      CurBalance: LongInt;
+      RightZeroBal: Boolean;
+    begin
+    with AvtDr do
+      begin
+      Stream.Seek(Loc);
+      Stream.Read(FC, SizeOf(FC));
+      CurBalance := FC.Flags and avtBalance;
+      if FC.LeftFileCell <> 0 then
+        begin
+        Stream.Seek(FC.LeftFileCell);
+        Stream.Read(FCL, SizeOf(FCL));
+        LeftBalance := FCL.Flags and avtBalance;
+        end;
+      if  (FC.LeftFileCell = 0) or
+          ( (LeftBalance <> OldBalance) and (LeftBalance = 0))
+      then
+        begin
+        FC.Flags := FC.Flags and (not avtBalance);
+        {       if CurBalance = $00000300 then FC.Flags:=FC.Flags or $00000000 else}
+        if CurBalance = $00000000 then
+          FC.Flags := FC.Flags or $00000100
+        else
+          {       if CurBalance = $00000100}
+          begin
+          Stream.Seek(FC.RightFileCell);
+          Stream.Read(FCR, SizeOf(FCR));
+          RightZeroBal := (FCR.Flags and avtBalance) = 0;
+          Loc := AvtCellRotateLeft(AvtDr, Loc);
+          Stream.Seek(Loc);
+          Stream.Read(FC, SizeOf(FC));
+          Stream.Seek(FC.LeftFileCell);
+          Stream.Read(FCL, SizeOf(FCL));
+          if RightZeroBal then
+            begin
+            FC.Flags := (FC.Flags and (not avtBalance)) or $00000300;
+            FCL.Flags := (FCL.Flags and (not avtBalance)) or $00000100;
+            end
+          else
+            begin
+            FC.Flags := (FC.Flags and (not avtBalance)) {or $00000000};
+            FCL.Flags := (FCL.Flags and (not avtBalance)) {or $00000000};
+            end;
+          Stream.Seek(FC.LeftFileCell);
+          Stream.Write(FCL, SizeOf(FCL));
+          end;
+        Stream.Seek(Loc);
+        Stream.Write(FC, SizeOf(FC));
+        end;
+      AvtRestoreLeftBalance := Loc;
+      end
+    end { AvtRestoreLeftBalance };
+
+  function AvtRestoreRightBalance(Loc: LongInt;
+      const OldBalance: LongInt): LongInt;
+    var
+      RightBalance: LongInt;
+      CurBalance: LongInt;
+      LeftZeroBal: Boolean;
+    begin
+    with AvtDr do
+      begin
+      Stream.Seek(Loc);
+      Stream.Read(FC, SizeOf(FC));
+      CurBalance := FC.Flags and avtBalance;
+      if FC.RightFileCell <> 0 then
+        begin
+        Stream.Seek(FC.RightFileCell);
+        Stream.Read(FCR, SizeOf(FCR));
+        RightBalance := FCR.Flags and avtBalance;
+        end;
+      if  (FC.RightFileCell = 0) or
+          ( (RightBalance <> OldBalance) and (RightBalance = 0))
+      then
+        begin
+        FC.Flags := FC.Flags and $FFFFFCFF;
+        {       if CurBalance = $00000100 then FC.Flags:=FC.Flags or $00000000 else}
+        if CurBalance = $00000000 then
+          FC.Flags := FC.Flags or $00000300
+        else
+          {       if CurBalance = $00000300}
+          begin
+          Stream.Seek(FC.LeftFileCell);
+          Stream.Read(FCL, SizeOf(FCL));
+          LeftZeroBal := (FCL.Flags and avtBalance) = 0;
+          Loc := AvtCellRotateRight(AvtDr, Loc);
+          Stream.Seek(Loc);
+          Stream.Read(FC, SizeOf(FC));
+          Stream.Seek(FC.RightFileCell);
+          Stream.Read(FCR, SizeOf(FCR));
+          if LeftZeroBal then
+            begin
+            FC.Flags := (FC.Flags and (not avtBalance)) or $00000100;
+            FCR.Flags := (FCR.Flags and (not avtBalance)) or $00000300;
+            end
+          else
+            begin
+            FC.Flags := (FC.Flags and (not avtBalance)) {or $00000000};
+            FCR.Flags := (FCR.Flags and (not avtBalance)) {or $00000000};
+            end;
+          Stream.Seek(FC.RightFileCell);
+          Stream.Write(FCR, SizeOf(FCR));
+          end;
+        Stream.Seek(Loc);
+        Stream.Write(FC, SizeOf(FC));
+        end;
+      AvtRestoreRightBalance := Loc;
+      end
+    end { AvtRestoreRightBalance };
+
+  function AvtTreeRemoveLeftmost(const Loc: LongInt; var L0: LongInt): LongInt;
+    var
+      OldBalance: LongInt;
+      L1, L2: LongInt;
+    begin
+    with AvtDr do
+      begin
+      Stream.Seek(Loc);
+      Stream.Read(FC, SizeOf(FC));
+      if FC.LeftFileCell = 0 then
+        begin
+        l0 := Loc;
+        AvtTreeRemoveLeftmost := FC.RightFileCell;
+        Exit;
+        end;
+      L1 := FC.LeftFileCell;
+      Stream.Seek(L1);
+      Stream.Read(FC, SizeOf(FC));
+      OldBalance := FC.Flags and avtBalance;
+      L2 := AvtTreeRemoveLeftmost(L1, L0);
+      if L1 <> L2 then
+        begin
+        Stream.Seek(Loc);
+        Stream.Read(FC, SizeOf(FC));
+        FC.LeftFileCell := L2;
+        Stream.Seek(Loc);
+        Stream.Write(FC, SizeOf(FC));
+        end;
+      AvtTreeRemoveLeftmost := AvtRestoreLeftBalance(Loc, OldBalance);
+      end
+    end { AvtTreeRemoveLeftmost };
+
+  function AvtTreeRemoveRightmost(const Loc: LongInt;
+      var L0, OldBalance: LongInt): LongInt;
+    var
+      OldBalance3: LongInt;
+      L1, L2: LongInt;
+    begin
+    with AvtDr do
+      begin
+      Stream.Seek(Loc);
+      Stream.Read(FC, SizeOf(FC));
+      if FC.RightFileCell = 0 then
+        begin
+        l0 := Loc;
+        AvtTreeRemoveRightmost := FC.LeftFileCell;
+        Exit;
+        end;
+      L1 := FC.RightFileCell;
+      Stream.Seek(L1);
+      Stream.Read(FC, SizeOf(FC));
+      OldBalance := FC.Flags and avtBalance;
+      L2 := AvtTreeRemoveRightmost(L1, L0, OldBalance);
+      if L1 <> L2 then
+        begin
+        Stream.Seek(Loc);
+        Stream.Read(FC, SizeOf(FC));
+        FC.RightFileCell := L2;
+        Stream.Seek(Loc);
+        Stream.Write(FC, SizeOf(FC));
+        end;
+      AvtTreeRemoveRightmost := AvtRestoreRightBalance(Loc, OldBalance);
+      end
+    end { AvtTreeRemoveRightmost };
+
   function AvtTreeNodeRemove(const Loc: LongInt): LongInt;
     var
       OldBalance: LongInt;
       L0, L1, L2: LongInt;
-
-    function AvtRestoreLeftBalance(Loc: LongInt;
-        const OldBalance: LongInt): LongInt;
-      var
-        LeftBalance: LongInt;
-        CurBalance: LongInt;
-        RightZeroBal: Boolean;
-      begin
-      with AvtDr do
-        begin
-        Stream.Seek(Loc);
-        Stream.Read(FC, SizeOf(FC));
-        CurBalance := FC.Flags and avtBalance;
-        if FC.LeftFileCell <> 0 then
-          begin
-          Stream.Seek(FC.LeftFileCell);
-          Stream.Read(FCL, SizeOf(FCL));
-          LeftBalance := FCL.Flags and avtBalance;
-          end;
-        if  (FC.LeftFileCell = 0) or
-            ( (LeftBalance <> OldBalance) and (LeftBalance = 0))
-        then
-          begin
-          FC.Flags := FC.Flags and (not avtBalance);
-          {       if CurBalance = $00000300 then FC.Flags:=FC.Flags or $00000000 else}
-          if CurBalance = $00000000 then
-            FC.Flags := FC.Flags or $00000100
-          else
-            {       if CurBalance = $00000100}
-            begin
-            Stream.Seek(FC.RightFileCell);
-            Stream.Read(FCR, SizeOf(FCR));
-            RightZeroBal := (FCR.Flags and avtBalance) = 0;
-            Loc := AvtCellRotateLeft(AvtDr, Loc);
-            Stream.Seek(Loc);
-            Stream.Read(FC, SizeOf(FC));
-            Stream.Seek(FC.LeftFileCell);
-            Stream.Read(FCL, SizeOf(FCL));
-            if RightZeroBal then
-              begin
-              FC.Flags := (FC.Flags and (not avtBalance)) or $00000300;
-              FCL.Flags := (FCL.Flags and (not avtBalance)) or $00000100;
-              end
-            else
-              begin
-              FC.Flags := (FC.Flags and (not avtBalance)) {or $00000000};
-              FCL.Flags := (FCL.Flags and (not avtBalance)) {or $00000000};
-              end;
-            Stream.Seek(FC.LeftFileCell);
-            Stream.Write(FCL, SizeOf(FCL));
-            end;
-          Stream.Seek(Loc);
-          Stream.Write(FC, SizeOf(FC));
-          end;
-        AvtRestoreLeftBalance := Loc;
-        end
-      end { AvtRestoreLeftBalance };
-
-    function AvtRestoreRightBalance(Loc: LongInt;
-        const OldBalance: LongInt): LongInt;
-      var
-        RightBalance: LongInt;
-        CurBalance: LongInt;
-        LeftZeroBal: Boolean;
-      begin
-      with AvtDr do
-        begin
-        Stream.Seek(Loc);
-        Stream.Read(FC, SizeOf(FC));
-        CurBalance := FC.Flags and avtBalance;
-        if FC.RightFileCell <> 0 then
-          begin
-          Stream.Seek(FC.RightFileCell);
-          Stream.Read(FCR, SizeOf(FCR));
-          RightBalance := FCR.Flags and avtBalance;
-          end;
-        if  (FC.RightFileCell = 0) or
-            ( (RightBalance <> OldBalance) and (RightBalance = 0))
-        then
-          begin
-          FC.Flags := FC.Flags and $FFFFFCFF;
-          {       if CurBalance = $00000100 then FC.Flags:=FC.Flags or $00000000 else}
-          if CurBalance = $00000000 then
-            FC.Flags := FC.Flags or $00000300
-          else
-            {       if CurBalance = $00000300}
-            begin
-            Stream.Seek(FC.LeftFileCell);
-            Stream.Read(FCL, SizeOf(FCL));
-            LeftZeroBal := (FCL.Flags and avtBalance) = 0;
-            Loc := AvtCellRotateRight(AvtDr, Loc);
-            Stream.Seek(Loc);
-            Stream.Read(FC, SizeOf(FC));
-            Stream.Seek(FC.RightFileCell);
-            Stream.Read(FCR, SizeOf(FCR));
-            if LeftZeroBal then
-              begin
-              FC.Flags := (FC.Flags and (not avtBalance)) or $00000100;
-              FCR.Flags := (FCR.Flags and (not avtBalance)) or $00000300;
-              end
-            else
-              begin
-              FC.Flags := (FC.Flags and (not avtBalance)) {or $00000000};
-              FCR.Flags := (FCR.Flags and (not avtBalance)) {or $00000000};
-              end;
-            Stream.Seek(FC.RightFileCell);
-            Stream.Write(FCR, SizeOf(FCR));
-            end;
-          Stream.Seek(Loc);
-          Stream.Write(FC, SizeOf(FC));
-          end;
-        AvtRestoreRightBalance := Loc;
-        end
-      end { AvtRestoreRightBalance };
-
-    function AvtTreeRemoveLeftmost(const Loc: LongInt): LongInt;
-      var
-        OldBalance: LongInt;
-        L1, L2: LongInt;
-      begin
-      with AvtDr do
-        begin
-        Stream.Seek(Loc);
-        Stream.Read(FC, SizeOf(FC));
-        if FC.LeftFileCell = 0 then
-          begin
-          l0 := Loc;
-          AvtTreeRemoveLeftmost := FC.RightFileCell;
-          Exit;
-          end;
-        L1 := FC.LeftFileCell;
-        Stream.Seek(L1);
-        Stream.Read(FC, SizeOf(FC));
-        OldBalance := FC.Flags and avtBalance;
-        L2 := AvtTreeRemoveLeftmost(L1);
-        if L1 <> L2 then
-          begin
-          Stream.Seek(Loc);
-          Stream.Read(FC, SizeOf(FC));
-          FC.LeftFileCell := L2;
-          Stream.Seek(Loc);
-          Stream.Write(FC, SizeOf(FC));
-          end;
-        AvtTreeRemoveLeftmost := AvtRestoreLeftBalance(Loc, OldBalance);
-        end
-      end { AvtTreeRemoveLeftmost };
-
-    function AvtTreeRemoveRightmost(const Loc: LongInt): LongInt;
-      var
-        OldBalance3: LongInt;
-        L1, L2: LongInt;
-      begin
-      with AvtDr do
-        begin
-        Stream.Seek(Loc);
-        Stream.Read(FC, SizeOf(FC));
-        if FC.RightFileCell = 0 then
-          begin
-          l0 := Loc;
-          AvtTreeRemoveRightmost := FC.LeftFileCell;
-          Exit;
-          end;
-        L1 := FC.RightFileCell;
-        Stream.Seek(L1);
-        Stream.Read(FC, SizeOf(FC));
-        OldBalance := FC.Flags and avtBalance;
-        L2 := AvtTreeRemoveRightmost(L1);
-        if L1 <> L2 then
-          begin
-          Stream.Seek(Loc);
-          Stream.Read(FC, SizeOf(FC));
-          FC.RightFileCell := L2;
-          Stream.Seek(Loc);
-          Stream.Write(FC, SizeOf(FC));
-          end;
-        AvtTreeRemoveRightmost := AvtRestoreRightBalance(Loc, OldBalance);
-        end
-      end { AvtTreeRemoveRightmost };
 
     { function AvtTreeNodeRemove(const Loc: LongInt): LongInt; }
     begin { AvtTreeNodeRemove }
@@ -716,7 +717,7 @@ function AvtDelFile(AvtDr: TArvidDrive; AName: String): Boolean;
               Stream.Seek(L1);
               Stream.Read(FCR, SizeOf(FCR));
               OldBalance := FCR.Flags and avtBalance;
-              L2 := AvtTreeRemoveLeftmost(L1);
+              L2 := AvtTreeRemoveLeftmost(L1, L0);
               Stream.Seek(Loc);
               Stream.Read(FC, SizeOf(FC));
               FC.RightFileCell := L2;
@@ -736,7 +737,7 @@ function AvtDelFile(AvtDr: TArvidDrive; AName: String): Boolean;
               Stream.Seek(L1);
               Stream.Read(FCL, SizeOf(FCL));
               OldBalance := FCL.Flags and avtBalance;
-              L2 := AvtTreeRemoveRightmost(L1);
+              L2 := AvtTreeRemoveRightmost(L1, L0, OldBalance);
               Stream.Seek(Loc);
               Stream.Read(FC, SizeOf(FC));
               FC.LeftFileCell := L2;
