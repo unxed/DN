@@ -504,31 +504,31 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     end {case};
     end;
 
+  procedure DE(var C: Boolean);
+    var
+      Job: TCopyJob;
+    begin
+    GrdClick := True;
+    if JobGet(JobId, Job) and Job.Background then
+      DispatchEventsBackground(Info, C)
+    else
+      DispatchEvents(Info, C)
+    end;
+
   procedure Dispatch;
     var
       CancelAnswer: word;
       C: Boolean;
-    procedure DE;
-      var
-        Job: TCopyJob;
-      begin
-      GrdClick := True;
-      if JobGet(JobId, Job) and Job.Background then
-        DispatchEventsBackground(Info, C)
-      else
-        DispatchEvents(Info, C)
-      end;
-
     begin
     C := False;
     if CopyCancel then
       begin
-      DE;
+      DE(C);
       Exit
       end;
     if TimerExpired(_Tmr) then
       begin
-      DE;
+      DE(C);
       JobProgress(JobId, (ToRead+ToWrite) div 2);
       if C or CtrlBreakHit then
         begin
@@ -2297,19 +2297,19 @@ TryGetInfo:
     Info.Write(5, '');
     end { MakeDirectories };
 
+  procedure MakeMark(P_: Pointer);
+  var P: PFileRec absolute P_;
+    begin
+    if  (Copy(P^.Owner^, 1, Length(SSS)) = SSS) then
+      P^.Attr := P^.Attr or Marked;
+    end;
+
   procedure __Remove;
     var
       RRC: TStringCollection;
 
     procedure DoRemove(P_: Pointer);
     var P: PFileRec absolute P_;
-
-      procedure MakeMark(P_: Pointer);
-      var P: PFileRec absolute P_;
-        begin
-        if  (Copy(P^.Owner^, 1, Length(SSS)) = SSS) then
-          P^.Attr := P^.Attr or Marked;
-        end;
 
       begin
       {Cat: previously the next piece ran only for successfully copied
