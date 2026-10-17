@@ -370,6 +370,17 @@ finally:
     shutil.rmtree(d, ignore_errors=True)
 
 
+# Ctrl+\ goes to the root folder, as in Far and in DN: a terminal sends FS ($1C), tv/ gives '\' with ctrl
+d, t = start(out, True)
+try:
+    t.send('\x1c', 1.0)                         # Ctrl+\
+    title = ''.join(c for c, _ in t.screen.cells[1])[50:]
+    check(' / ' in title and 'work' not in title, 'FarUx on: Ctrl+\\ goes to the root folder', t)
+    check(quit_dn(t) == 0, 'FarUx Ctrl+\\: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
 d, t = start(out, False)
 try:
     t.send(w32(0x4F, ord('o'), 2), 0.8)           # Alt+O: the menu Options

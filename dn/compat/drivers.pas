@@ -261,6 +261,11 @@ begin
   if  ((Event.KeyDown.ControlKeyState and 4) <> 0) and ((Event.KeyDown.ControlKeyState and 8) = 0) and (Key >= 1) and (Key <= 26)
       and not (Key in [8, 9, 13]) then
     Key := Key or (LongInt(CtrlScan[Key]) shl 8);
+  { Ctrl+\: tv/ gives the character '\' with ctrl (a terminal may also send $1C, FS), with no scan code or with that of the key;
+    DN looks for kbCtrlBSlash ($2B00 with ctrl) }
+  if  ((Event.KeyDown.ControlKeyState and 4) <> 0) and ((Event.KeyDown.ControlKeyState and 8) = 0)
+      and (((Key and $FF) = $5C) or ((Key and $FF) = $1C)) and (((Key shr 8) = 0) or ((Key shr 8) = $2B)) then
+    Key := $2B00;
   { Alt and a key of punctuation: tv/ gives the character (a terminal sends ESC and the character), DN looks for the scan code of the key
     (kbAltQuote = $082800); the character of the key with Shift adds Shift }
   if ((Event.KeyDown.ControlKeyState and 8) <> 0) and (Key > $20) and (Key < $7F) then
