@@ -728,14 +728,14 @@ function MemEqu(var A, B; Size: LongInt): Boolean;
         end;
       end;
 
-    procedure SetFileTime(ft: LongInt);
+    procedure SetFileTime(const FullName: String; ft: LongInt);
       var
         f: lFile;
       begin
       if ft = 0 then
         Exit;
       {Cat: changed FileMode from $40 to 2 - otherwise the time is not set}
-      lAssignFile(f, OutputDir+OutFName);
+      lAssignFile(f, FullName);
       FileMode := 2;
       lResetFile(f, 1);
       SetFTime(f.f, ft);
@@ -772,7 +772,7 @@ function MemEqu(var A, B; Size: LongInt): Boolean;
     FlushOutBuf;
     if CurPFile^.S.TotSect = CurPFile^.NSect then
       begin
-      SetFileTime(CurPFile^.FileTime);
+      SetFileTime(OutputDir+OutFName, CurPFile^.FileTime);
       if CurPFile^.EndFound then
         Inc(GoodNumber)
       else
@@ -1918,7 +1918,7 @@ end;
         WriteLnT(s1+' : '+S2);
         end;
 
-      function SStrPerSect: String;
+      function SStrPerSect(NumSect, StrPerSect, StrPerLastS: LongInt): String;
         var
           s: String;
         begin
@@ -1944,7 +1944,7 @@ end;
         Kb2 := ItoS(SmartDiv(L, 1024))+'Kb';
         end;
 
-      function EncSize: String;
+      function EncSize(OutBufSize, NumSect: LongInt): String;
         begin
         EncSize := Kb2(longmul((OutBufSize-SectNZ), NumSect+1));
         end;
@@ -1987,7 +1987,7 @@ function GetDecimal(Number: Word): String;
         CrTime := CurStdDateTime;
         end;
 
-      function FTime: String;
+      function FTime(SouTime: LongInt): String;
         var
           DT: DateTime;
         begin
@@ -1999,11 +1999,11 @@ function GetDecimal(Number: Word): String;
       begin { InsertStatistics }
       WriteInfo(GetString(dlUUEncodeSFN), UpStrg(SouName));
       WriteInfo(GetString(dlUUEncodeOS), KB(SouSize));
-      WriteInfo(GetString(dlUUEncodeCreated), FTime);
+      WriteInfo(GetString(dlUUEncodeCreated), FTime(SouTime));
       WriteInfo(GetString(dlUUEncodeTime), CrTime);
-      WriteInfo(GetString(dlUUEncodeSize), EncSize);
+      WriteInfo(GetString(dlUUEncodeSize), EncSize(OutBufSize, NumSect));
       WriteInfo(GetString(dlUUEncodeSections), ItoS(NumSect+1));
-      WriteInfo(GetString(dlUUEncodeLines), SStrPerSect);
+      WriteInfo(GetString(dlUUEncodeLines), SStrPerSect(NumSect, StrPerSect, StrPerLastS));
       WriteEmptyLn;
       WriteEmptyLn;
       end { InsertStatistics };
