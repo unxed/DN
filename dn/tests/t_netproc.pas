@@ -80,7 +80,7 @@ begin
   { the end: exit, the pipe is drained, then -1 }
   {$IFDEF WINDOWS}
   P.Stop;
-  Check(P.Start('cmd.exe', ['/d', '/q', '/c', 'echo B & exit /b 3']), 'a command with an exit code is started');
+  Check(P.Start('cmd.exe', ['/d', '/q', '/c', 'echo B& exit /b 3']), 'a command with an exit code is started');
   {$ELSE}
   Check(P.Write('echo B; exit 3' + TestLineEnding), 'the last line is sent');
   {$ENDIF}
