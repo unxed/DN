@@ -1063,16 +1063,17 @@ procedure CM_CompareDirs(AFP, IP: Pointer);
     IsCheckboxes := (P is TCheckBoxes);
     end;
   
-  procedure Cmp1(PF_: Pointer);
-  var PF: PFileRec absolute PF_;
-    function Cmp(AP_: Pointer): Boolean;
-    var AP: PFileRec absolute AP_;
-      begin
-      UpdateWriteView(Info);
-      Cmp := (AP^.Attr and Directory = 0)
-             and (P.Files.FileCompare(PF, AP) = 0);
-      end;
+  function Cmp(AP_: Pointer): Boolean;
+  var AP: PFileRec absolute AP_;
     begin
+    UpdateWriteView(Info);
+    Cmp := (AP^.Attr and Directory = 0)
+           and (P.Files.FileCompare(PF, AP) = 0);
+    end;
+
+  procedure Cmp1(PF_: Pointer);
+    begin
+    PF := PFileRec(PF_);
     UpdateWriteView(Info);
     if DT.S = 0 then
       PF^.Selected := False;
