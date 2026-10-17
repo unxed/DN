@@ -145,12 +145,15 @@ jobs:
               python3 tools/dn-linux-args.py out/dn
               python3 tools/dn-linux-ux.py out/dn
               python3 tools/dn-linux-pathscan.py out/dn
+          - name: ssh in the command line
+            cmds: |
+              python3 tools/dn-linux-ssh.py out/dn
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Packages
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3 p7zip-full xz-utils zip unzip
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3 p7zip-full xz-utils zip unzip openssh-server openssh-client
       - name: Build DN (one command)
         run: tools/build.sh linux64 out/dn
       - name: ${{ matrix.name }}
