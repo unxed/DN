@@ -84,7 +84,7 @@ begin
   {$ELSE}
   Check(P.Write('echo B; exit 3' + TestLineEnding), 'the last line is sent');
   {$ENDIF}
-  Check(ReadUntil(P, 'B' + #10, 5000, Got), 'the last answer comes before the end');
+  Check(ReadUntil(P, 'B' + TestLineEnding, 5000, Got), 'the last answer comes before the end');
   Start := Now;
   repeat
     N := P.Read(Buf, SizeOf(Buf), 100);
