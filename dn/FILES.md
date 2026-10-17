@@ -191,8 +191,10 @@ no silent gaps (post-class criterion A).
 | `inifiles.pas` | generic INI parse helpers under `iniengine` |
 | `listmakr.pas` | string-list maker used by the resource toolchain |
 | `messages.pas` | message boxes / `ErrMsg` wrappers over `tv/` |
+| `netsplit.pas` (ours) | an address `scheme://user:password@host:port/path` split into its parts and put together again, the percent coding (unxed/dn#90) |
 | `objtype.pas` | stream object-type numbers (`ot*`) for DN classes |
 | `pktview.pas` | FidoNet `.pkt` viewer |
+| `remotefs.pas` (ours) | `TRemoteFS`, the abstract file system behind a panel that shows no local directory, and `TLocalFS` over a directory of this machine (unxed/dn#90, `docs/NETWORK.md`) |
 | `rstrings.pas` | resource string index glue |
 | `strview.pas` | string viewer widget |
 | `timeutil.pas` | time helpers (was `xtime`; `GetCurMSec`, etc.) |
