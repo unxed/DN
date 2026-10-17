@@ -15,6 +15,7 @@ on:
       - tools/dn-win-smoke.py
       - tools/pty_screen.py
       - tools/build-fpc-windows.sh
+      - tools/build-netproc-test-windows.sh
       - tools/gen-shim.py
       - .github/workflows/dn-windows.yml
   pull_request:
@@ -50,6 +51,10 @@ jobs:
         run: |
           if [ "${{ matrix.target }}" = win64 ]; then export DN_WIN=~/fpc-win64; else export DN_WIN32=~/fpc-win32; fi
           DN_UTF8=${{ matrix.utf8 }} tools/build.sh ${{ matrix.target }} out/dn
+      - name: Build NetProc test for Windows
+        run: |
+          if [ "${{ matrix.target }}" = win64 ]; then compiler=~/fpc-win64/bin/fpc-win64; else compiler=~/fpc-win32/bin/fpc-win32; fi
+          tools/build-netproc-test-windows.sh "$compiler" out/dn/netproc-test
       - uses: actions/upload-artifact@v4
         with:
           name: dn-${{ matrix.target }}-u${{ matrix.utf8 }}
@@ -71,6 +76,8 @@ jobs:
         with:
           name: dn-${{ matrix.target }}-u${{ matrix.utf8 }}
           path: out/dn
+      - name: NetProc child-process test
+        run: .\out\dn\netproc-test\bin\t_netproc.exe
       - run: python -m pip install pywinpty
       - name: DN on a Windows console (ConPTY)
         env:

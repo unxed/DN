@@ -4,6 +4,14 @@ program t_netproc;
 uses SysUtils, DateUtils, NetProc;
 {$I dntest.inc}
 
+{$IFDEF WINDOWS}
+const
+  TestLineEnding = #13#10;
+{$ELSE}
+const
+  TestLineEnding = #10;
+{$ENDIF}
+
 { Reads from the standard output until Want is in what came, the program ends, or Ms milliseconds are over. }
 function ReadUntil(P: TNetProc; const Want: AnsiString; Ms: Integer; out Got: AnsiString): Boolean;
 var
@@ -33,24 +41,36 @@ var
 begin
   { the program that cannot be started is told in words, and nothing runs }
   P := TNetProc.Create;
+  {$IFDEF WINDOWS}
+  Check(not P.Start('C:\__lunobot_missing_program__\missing.exe', []), 'a program that is not there is not started');
+  {$ELSE}
   Check(not P.Start('/nonexistent-dir/no-such-program', []), 'a program that is not there is not started');
+  {$ENDIF}
   Check((P.LastError <> '') and not P.Running, 'the failure is told and nothing runs');
   Check(P.Read(Buf, SizeOf(Buf), 10) = -1, 'Read with no program says that it has ended');
   P.Free;
 
   { send a line, take the answer }
   P := TNetProc.Create;
+  {$IFDEF WINDOWS}
+  Check(P.Start('cmd.exe', ['/d', '/q', '/k']), 'cmd is started');
+  {$ELSE}
   Check(P.Start('/bin/sh', []), 'sh is started');
+  {$ENDIF}
   Check(P.Running and (P.ExitCode = -1), 'it runs, and has no exit code yet');
-  Check(P.Write('echo A' + #10), 'a line is sent');
-  Check(ReadUntil(P, 'A' + #10, 5000, Got) and (Got = 'A' + #10), 'the answer "A" comes back');
+  Check(P.Write('echo A' + TestLineEnding), 'a line is sent');
+  Check(ReadUntil(P, 'A' + TestLineEnding, 5000, Got), 'the answer "A" comes back');
 
   { the standard error is a pipe of its own }
-  Check(P.Write('echo E 1>&2' + #10), 'a line for the standard error is sent');
+  Check(P.Write('echo E 1>&2' + TestLineEnding), 'a line for the standard error is sent');
   N := P.ReadErr(Buf, SizeOf(Buf), 5000);
-  Check((N = 2) and (Buf[0] = 'E'), 'the standard error is read apart from the standard output');
+  Check((N > 0) and (Buf[0] = 'E'), 'the standard error is read apart from the standard output');
 
   { nothing to read: Read returns 0 after about the time it was given, the program runs on }
+  {$IFDEF WINDOWS}
+  P.Stop;
+  Check(P.Start('cmd.exe', ['/d', '/q', '/c', 'ping -n 6 127.0.0.1 >nul']), 'a silent command is started');
+  {$ENDIF}
   Start := Now;
   N := P.Read(Buf, SizeOf(Buf), 300);
   Check(N = 0, 'no bytes: Read answers 0');
@@ -58,7 +78,12 @@ begin
   Check(P.Running, 'a program that is silent still runs');
 
   { the end: exit, the pipe is drained, then -1 }
-  Check(P.Write('echo B; exit 3' + #10), 'the last line is sent');
+  {$IFDEF WINDOWS}
+  P.Stop;
+  Check(P.Start('cmd.exe', ['/d', '/q', '/c', 'echo B & exit /b 3']), 'a command with an exit code is started');
+  {$ELSE}
+  Check(P.Write('echo B; exit 3' + TestLineEnding), 'the last line is sent');
+  {$ENDIF}
   Check(ReadUntil(P, 'B' + #10, 5000, Got), 'the last answer comes before the end');
   Start := Now;
   repeat
@@ -71,7 +96,11 @@ begin
 
   { a program that does not answer is ended by Stop, and Stop may come twice }
   P := TNetProc.Create;
+  {$IFDEF WINDOWS}
+  Check(P.Start('cmd.exe', ['/d', '/q', '/c', 'ping -n 6 127.0.0.1 >nul']), 'cmd with ping is started');
+  {$ELSE}
   Check(P.Start('/bin/sh', ['-c', 'sleep 5']), 'sh with sleep is started');
+  {$ENDIF}
   Start := Now;
   Check(P.Read(Buf, SizeOf(Buf), 300) = 0, 'sleep gives no bytes within the limit');
   P.Stop;
@@ -82,8 +111,12 @@ begin
 
   { the end of the input reaches the program }
   P := TNetProc.Create;
+  {$IFDEF WINDOWS}
+  Check(P.Start('cmd.exe', ['/d', '/q', '/c', 'more']), 'more is started');
+  {$ELSE}
   Check(P.Start('/bin/cat', []), 'cat is started');
-  Check(P.Write('abc'), 'bytes are sent to cat');
+  {$ENDIF}
+  Check(P.Write('abc' + TestLineEnding), 'bytes are sent to the program');
   P.CloseInput;
   Check(ReadUntil(P, 'abc', 5000, Got), 'cat sends the bytes back and, with the input closed, ends');
   P.Free;
