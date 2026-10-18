@@ -853,7 +853,16 @@ begin
   end;
   if not GotDataMark then
   begin
-    Broke('the remote side did not confirm receiving the file data');
+    Msg := Copy(Line, Length(Term) + 1, Length(Line));
+    P := Pos(' ', Msg);
+    if P = 0 then
+      Msg := ''
+    else
+      Msg := Copy(Msg, P + 1, Length(Msg));
+    if Msg <> '' then
+      Broke('the remote side did not confirm receiving the file data: ' + Msg)
+    else
+      Broke('the remote side did not confirm receiving the file data');
     Exit(rrFailed);
   end;
   Msg := Copy(Line, Length(Term) + 1, Length(Line));
