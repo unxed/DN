@@ -424,6 +424,23 @@ begin
   FS.Free;
 end;
 
+{ The lines that a BSD host answers with (stat -f), made up here: no shell of this machine speaks that dialect. }
+procedure CheckBsdLines;
+var
+  E: TRemoteEntry;
+begin
+  Check(ParseEntry('statbsd', '100644 11 1580000000 1580000001 1580000002 501 20 /tmp/x/with space.txt', E), 'statbsd: a file line is read');
+  Check((E.Kind = rkFile) and (E.Size = 11) and (E.Mode = &644) and (E.Name = 'with space.txt') and (E.LinkTarget = ''), 'statbsd: a file has its type, size, mode and name');
+  Check(E.MTime = UniversalTimeToLocal(UnixToDateTime(1580000000)), 'statbsd: the time is the modification time');
+  Check(ParseEntry('statbsd', '40755 512 1580000000 0 0 0 0 /tmp/x/sub', E) and (E.Kind = rkDir) and (E.Mode = &755) and (E.Name = 'sub'), 'statbsd: a directory');
+  Check(ParseEntry('statbsd', '120755 3 1580000000 0 0 0 0 /tmp/x/link -> sub', E) and (E.Kind = rkLink) and (E.Name = 'link') and (E.LinkTarget = 'sub'), 'statbsd: a link has its target apart from its name');
+  Check(ParseEntry('statbsd', '104755 9 1580000000 0 0 0 0 /tmp/x/suid', E) and (E.Kind = rkFile) and (E.Mode = &4755), 'statbsd: the special bits stay in the mode');
+  Check(ParseEntry('statbsd', '20620 0 1580000000 0 0 0 0 /dev/tty0', E) and (E.Kind = rkOther) and (E.Name = 'tty0'), 'statbsd: a device is another kind');
+  Check(not ParseEntry('statbsd', '10x644 11 1580000000 0 0 0 0 /tmp/x/f', E), 'statbsd: a mode that is not octal is refused');
+  Check(not ParseEntry('statbsd', '100644 11', E), 'statbsd: a short line is refused');
+  Check(not ParseEntry('statbsd', '', E), 'statbsd: an empty line is refused');
+end;
+
 var
   Helper, Tmp, Base, Weird, Big, Pattern, Data: AnsiString;
   Shells: array[0..2] of AnsiString = ('/bin/sh', '/bin/bash', '/bin/dash');
@@ -434,6 +451,7 @@ begin
   Check(Length(Helper) > 1000, 'the text of the helper is found');
   if Helper = '' then
     Finish;
+  CheckBsdLines;
 
   Tmp := GetEnvironmentVariable('TMPDIR');
   if Tmp = '' then

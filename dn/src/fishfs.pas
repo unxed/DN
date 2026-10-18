@@ -64,7 +64,7 @@ type
     function FeatureValue(const Name: AnsiString): AnsiString;
     { The directory in which the remote shell was started. }
     function Pwd(out Dir: AnsiString): TRemoteResult;
-    { Makes the helper list with the tool Mode ("find", "stat"); rrFailed when the host has not got it. }
+    { Makes the helper list with the tool Mode ("find", "stat", "statbsd"); rrFailed when the host has not got it. }
     function SetListingMode(const Mode: AnsiString): TRemoteResult;
     function List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult; override;
     function Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult; override;
@@ -82,6 +82,9 @@ type
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
     property Connected: Boolean read FConnected;
   end;
+
+{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd"); False when the line does not fit it. }
+function ParseEntry(const Mode, Line: AnsiString; out E: TRemoteEntry): Boolean;
 {$ENDIF}
 
 implementation
@@ -201,11 +204,11 @@ begin
     Result := UniversalTimeToLocal(UnixToDateTime(V));
 end;
 
-{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat"). False when the line does not fit it (a name with a line
-  end in it shows up as two lines, the helper cannot do better). }
+{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd"). False when the line does not fit it (a name with
+  a line end in it shows up as two lines, the helper cannot do better). }
 function ParseEntry(const Mode, Line: AnsiString; out E: TRemoteEntry): Boolean;
 var
-  P, Code, Slash: Integer;
+  P, Code, Slash, Arrow: Integer;
   TypeS, SizeS, MTimeS, ModeS: AnsiString;
   Bits: LongInt;
 begin
@@ -265,6 +268,43 @@ begin
     end;
     E.Mode := Bits and $FFF;
     E.Name := Copy(Line, P, Length(Line));
+    Slash := LastDelimiter('/', E.Name);
+    E.Name := Copy(E.Name, Slash + 1, Length(E.Name));
+  end
+  else if Mode = 'statbsd' then
+  begin
+    { %p %z %m %a %c %u %g %N: the type and permissions in octal, the size, the three times, the owner, the group, the name as it was asked for (a link
+      shows as "name -> target") }
+    ModeS := TakeField(Line, P);
+    SizeS := TakeField(Line, P);
+    MTimeS := TakeField(Line, P);
+    TakeField(Line, P);
+    TakeField(Line, P);
+    TakeField(Line, P);
+    TakeField(Line, P);
+    if (ModeS = '') or (SizeS = '') or (MTimeS = '') or (P > Length(Line) + 1) then
+      Exit;
+    Bits := OctalValue(ModeS);
+    if Bits < 0 then
+      Exit;
+    case Bits and $F000 of
+      $4000: E.Kind := rkDir;
+      $8000: E.Kind := rkFile;
+      $A000: E.Kind := rkLink;
+    else
+      E.Kind := rkOther;
+    end;
+    E.Mode := Bits and $FFF;
+    E.Name := Copy(Line, P, Length(Line));
+    if E.Kind = rkLink then
+    begin
+      Arrow := Pos(' -> ', E.Name);
+      if Arrow > 0 then
+      begin
+        E.LinkTarget := Copy(E.Name, Arrow + 4, Length(E.Name));
+        E.Name := Copy(E.Name, 1, Arrow - 1);
+      end;
+    end;
     Slash := LastDelimiter('/', E.Name);
     E.Name := Copy(E.Name, Slash + 1, Length(E.Name));
   end
@@ -686,7 +726,7 @@ begin
       Exit;
     if (Lines.Count < 1) or (not ModeOfLine(Lines[0], Mode)) then
       Exit(Fail(rrFailed, 'the list has no line with the tool that made it'));
-    if (Mode <> 'find') and (Mode <> 'stat') then
+    if (Mode <> 'find') and (Mode <> 'stat') and (Mode <> 'statbsd') then
       Exit(Fail(rrUnsupported, 'the remote host lists with "' + Mode + '", which is not read yet'));
     SetLength(Entries, Lines.Count);
     N := 0;
@@ -727,7 +767,7 @@ begin
       Exit;
     if (Lines.Count < 2) or (not ModeOfLine(Lines[0], Mode)) then
       Exit(Fail(rrFailed, 'the answer has no line with the tool that made it'));
-    if (Mode <> 'find') and (Mode <> 'stat') then
+    if (Mode <> 'find') and (Mode <> 'stat') and (Mode <> 'statbsd') then
       Exit(Fail(rrUnsupported, 'the remote host lists with "' + Mode + '", which is not read yet'));
     if not ParseEntry(Mode, Lines[1], Entry) then
       Exit(Fail(rrFailed, 'cannot read the answer: ' + Lines[1]));
