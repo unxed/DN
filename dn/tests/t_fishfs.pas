@@ -303,7 +303,7 @@ begin
     Check(FS.Connected, Tag + 'the reads leave the connection open');
 
     { writing truncates on open, streams raw bytes in bounded frames, and accepts line-based encoded paths }
-    Check(FS.HasFeature('write'), Tag + 'the helper reports a write method');
+    Check(FS.FeatureValue('write') <> '', Tag + 'the helper reports a write method');
     WriteRemote(FS, Tag, Base + '/plain.txt', 'replacement');
     Check(ReadRemote(FS, Tag, Base + '/plain.txt', 3) = 'replacement', Tag + 'an existing file is truncated and replaced');
     WriteRemote(FS, Tag, Weird + '/new' + #10 + 'line/upload', LoadText(Big));
