@@ -165,6 +165,11 @@ def session(out, d):
     check(status == 0, 'Alt-X ends the program (status %r)' % (status,), scr)
 
 
+def blocked_note(screen):
+    """the message of dn#88 step 4: a command held back by a background copy (the box may wrap the words)"""
+    return 'background copy' in screen.replace('\n', ' ') or ('background' in screen and 'running' in screen)
+
+
 def background_copy(out, d):
     """A background copy leaves the panels responsive and finishes every file."""
     w = os.path.join(d, 'background')
@@ -183,6 +188,7 @@ def background_copy(out, d):
             f.write(payload)
 
     t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'))
+    closed = False                                   # Alt-X at the end has already closed the terminal
     t.started()
     try:
         t.send(F['ESC'], 0.3)
@@ -215,6 +221,10 @@ def background_copy(out, d):
                 # the Copy dialog is the only screen with a Cancel button (the progress window has Stop); the F-key bar
                 # and the title of the progress window both contain "Copy", so that word proves nothing
                 f5_screen = t.text()
+                # dn#88 step 4: the key held back says why; Enter closes the message and the copy goes on
+                f5_note = blocked_note(f5_screen)
+                if f5_note:
+                    t.send(F['ENTER'], 0.5)
                 # F5 on a copy that has just finished is a real Copy dialog (dn-linux #736: 4096 of 4096 files were copied when F5 was
                 # pressed): only a copy that still runs when the screen is read proves anything, as for F8 below
                 copy_ran_f5 = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
@@ -226,6 +236,9 @@ def background_copy(out, d):
                     t.send(F['ESC'], 0.5)
                 t.send(F['F8'], 0.5)
                 f8_screen = t.text()
+                f8_note = blocked_note(f8_screen)
+                if f8_note:
+                    t.send(F['ENTER'], 0.5)
                 # F8 on a copy that has just finished is a real delete dialog: only a copy that still runs when the screen is read proves anything
                 copy_ran_on = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
                 f8_dialog_visible = 'Confirm' in f8_screen or 'wish to delete' in f8_screen
@@ -234,6 +247,18 @@ def background_copy(out, d):
                     print('--- the screen right after F8 (a dialog is expected to be absent):\n' + f8_screen, flush=True)
                 if f8_dialog_visible:
                     t.send(F['ESC'], 0.2)
+                t.send(F['ALT-X'], 0.5)
+                quit_screen = t.text()
+                copy_ran_quit = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
+                quit_note = blocked_note(quit_screen)
+                if quit_note:
+                    t.send(F['ENTER'], 0.5)
+                if copy_ran_f5 and copy_ran_on and copy_ran_quit:
+                    check(f5_note and f8_note and quit_note and t.alive(),
+                          'Background: F5, F8 and Alt-X say that a background copy is running, Enter closes it, dn goes on '
+                          '(F5 %r, F8 %r, Alt-X %r)' % (f5_note, f8_note, quit_note), quit_screen)
+                else:
+                    print('SKIP Background: the copy finished before F5/F8/Alt-X were all pressed, the message is not checked', flush=True)
                 check(not f5_opened_dialog and not f8_opened_dialog and os.path.isdir(src),
                       'Background: panel navigation works and F5/F8 do not start foreground operations '
                       '(F5 dialog %r, F8 dialog %r, source is a directory %r, %d of %d files copied)' % (
@@ -305,11 +330,20 @@ def background_copy(out, d):
         check(clock_back, 'Background: the clock comes back when the copy ends (%r)' % t.text().split('\n')[0].strip()[-24:],
               t.text())
         check(t.alive() and 'Fatal' not in t.text(), 'Background: DN remains alive', t.text())
+        # dn#88 step 4: Alt-X, held back while the copy ran, ends the program once the copy is over
+        t.send(F['ALT-X'], 0.5)
+        quit_screen = t.text()
+        t.send(F['ENTER'], 1.5)
+        status = t.close(4)
+        closed = True
+        check(status == 0 and not blocked_note(quit_screen),
+              'Background: Alt-X ends the program after the copy (status %r)' % (status,), quit_screen)
     finally:
-        if t.alive():
-            t.send(F['ALT-X'], 0.3)
-            t.send(F['ENTER'], 0.3)
-        t.close(3)
+        if not closed:
+            if t.alive():
+                t.send(F['ALT-X'], 0.3)
+                t.send(F['ENTER'], 0.3)
+            t.close(3)
         # a crash report of DN (Fatal Error ... crash001.txt) names the call chain: put it in the log, the file is lost with the runner
         crash = os.path.join(d, 'crash')
         if os.path.isdir(crash):

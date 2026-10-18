@@ -117,7 +117,7 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
 
 implementation
 uses
-  mainapp, Commands, CopyJobs, Dos, TitleSet, basics, strutil, fileutil, TvGlyphs
+  mainapp, Commands, CopyJobs, Dos, TitleSet, basics, strutil, fileutil, TvGlyphs, Messages
   ;
 
 constructor TPercentGauge.Create(const Bounds: TRect; AMaxValue: LongInt);
@@ -576,6 +576,20 @@ procedure DispatchEvents(InfoView: TWhileView; var CancelParam: Boolean);
     then Application}InfoView.HandleEvent(Event);
   end;
 
+var
+  BlockedNoteShown: Boolean = False;
+
+{ dn#88 step 4: a command held back while the copy runs in the background says why, instead of
+  vanishing; a second press while the message is on the screen adds no second one. }
+procedure ExplainBlocked;
+  begin
+  if BlockedNoteShown then
+    Exit;
+  BlockedNoteShown := True;
+  MessageBox(^C + GetString(dlCopyBlocked), nil, mfInformation + mfOKButton);
+  BlockedNoteShown := False;
+  end;
+
 procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolean);
   var
     Event: TEvent;
@@ -587,7 +601,10 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
   if (Event.What = evKeyDown) and
     ((DNKeyCode(Event) = kbF5) or (DNKeyCode(Event) = kbF6) or
      (DNKeyCode(Event) = kbF8)) then
+    begin
     ClearEvent(Event);
+    ExplainBlocked;
+    end;
   if  (Event.What = evCommand) and (Event.Message.Command = cmCancel) and
       (Event.Message.InfoPtr = InfoView.But) or
       (Event.What = evKeyDown) and (DNKeyCode(Event) = kbESC)
@@ -597,7 +614,10 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
     CancelParam := True;
     end;
   if  (Event.What = evCommand) and BackgroundCopyBlocks(Event.Message.Command) then
+    begin
     InfoView.ClearEvent(Event);
+    ExplainBlocked;
+    end;
   if Event.What <> evNothing then
     Application.HandleEvent(Event);
   end;

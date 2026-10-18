@@ -2065,6 +2065,7 @@ type
     dlCopyStatus, { the word before the percent of a background copy in the place of the clock (dn#88 step 2b) }
     dlCopyFinished, { the head of the message that a copy sent to the background is done (dn#88 step 3) }
     dlCopyFailed, { the head of the message that a copy sent to the background has failed (dn#88 step 3) }
+    dlCopyBlocked, { why a command waits while a copy runs in the background (dn#88 step 4) }
     dlReplace,
     dlWarning,
     dlCloseButton,
