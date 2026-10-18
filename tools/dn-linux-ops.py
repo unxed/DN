@@ -507,6 +507,15 @@ def background_start(out, d):
                   finished, len(wrong)), t.text())
         if t.wait_text('Copy finished', timeout=15.0):
             t.send(F['ENTER'], 0.5)
+        # dn#88 step 7: F1 in Utilities, Copy jobs opens the topic of the list (the ended copy is still on it)
+        t.send('\x1bu', 0.8)                            # Alt-U: Utilities
+        t.send('j', 1.0)                                # Copy ~j~obs...
+        t.send(F['F1'], 1.5)
+        help_screen = t.text()
+        check('Utilities|Copy jobs lists' in help_screen,
+              'F1 in Copy jobs opens the help topic "Copy jobs"', help_screen)
+        t.send(F['ESC'], 0.5)                           # the help
+        t.send(F['ESC'], 0.5)                           # the list
         check(t.alive() and 'Fatal' not in t.text(), 'Start in background: DN remains alive', t.text())
     finally:
         if t.alive():

@@ -1008,6 +1008,10 @@ When copying, Navigator can use system 'copy' function if
     "Remove source files" - move files instead of copy
 
 
+    "Start in background" - the copy goes to the background at
+    once: the panels work while it runs, see
+    {Copying in the background:BackgroundCopy}
+
 .topic AppendFiles=31
 .title Append files
 
@@ -4608,6 +4612,40 @@ mask and the number are remembered until DN is closed.
 {a.jpg:_} and {b.jpg:_} become {photo_001.jpg:_} and {photo_002.jpg:_}.
    If a file cannot be renamed, the command reports it and stops; the files
 renamed before remain renamed.
+
+.topic BackgroundCopy=48107
+.title Copying in the background
+
+   A copy (or a move) can go on while you work in the panels. Press the
+"Background" button of the copy window, or check "Start in background" in
+the {Copy dialog box:CopyDialog}. The copy window then keeps only the "Stop"
+button, and the place of the clock shows how far the copy is, for example
+{Copy 25%:_}, with {+1:_} for each copy that waits after it.
+
+   While a copy runs in the background, F5 and F6 open the usual dialog, and
+OK puts the new copy in the {list of the copy jobs:CopyJobs}: it starts by
+itself when the copy before it ends. The commands that would change what the
+copy reads or writes (F8, renaming, changing the directory of a panel, quitting
+DN and some others) wait until the copy ends, and DN says why.
+
+   When the last copy ends, DN says so ("Copy finished"); a copy that failed
+says why at once.
+
+.topic CopyJobs=48108
+.title Copy jobs
+
+   Utilities|Copy jobs lists the copies of this session, one per line:
+
+   [wait]       waits for the copy before it
+   [run 25%]    runs, the share of the bytes copied so far
+   [done]       finished
+   [failed]     stopped by an error, and why
+   [cancelled]  cancelled
+
+   "Cancel job" stops the selected copy, or takes a waiting one out of the
+queue, so that it never starts. "Clear" takes the ended copies off the list.
+
+   See also {Copying in the background:BackgroundCopy}.
 
 .topic Path=48094 ; [C] /DataCompBoy/  3-06-2000
 .title Select path

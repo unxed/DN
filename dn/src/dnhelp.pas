@@ -284,6 +284,8 @@ const
   hcSelectPreset         = 48104;
   hcDialogItems          = 48105;
   hcGroupRename          = 48106;
+  hcBackgroundCopy       = 48107; { dn#88 step 7 }
+  hcCopyJobs             = 48108;
   hcSkipBadFile          = 49009;
   hcQueryAbort           = 49010;
   hc_                    = 65535;

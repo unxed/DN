@@ -1870,6 +1870,7 @@ begin
     R := TRect.Create(1, 1, 57, 17);
     D := TDialog.Create(R, GetString(dlCopyJobsTitle));
     D.Options := D.Options or ofCentered;
+    D.HelpCtx := hcCopyJobs; { dn#88 step 7 }
 
     R := TRect.Create(53, 2, 54, 12);
     P := TScrollBar.Create(R);

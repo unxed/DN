@@ -55,6 +55,14 @@ Where DN keeps the files of the user (the places of each system, `TvAppDir` of t
 The environment variable `DN2` names one directory for all of them. The first start copies the settings of an older DN from the directory of the
 program (and, on macOS, from `~/.config/dn`) and moves the logs and the crash reports out of the directory of the settings.
 
+## Copying in the background
+
+A copy or a move can run while you work in the panels: press **Background** in the copy window, or check **Start in background** in the
+Copy dialog. The place of the clock then shows how far the copy is. F5 and F6 during it put new copies in a queue, and they start one
+after another. **Utilities → Copy jobs** lists the copies of the session and can cancel a running or a waiting one. Commands that would
+change what the copy reads or writes (F8, renaming, quitting DN and some others) wait for it and say why. The help (F1) has the topics
+"Copying in the background" and "Copy jobs" ([dn#88](https://github.com/unxed/dn/issues/88)).
+
 ## Build DN with your own fpc
 
 For the common Linux habit `make` / `make install` there is a laconic root `Makefile`
