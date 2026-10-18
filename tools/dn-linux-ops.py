@@ -253,6 +253,8 @@ def background_copy(out, d):
                 quit_note = blocked_note(quit_screen)
                 if quit_note:
                     t.send(F['ENTER'], 0.5)
+                elif 'wish to quit' in quit_screen:
+                    t.send(F['ESC'], 0.5)               # No: a quit question left open would hold the copy and the checks below
                 if copy_ran_f5 and copy_ran_on and copy_ran_quit:
                     check(f5_note and f8_note and quit_note and t.alive(),
                           'Background: F5, F8 and Alt-X say that a background copy is running, Enter closes it, dn goes on '

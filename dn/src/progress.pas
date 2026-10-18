@@ -600,7 +600,9 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
     background job owns its source and destination. }
   if (Event.What = evKeyDown) and
     ((DNKeyCode(Event) = kbF5) or (DNKeyCode(Event) = kbF6) or
-     (DNKeyCode(Event) = kbF8)) then
+     (DNKeyCode(Event) = kbF8) or
+     { Alt+X becomes cmQuit inside Application.HandleEvent, past the check of the commands below }
+     (DNKeyCode(Event) = kbAltX)) then
     begin
     ClearEvent(Event);
     ExplainBlocked;
