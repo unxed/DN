@@ -22,6 +22,7 @@ install: all
 	install -d $(LIBDIR) $(BINDIR)
 	install -m 755 $(OUT)/dn $(LIBDIR)/dn
 	install -m 755 tools/dn-autoupdate.sh $(LIBDIR)/dn-autoupdate.sh
+	install -m 644 dn/third-party/f4-fish/helper.sh $(LIBDIR)/fishhelper.sh
 	# Resources must sit next to the binary (or behind DNDLG); see mainapp.pas OpenResourceStream.
 	-cp -a $(OUT)/*.dlg $(OUT)/*.lng $(OUT)/*.hlp $(LIBDIR)/
 	if [ -d $(OUT)/xlt ]; then cp -a $(OUT)/xlt $(LIBDIR)/; fi

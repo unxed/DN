@@ -24,6 +24,7 @@ case "$name" in
         [ -f "$out/dn" ] || { echo "dn-pack: no dn in $out" >&2; exit 1; }
         cp "$out/dn" "$stage/lib/dn/dn"
         cp "$out"/*.lng "$out"/*.dlg "$out"/*.hlp "$stage/lib/dn/"
+        cp "$here/dn/third-party/f4-fish/helper.sh" "$stage/lib/dn/fishhelper.sh"     # the FISH+ helper that DN sends to the remote sh (dn#90 step 5)
         cp -r "$here/dn/data/xlt" "$stage/lib/dn/xlt"
         cp "$here/dn/data/dn.ini" "$stage/lib/dn/"
         cp "$here/dn/data/dn.ext.linux" "$stage/lib/dn/dn.ext"     # the commands of Enter for the common types (xdg-open)
@@ -48,6 +49,7 @@ EOF
         for f in dn dn.exe cwsdpmi.exe; do if [ -f "$out/$f" ]; then cp "$out/$f" "$stage/"; fi; done
         [ -f "$stage/dn" ] || [ -f "$stage/dn.exe" ] || { echo "dn-pack: no dn or dn.exe in $out" >&2; exit 1; }
         cp "$out"/*.lng "$out"/*.dlg "$out"/*.hlp "$stage/"
+        cp "$here/dn/third-party/f4-fish/helper.sh" "$stage/fishhelper.sh"     # the FISH+ helper that DN sends to the remote sh (dn#90 step 5)
         cp -r "$here/dn/data/xlt" "$stage/xlt"
         cp "$here/dn/data/dn.ini" "$stage/"
         case "$name" in dos*) [ -f "$stage/cwsdpmi.exe" ] || { echo "dn-pack: no cwsdpmi.exe in $out" >&2; exit 1; };; esac
