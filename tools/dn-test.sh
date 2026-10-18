@@ -26,7 +26,13 @@ if [ "${1:-}" = "--one" ]; then                         # one test: build it, ru
     res=${DN_RES_DIR:-$([ -f "$here/out/linux64/english.dlg" ] && echo "$here/out/linux64")}
     (cd "$here/dn/tests" && DN_RES_DIR=$res TMPDIR="$d/tmp" HOME="$d/home" "$d/$n" > "$w/$n.txt" 2>&1) || true
     r=$(tail -1 "$w/$n.txt"); echo "$n: $r" > "$w/$n.res"
-    case "$r" in "ALL OK"*) ;; *) grep -E '^FAIL' "$w/$n.txt" | head -10 >> "$w/$n.res";; esac
+    case "$r" in "ALL OK"*) ;; *)
+        grep -E '^FAIL' "$w/$n.txt" | head -10 >> "$w/$n.res"
+        if ! grep -q '^FAIL' "$w/$n.txt"; then
+            { echo "test output (last 30 lines):"; tail -30 "$w/$n.txt"; } >> "$w/$n.res"
+        fi
+        ;;
+    esac
     exit 0
 fi
 
