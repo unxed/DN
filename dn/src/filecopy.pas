@@ -1372,6 +1372,24 @@ lbStartWrite:
     MemBufPos := 0;
     end { MaxWrite };
 
+  function ReadCount: String;
+    begin
+    ReadCount := FStr(ToRead)+GetString(dlBytes)+GetPercent(ToRead)
+      +GetString(dlFC_WasRead);
+    SetTitle(GetPercent((ToWrite+ToRead) div 2)+GetString(dlCopied));
+    end;
+
+  procedure ReadProgress(ln: TSize);
+    var
+      CT: String;
+    begin
+    Info.Write(2, StrGrd(ln, ReadPos, Info.Size.X-6, RevertBar));
+    Info.Write(3, ReadCount);
+    CT := CopyTime;
+    if CT <> '' then
+      Info.Write(9, CT); {John_SW 30-06-2005}
+    end;
+
   procedure CopyFile(const FName, AddDir: String; Own: PFileRec;
        ln: TSize; Dtt: LongInt; Attr: Word);
     label 1;
@@ -1496,24 +1514,6 @@ lbStartWrite:
 
     label
       NoRename, FileRead, PrepareResume, PrepareSkip, PrepareAppend;
-
-    function ReadCount: String;
-      begin
-      ReadCount := FStr(ToRead)+GetString(dlBytes)+GetPercent(ToRead)
-        +GetString(dlFC_WasRead);
-      SetTitle(GetPercent((ToWrite+ToRead) div 2)+GetString(dlCopied));
-      end;
-
-    procedure ReadProgress;
-      var
-        CT: String;
-      begin
-      Info.Write(2, StrGrd(ln, ReadPos, Info.Size.X-6, RevertBar));
-      Info.Write(3, ReadCount);
-      CT := CopyTime;
-      if CT <> '' then
-        Info.Write(9, CT); {John_SW 30-06-2005}
-      end;
 
     begin { CopyFile }
     {JO: !!! do not copy files found in archives  }
@@ -1740,7 +1740,7 @@ PrepareResume:
       P := TLine.Create(WW, Own, FName, NName, ln, Dtt, Attr, EOF);
       if P = nil then
         begin { buffer exhausted }
-        ReadProgress;
+        ReadProgress(ln);
         MaxWrite;
         if SkipRequested then
           Break;
@@ -1818,7 +1818,7 @@ FileRead:
       //Dispatch;
       if GrdClick then
         begin
-        ReadProgress;
+        ReadProgress(ln);
         GrdClick := False;
         end;
 
@@ -1838,7 +1838,7 @@ FileRead:
 
     SkipRequested := False;
     ClrIO;
-    ReadProgress;
+    ReadProgress(ln);
     Close(ReadStream.F);
     if not AdvCopy then
       MaxWrite;
