@@ -13,6 +13,17 @@ interface
 type
   TJobState = (jsQueued, jsRunning, jsDone, jsFailed, jsCancelled);
 
+  { What a queued copy needs to start later without the dialog and without the panels (dn#88 step 5a). Only strings and numbers:
+    by the time the job starts the panel may show another directory. Names are the names inside SrcDir, in the order of the panel. }
+  TCopyRequest = record
+    SrcDir: AnsiString;
+    DstDir: AnsiString;
+    Mask: AnsiString;
+    Names: array of AnsiString;
+    Mode: Word;           { CopyMode of FilesCopy }
+    Options: Word;        { CopyOptions of FilesCopy }
+  end;
+
   TCopyJob = record
     Id: LongInt;          { 1, 2, 3 ... in the order of JobAdd; never used twice }
     State: TJobState;
@@ -21,10 +32,15 @@ type
     Done: Int64;          { bytes copied so far }
     Error: String;        { why the job failed (jsFailed only) }
     Background: Boolean;  { the user sent the copy to the background: the panels work while it runs (JobSetBackground) }
+    HasRequest: Boolean;  { Request is filled: the job comes from JobAddRequest }
+    Request: TCopyRequest; { read-only for the readers of JobGet and JobAt: Names is shared with the stored job }
   end;
 
 { Adds a job in the state jsQueued and returns its Id. }
 function JobAdd(const Title: String; Total: Int64): LongInt;
+
+{ Like JobAdd, and keeps a copy of Request for the job (HasRequest is True). The caller may change its own Request afterwards. }
+function JobAddRequest(const Title: String; Total: Int64; const Request: TCopyRequest): LongInt;
 
 { The job with this Id, or False when there is none (a cleared job too). }
 function JobGet(Id: LongInt; var Job: TCopyJob): Boolean;
@@ -138,8 +154,20 @@ begin
   Jobs[N].Done := 0;
   Jobs[N].Error := '';
   Jobs[N].Background := False;
+  Jobs[N].HasRequest := False;
   Result := NextId;
   Inc(NextId);
+end;
+
+function JobAddRequest(const Title: String; Total: Int64; const Request: TCopyRequest): LongInt;
+var
+  N: Integer;
+begin
+  Result := JobAdd(Title, Total);
+  N := High(Jobs);
+  Jobs[N].HasRequest := True;
+  Jobs[N].Request := Request;
+  Jobs[N].Request.Names := Copy(Request.Names, 0, Length(Request.Names));
 end;
 
 function JobGet(Id: LongInt; var Job: TCopyJob): Boolean;

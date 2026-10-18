@@ -7,6 +7,7 @@ uses CopyJobs, Commands;
 var
   A, B, C, D, E, F, G, H, K, L, M, N: LongInt;
   J: TCopyJob;
+  Req: TCopyRequest;
 
 begin
   Check((JobCount = 0) and (JobNextQueued = 0) and (JobsActive = 0), 'no jobs at the start');
@@ -138,6 +139,38 @@ begin
   Check(JobCancel(C) and (JobsStatusText('Kopie') = 'Kopie 37%'), 'no waiting jobs: no +N; the word is the caller''s');
   Check(JobFinish(A) and (JobsStatusText('Copy') = ''), 'a finished copy: no state');
   Check(JobsClearEnded = 3, 'the jobs of the state part are cleared');
+
+  { dn#88 step 5a: the request of a queued copy }
+  Req.SrcDir := '/home/u/src';
+  Req.DstDir := '/home/u/dst';
+  Req.Mask := '*.*';
+  SetLength(Req.Names, 2);
+  Req.Names[0] := 'a.iso';
+  Req.Names[1] := 'dir one';
+  Req.Mode := 1;
+  Req.Options := 6;
+  A := JobAddRequest('a.iso', 1000, Req);
+  Req.Names[0] := 'changed';
+  Req.SrcDir := '/home/u/src2';
+  B := JobAdd('b.log', 0);
+  C := JobAddRequest('c.txt', 0, Req);
+  Check(JobGet(A, J) and J.HasRequest and (J.State = jsQueued) and (J.Total = 1000), 'a job with a request is queued and has it');
+  Check((J.Request.SrcDir = '/home/u/src') and (J.Request.DstDir = '/home/u/dst') and (J.Request.Mask = '*.*'),
+    'the directories and the mask are kept');
+  Check((J.Request.Mode = 1) and (J.Request.Options = 6), 'the mode and the options are kept');
+  Check((Length(J.Request.Names) = 2) and (J.Request.Names[0] = 'a.iso') and (J.Request.Names[1] = 'dir one'),
+    'the names are kept in order and a later change of the caller does not reach them');
+  Check(JobGet(B, J) and not J.HasRequest and (Length(J.Request.Names) = 0), 'a job from JobAdd has no request');
+  Check(JobGet(C, J) and J.HasRequest and (J.Request.SrcDir = '/home/u/src2') and (J.Request.Names[0] = 'changed'),
+    'the second request is its own');
+  Check(JobAt(0, J) and (J.Id = A) and JobAt(1, J) and (J.Id = B) and JobAt(2, J) and (J.Id = C), 'the jobs keep the order of adding');
+  Check(JobNextQueued = A, 'the first request is next');
+  Check(JobStart(A) and JobFinish(A) and (JobNextQueued = B), 'the next one is the job after the finished one');
+  Check(JobCancel(B) and (JobNextQueued = C), 'a cancelled job is skipped; the request job is next');
+  Check(JobsClearEnded = 2, 'the ended jobs are cleared');
+  Check(JobGet(C, J) and J.HasRequest and (J.State = jsQueued) and (J.Request.Names[1] = 'dir one') and (JobNextQueued = C),
+    'clearing the ended jobs does not touch the waiting one with its request');
+  Check(JobCancel(C) and (JobsClearEnded = 1) and (JobCount = 0), 'the jobs of the request part are cleared');
 
 Finish;
 end.
