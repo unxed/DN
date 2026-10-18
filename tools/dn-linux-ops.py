@@ -283,6 +283,10 @@ def background_copy(out, d):
                             check('[wait]' in f5_jobs_screen and '[run' in f5_jobs_screen,
                                   'Background: Utilities, Copy jobs shows the running copy and the one asked for during it as "[wait]"',
                                   f5_jobs_screen)
+                            # dn#88 step 8: the copy has run for seconds by now, so its row has the speed and the time left
+                            check(re.search(r'\[run \d+% [\d.]+ [KM]B/s \d+:\d\d', f5_jobs_screen) is not None,
+                                  'Background: the row of the running copy shows the speed and the time left ("[run N% X MB/s m:ss]")',
+                                  f5_jobs_screen)
                             # dn#88 step 5c: a third copy, cancelled from the list while it waits, never starts
                             t.send(F['F5'], 0.5)
                             third_dialog = 'Cancel' in t.text()
@@ -378,7 +382,7 @@ def background_copy(out, d):
             # a copy that has just finished leaves an empty list (dn-linux #38749777724: 3963 of 4096 files at 6 seconds, then 1.8 seconds
             # of keys before the screen was read): only a copy that still runs when the screen is read proves anything, as for F5/F8 above
             copy_ran_jobs = not all(os.path.isfile(p) for p in expected)
-            run = re.search(r'\[run (\d+)%\]', jobs_screen)
+            run = re.search(r'\[run (\d+)%', jobs_screen)
             if run is not None or copy_ran_jobs:
                 check(run is not None and int(run.group(1)) > 0,
                       'Background: Utilities, Copy jobs shows the running copy with a percent above 0 (%s)' % (
