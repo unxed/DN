@@ -739,6 +739,45 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
       end;
     end;
 
+  procedure RewriteWriteStrem(P: TLine);
+    {Open WriteStrem and set its final size.
+     Size is set to reduce fragmentation and
+     speed things up.
+       InOutres reflects the open result, and the size-set
+     result is not analyzed.}
+    begin
+    lReWriteFile(WriteStream, 1);
+    SysFileSetSize(FileRec(WriteStream.F).Handle, CompToFSize(P.Size));
+    end;
+
+  procedure TryToReset(P: TLine; var Opened: Integer; var Created: Boolean);
+    var
+      OldAttr: Word;
+    begin
+    {AK155 2-02-2002
+Previously file existence was checked via lResetFile, which was not
+entirely correct. On CD RW under RSJ and, it seems, on some network disks,
+this operation creates a file and a false overwrite prompt.
+Moreover, on a negative answer the created file remains
+(with zero length). Checking via lGetFAttr is cleaner.
+}
+    if CopyMode <> cpmOverwrite then
+      begin
+      ClrIO;
+      lGetFAttr(WriteStream, OldAttr);
+      if  (DosError = 0) then
+        begin
+        lResetFile(WriteStream, 1);
+        Opened := IOResult;
+        Created := False;
+        Exit;
+        end;
+      end;
+    RewriteWriteStrem(P);
+    Opened := IOResult;
+    Created := Opened = 0;
+    end { TryToReset };
+
   procedure MaxWrite;
     label DoRewrite, DoAppend, 1, 2, lbStartWrite, lbStartCheck
       , lRetryToReset;
@@ -759,45 +798,6 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
       
       LongNameWarn: String[50];
       I_LW: Byte;
-
-    procedure RewriteWriteStrem;
-      {Open WriteStrem and set its final size.
-       Size is set to reduce fragmentation and
-       speed things up.
-         InOutres reflects the open result, and the size-set
-       result is not analyzed.}
-      begin
-      lReWriteFile(WriteStream, 1);
-      SysFileSetSize(FileRec(WriteStream.F).Handle, CompToFSize(P.Size));
-      end;
-
-    procedure TryToReset;
-      var
-        OldAttr: Word;
-      begin
-      {AK155 2-02-2002
-Previously file existence was checked via lResetFile, which is not
-entirely correct. On CD RW under RSJ and, it seems, on some network disks,
-this operation creates a file and a false overwrite prompt.
-Moreover, on a negative answer the created file remains
-(with zero length). Checking via lGetFAttr is cleaner.
-}
-      if CopyMode <> cpmOverwrite then
-        begin
-        ClrIO;
-        lGetFAttr(WriteStream, OldAttr);
-        if  (DosError = 0) then
-          begin
-          lResetFile(WriteStream, 1);
-          Opened := IOResult;
-          Created := False;
-          Exit;
-          end;
-        end;
-      RewriteWriteStrem;
-      Opened := IOResult;
-      Created := Opened = 0;
-      end { TryToReset };
 
     procedure DoSkip;
       begin
@@ -995,7 +995,7 @@ Moreover, on a negative answer the created file remains
             if AdvCopy then
               begin
 lRetryToReset:
-              TryToReset;
+              TryToReset(P, Opened, Created);
               case Opened of
                 0:
                   begin
@@ -1202,7 +1202,7 @@ DoAppend:
             begin
 DoRewrite:
             ClrIO;
-            RewriteWriteStrem;
+            RewriteWriteStrem(P);
             if CheckI24Abort then
               Break;
             if  (InOutRes = 5) then
@@ -1218,7 +1218,7 @@ DoRewrite:
                 TrySetArch;
               if CheckI24Abort then
                 Break;
-              RewriteWriteStrem;
+              RewriteWriteStrem(P);
               end;
             end;
 
