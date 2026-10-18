@@ -99,7 +99,7 @@ procedure CloseWriteStream;
     the entire unwritten part. `}
 
 implementation
-uses DnPath, CopyJobs,
+uses DnPath, CopyJobs, DNHelp,
   FlightRec, mainapp, Startup, Messages, HistList, Commands,
   timeutil, Validate, TitleSet, UserMenu, Dos, DnIni,
   
@@ -2420,6 +2420,7 @@ qqqq:
     JobSetBackground(JobId, True); { dn#88 step 6: "Start in background" in the Copy dialog }
   R := TRect.Create(0, 0, 60, 15); {John_SW 30-06-2005}
   Info := TWhileView.Create(R);
+  Info.HelpCtx := hcBackgroundCopy; { dn#88 step 7: F1 in the copy window tells about the background }
   if CopyOptions and cpoMove <> 0 then
     Info.Top := GetString(dlFCMove)
   else
