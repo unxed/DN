@@ -72,15 +72,24 @@ begin
       Exit(I);
 end;
 
+{ The path on the remote side of a path of the tree: the host is this machine, so the tree stands where Base is (TLocalFS has Base as its root). }
+function RemotePath(const Base, Dir: AnsiString): AnsiString;
+begin
+  if Dir = '/' then
+    Result := Base
+  else
+    Result := Base + Dir;
+end;
+
 { The list of Dir from the remote side has the same names, kinds and sizes of files as the list of the same directory from TLocalFS. }
-procedure CompareLists(const Tag: AnsiString; FS: TFishFS; Local: TLocalFS; const Dir: AnsiString);
+procedure CompareLists(const Tag: AnsiString; FS: TFishFS; Local: TLocalFS; const Base, Dir: AnsiString);
 var
   Remote, Want: TRemoteEntries;
   R: TRemoteResult;
   I, J: Integer;
   Same, SameKind, SameSize: Boolean;
 begin
-  R := FS.List(Dir, Remote);
+  R := FS.List(RemotePath(Base, Dir), Remote);
   Check(R = rrOk, Tag + 'the list of ' + Dir + ' is taken: ' + FS.LastError);
   Check(Local.List(Dir, Want) = rrOk, Tag + 'the reference list is taken');
   if (R <> rrOk) then
@@ -138,20 +147,20 @@ begin
     Check((FS.Pwd(Dir) = rrOk) and (Length(Dir) > 0) and (Dir[1] = '/'), Tag + 'the directory of the shell is told');
 
     { the lists }
-    CompareLists(Tag, FS, Local, '/');
-    CompareLists(Tag, FS, Local, '/sub');
-    CompareLists(Tag, FS, Local, '/sub/');
-    Check(FS.List('/sub/../sub/.', Remote) = rrOk, Tag + 'a path is made clean before it is sent');
-    Check(FS.List('/sub/..', Remote) = rrOk, Tag + 'the parent of a directory is listed');
+    CompareLists(Tag, FS, Local, Base, '/');
+    CompareLists(Tag, FS, Local, Base, '/sub');
+    CompareLists(Tag, FS, Local, Base, '/sub/');
+    Check(FS.List(Base + '/sub/../sub/.', Remote) = rrOk, Tag + 'a path is made clean before it is sent');
+    Check(FS.List(Base + '/sub/..', Remote) = rrOk, Tag + 'the parent of a directory is listed');
     Check(FS.List('/..', Remote) = rrDenied, Tag + 'a path that leaves the root is refused');
     Check(FS.List('sub', Remote) = rrDenied, Tag + 'a path that is not absolute is refused');
     Check(FS.List('/no-such-directory-here', Remote) = rrNotFound, Tag + 'a directory that is not there is not found');
-    Check(FS.List('/plain.txt', Remote) = rrNotDir, Tag + 'a file is not a directory');
+    Check(FS.List(Base + '/plain.txt', Remote) = rrNotDir, Tag + 'a file is not a directory');
     Check(Length(Remote) = 0, Tag + 'a failed list gives no entries');
     Check(FS.Connected, Tag + 'the refusals leave the connection open');
 
     { the fields of an entry }
-    Check(FS.List('/', Remote) = rrOk, Tag + 'the root is listed');
+    Check(FS.List(Base, Remote) = rrOk, Tag + 'the tree is listed');
     I := IndexOf(Remote, 'plain.txt');
     Check(I >= 0, Tag + 'plain.txt is in the list');
     if I >= 0 then
@@ -170,16 +179,16 @@ begin
     Check((I >= 0) and (Remote[I].Kind = rkLink), Tag + 'a link is a link in the list');
 
     { one entry }
-    Check(FS.Stat('/plain.txt', False, E) = rrOk, Tag + 'Stat of a file');
+    Check(FS.Stat(Base + '/plain.txt', False, E) = rrOk, Tag + 'Stat of a file');
     Check((E.Name = 'plain.txt') and (E.Kind = rkFile) and (E.Size = 3) and (E.Mode = &640), Tag + 'the entry is the file');
-    Check((FS.Stat('/sub', False, E) = rrOk) and (E.Kind = rkDir) and (E.Name = 'sub'), Tag + 'Stat of a directory');
+    Check((FS.Stat(Base + '/sub', False, E) = rrOk) and (E.Kind = rkDir) and (E.Name = 'sub'), Tag + 'Stat of a directory');
     Check((FS.Stat('/', False, E) = rrOk) and (E.Kind = rkDir) and (E.Name = ''), Tag + 'Stat of the root');
-    Check((FS.Stat('/link', False, E) = rrOk) and (E.Kind = rkLink), Tag + 'Stat of a link without following it');
-    Check((FS.Stat('/link', True, E) = rrOk) and (E.Kind = rkDir), Tag + 'Stat of a link to a directory with following it');
-    Check((FS.Stat('/dangling', True, E) = rrOk) and (E.Kind = rkLink), Tag + 'a link to nothing stays a link');
+    Check((FS.Stat(Base + '/link', False, E) = rrOk) and (E.Kind = rkLink), Tag + 'Stat of a link without following it');
+    Check((FS.Stat(Base + '/link', True, E) = rrOk) and (E.Kind = rkDir), Tag + 'Stat of a link to a directory with following it');
+    Check((FS.Stat(Base + '/dangling', True, E) = rrOk) and (E.Kind = rkLink), Tag + 'a link to nothing stays a link');
     Check(FS.Stat('/nothing-here', False, E) = rrNotFound, Tag + 'Stat of what is not there');
     Check(FS.Stat('plain.txt', False, E) = rrDenied, Tag + 'Stat of a path that is not absolute');
-    Check((FS.Stat('/with space.txt', False, E) = rrOk) and (E.Size = 11) and (E.Name = 'with space.txt'), Tag + 'Stat of a name with a blank');
+    Check((FS.Stat(Base + '/with space.txt', False, E) = rrOk) and (E.Size = 11) and (E.Name = 'with space.txt'), Tag + 'Stat of a name with a blank');
 
     { the paths that a line cannot carry }
     Dir := Weird + '/new' + #10 + 'line';
@@ -193,9 +202,9 @@ begin
     if FS.FeatureValue('mode') = 'find' then
     begin
       Check(FS.SetListingMode('stat') = rrOk, Tag + 'the helper lists with stat');
-      CompareLists(Tag, FS, Local, '/');
-      Check((FS.Stat('/plain.txt', False, E) = rrOk) and (E.Name = 'plain.txt') and (E.Size = 3) and (E.Mode = &640), Tag + 'Stat with stat');
-      Check((FS.Stat('/link', True, E) = rrOk) and (E.Kind = rkDir), Tag + 'a link to a directory is followed by stat');
+      CompareLists(Tag, FS, Local, Base, '/');
+      Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Name = 'plain.txt') and (E.Size = 3) and (E.Mode = &640), Tag + 'Stat with stat');
+      Check((FS.Stat(Base + '/link', True, E) = rrOk) and (E.Kind = rkDir), Tag + 'a link to a directory is followed by stat');
       Check(FS.SetListingMode('find') = rrOk, Tag + 'and back to find');
     end;
     Check(FS.SetListingMode('no-such-tool') <> rrOk, Tag + 'a tool that is not there is refused');
@@ -204,7 +213,7 @@ begin
 
     { what is not done yet }
     Check(FS.MkDir('/new-dir') = rrUnsupported, Tag + 'making a directory is not done yet');
-    Check(FS.SetMode('/plain.txt', &600) = rrUnsupported, Tag + 'setting the permissions is not done yet');
+    Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, Tag + 'setting the permissions is not done yet');
   finally
     Local.Free;
     FS.Free;
