@@ -74,7 +74,7 @@ uses
   osdep, dirwatch, fileutil, mainapp, gadgets,
   Drives, basics, envutil, Commands,
   boot, UserMenu, Messages, Startup,
-  panelroot, Macro, farux, panelwinx
+  panelroot, Macro, farux, panelwinx, CopyJobs
   ;
 
 (*{$I  runcmd.inc}*)
@@ -366,9 +366,13 @@ procedure MyApp.GetEvent(var Event: TEvent);
         cmClearData,
         cmSearchAdvance,
         cmAdvancePortSetup,
-        cmNavyLinkSetup,
-        cmQuit:
+        cmNavyLinkSetup:
           HandleCommand(Event);
+        cmQuit:
+          { dn#88 step 4: while a copy runs in the background, cmQuit goes on to DispatchEventsBackground (progress.pas),
+            which holds it back and says why }
+          if not BackgroundCopyRunning then
+            HandleCommand(Event);
         {Cat: check whether it is time to run EventCatcher plugins}
         
         {/Cat}
