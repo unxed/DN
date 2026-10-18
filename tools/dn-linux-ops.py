@@ -170,9 +170,20 @@ def blocked_note(screen):
     return 'background copy' in screen.replace('\n', ' ') or ('background' in screen and 'running' in screen)
 
 
-def right_half(screen):
-    """the right panel of the 100-column screen (dn#88 step 3b)"""
+def panel_half(screen, side):
+    """one panel of the 100-column screen (dn#88 step 3b)"""
+    if side == 'left':
+        return '\n'.join(line[:50] for line in screen.split('\n'))
     return '\n'.join(line[50:] for line in screen.split('\n'))
+
+
+def destination_panel(screen, dst):
+    """Return the screen half showing the receiving destination panel."""
+    for side in ('left', 'right'):
+        half = panel_half(screen, side)
+        if dst in half:
+            return half
+    return ''
 
 
 def background_copy(out, d):
@@ -203,7 +214,8 @@ def background_copy(out, d):
         t.send(F['DOWN'], 0.2)                           # .., destination, source
         t.send(F['ENTER'], 0.6)                          # into destination
         other_panel_screen = t.text()
-        other_panel_ready = 'source' not in right_half(other_panel_screen)   # nothing is copied yet: only ".." is listed
+        receiving_panel_before = destination_panel(other_panel_screen, dst)
+        other_panel_ready = bool(receiving_panel_before) and 'source' not in receiving_panel_before   # only ".." is listed before the copy
         t.send(F['TAB'], 0.3)
         t.send(F['HOME'], 0.2)
         t.send(F['DOWN'], 0.2)                           # .., destination, source
@@ -343,12 +355,12 @@ def background_copy(out, d):
                 t.send(F['ENTER'], 0.5)
                 # dn#88 step 3b: the other panel shows the destination; the copied directory appears there without a re-read by hand
                 if other_panel_ready:
-                    shown = t.until(lambda: 'source' in right_half(t.text()), 5.0)
+                    shown = t.until(lambda: 'source' in destination_panel(t.text(), dst), 5.0)
                     check(shown, 'Background: the receiving panel lists the copied directory after the copy ends', t.text())
                 else:
                     print('SKIP receiving panel: the other panel did not show the empty destination before the copy', flush=True)
                     print('--- screen before the background copy (left and right panels):\n' + other_panel_screen, flush=True)
-                    print('--- right panel before the background copy:\n' + right_half(other_panel_screen), flush=True)
+                    print('--- receiving panel before the background copy:\n' + receiving_panel_before, flush=True)
         clock_back = t.until(lambda: re.search(r'\bCopy\b', t.text().split('\n')[0]) is None, 5.0)
         check(clock_back, 'Background: the clock comes back when the copy ends (%r)' % t.text().split('\n')[0].strip()[-24:],
               t.text())
