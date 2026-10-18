@@ -40,3 +40,9 @@ Files of the public DN OSP 2.14 whose heads name another author (Cat, JO, AK155.
 Files of the public DN OSP 2.14 with no notice in the head (small adapters, tables, include files). Part of the same release.
 
 `copyini.pas`, `dnpath.pas`, `fileerrors.pas`, `filetype.pas`, `osdiskdos.pas`, `osdiskunix.pas`, `osdiskwindows.pas`, `panelsetup.pas`, `rcpvpd.ini`, `stdefine.inc`, `sysutils.inc`, `uselfn.pas`, `usersavr.pas`, `xcode.pas`
+
+## Files of other projects (their own licenses)
+
+Kept apart in `dn/third-party/<project>/`, each directory with the `LICENSE` of its files and a `NOTICE` that names the source. They are not DN code and not MIT files of this project; the release archives carry the `LICENSE` and the `NOTICE` of each (`tools/dn-notices.sh`).
+
+- `third-party/f4-fish/`: `LICENSE`, `NOTICE`, `helper.sh`

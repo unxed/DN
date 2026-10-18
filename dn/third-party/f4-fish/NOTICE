@@ -1,0 +1,10 @@
+helper.sh is the remote helper of the FISH+ protocol, taken from the project f4:
+
+  source:   https://github.com/unxed/f4
+  file:     plugins/netfox/fishplus/helper.sh
+  commit:   9e5c206ada9933f3ad7b42990455636db528fb80
+  license:  BSD 3-Clause, Copyright (c) 2026, unxed (the text is in LICENSE next to this file)
+
+The file is kept byte for byte as in f4. Its license is the one in LICENSE here, not the MIT license of the project and not
+the license of DN: the copyright notice and the disclaimer of LICENSE go with every copy of the file, in source or in binary
+form (the release archives carry them as LICENSE-F4-FISH.TXT and NOTICE-F4-FISH.TXT).
