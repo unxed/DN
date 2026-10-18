@@ -119,6 +119,10 @@ function BackgroundCopyBlocks(Command: Word): Boolean;
   it (dn#88 step 5b): F5, F6, Shift+F5. The other commands of BackgroundCopyBlocks stay blocked. }
 function BackgroundCopyQueues(Command: Word): Boolean;
 
+{ Value with each bit FromBits[I] turned into ToBits[I]; the bits not in FromBits are dropped. The check boxes of the Copy dialog
+  and the options of FilesCopy have different bits (dn#88 step 6), this turns one into the other. }
+function MapBits(Value: Word; const FromBits, ToBits: array of Word): Word;
+
 { True while the running copy (JobRunning) is in the background. }
 function BackgroundCopyRunning: Boolean;
 
@@ -427,6 +431,16 @@ begin
       Result := True;
       Exit;
     end;
+end;
+
+function MapBits(Value: Word; const FromBits, ToBits: array of Word): Word;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(FromBits) do
+    if (I <= High(ToBits)) and (Value and FromBits[I] <> 0) then
+      Result := Result or ToBits[I];
 end;
 
 function BackgroundCopyQueues(Command: Word): Boolean;

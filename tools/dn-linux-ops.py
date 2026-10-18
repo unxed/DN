@@ -417,7 +417,9 @@ def background_copy(out, d):
             # 3963 of 4096 files at 6 seconds, the copy ended while Alt-U, j and Esc were pressed): only a copy that still runs when the
             # last key is pressed proves anything, as for the list of jobs above
             print('SKIP Background: the end of the copy is announced: the copy ended while the keys of the list of jobs were pressed', flush=True)
-            if 'Copy finished' in t.text():
+            # the message of a copy that waited in the list comes when that copy ends, so it is waited for; the Esc of the
+            # list may have closed a message of the first copy, and then none comes
+            if t.wait_text('Copy finished', timeout=5.0):
                 t.send(F['ENTER'], 0.5)
         elif went_background:
             # dn#88 step 3: a copy that ran in the background says that it is done; the message waits for Enter
@@ -457,6 +459,60 @@ def background_copy(out, d):
             for name in sorted(os.listdir(crash)):
                 print('--- ' + name, flush=True)
                 print(open(os.path.join(crash, name), errors='replace').read()[:6000], flush=True)
+
+
+def background_start(out, d):
+    """dn#88 step 6: "Start in background" in the Copy dialog sends the copy to the background at once."""
+    w = os.path.join(d, 'bgstart')
+    src = os.path.join(w, 'source')
+    dst = os.path.join(w, 'destination')
+    os.makedirs(src)
+    os.makedirs(dst)
+    nfiles = 2048
+    payload = os.urandom(64 * 1024)
+    for i in range(nfiles):
+        with open(os.path.join(src, 'file%03d.dat' % i), 'wb') as f:
+            f.write(payload)
+    expected = [os.path.join(dst, 'source', 'file%03d.dat' % i) for i in range(nfiles)]
+    t = DnTerm(['./dn'], 100, 30, cwd=w, exe=os.path.join(d, 'dn'))
+    t.started()
+    try:
+        t.send(F['ESC'], 0.3)
+        t.send(F['HOME'], 0.2)
+        t.send(F['DOWN'], 0.2)                           # .., destination, source
+        t.send(F['DOWN'], 0.2)
+        t.send(F['F5'], 0.5)
+        dialog = t.text()
+        check('Start in background' in dialog, 'Copy dialog: the box "Start in background" is there', dialog)
+        t.send('destination', 0.2)
+        t.send('\x1bb', 0.3)                           # Alt-B: Start in ~b~ackground
+        t.send(F['ENTER'], 0.2)
+        # the panels come back while the copy runs: no progress window with a Background button, the place of the clock
+        # tells how far the copy is
+        # (the window of a copy in the background keeps only "Stop"; the clock place is redrawn once a second)
+        back = t.until(lambda: 'Name' in t.text() and 'Background' not in t.text() and 'Cancel' not in t.text()
+                       and re.search(r'\bCopy\b', t.text().split('\n')[0]) is not None, 5.0)
+        top = t.text().split('\n')[0]
+        running = not all(os.path.isfile(p) for p in expected)
+        if running:
+            check(back,
+                  'Start in background: the panels come back at once and the clock place shows the copy (%r)' % top.strip()[-24:],
+                  t.text())
+        else:
+            print('SKIP Start in background: the copy finished before the screen was read', flush=True)
+        finished = t.until(lambda: all(os.path.isfile(p) for p in expected), 120.0)
+        wrong = [p for p in expected if os.path.isfile(p) and open(p, 'rb').read() != payload]
+        check(finished and not wrong,
+              'Start in background: every file is copied with the same contents (finished %r, %d with other contents)' % (
+                  finished, len(wrong)), t.text())
+        if t.wait_text('Copy finished', timeout=15.0):
+            t.send(F['ENTER'], 0.5)
+        check(t.alive() and 'Fatal' not in t.text(), 'Start in background: DN remains alive', t.text())
+    finally:
+        if t.alive():
+            t.send(F['ALT-X'], 0.3)
+            t.send(F['ENTER'], 0.3)
+        t.close(3)
 
 
 def utf8(out, d):
@@ -676,7 +732,7 @@ def part(out, fn):
 
 def main():
     out = os.path.abspath(sys.argv[1])
-    parts = [session, background_copy, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
+    parts = [session, background_copy, background_start, desktop, group_rename] + ([utf8] if os.environ.get('DN_OPS_UTF8') == '1' else [])
     side_by_side([lambda fn=fn: part(out, fn) for fn in parts])          # each in a directory of its own, all at once
     print('ALL OK (%d checks)' % count if not fails else '%d of %d checks FAILED' % (fails, count))
     sys.exit(1 if fails else 0)

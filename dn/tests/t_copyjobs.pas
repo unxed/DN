@@ -115,6 +115,11 @@ begin
     'F5, F6 and Shift+F5 put the new copy in the job list (dn#88 step 5b)');
   Check(not BackgroundCopyQueues(cmPanelErase) and not BackgroundCopyQueues(cmSingleRename) and not BackgroundCopyQueues(cmQuit),
     'erase, rename and quit do not wait in the job list');
+  { dn#88 step 6: the boxes of the Copy dialog ($01..$10) and the options of FilesCopy (here $10 -> $10 and $08 -> $10 as in filecopy) }
+  Check(MapBits($08, [$01, $02, $04, $08, $10], [$01, $02, $04, $10, $20]) = $10, 'the fourth box is the option $10');
+  Check(MapBits($10 or $01, [$01, $02, $04, $10, $20], [$01, $02, $04, $08, $10]) = $08 or $01, 'and back: $10 is the fourth box');
+  Check(MapBits($15, [$01, $02, $04, $08, $10], [$01, $02, $04, $10, $20]) = $01 or $04 or $20, 'each bit by itself');
+  Check(MapBits($C0, [$01, $02], [$10, $20]) = 0, 'bits not in the table are dropped');
 
   { part 4b-5: the rows of the jobs list }
   A := JobAdd('a.iso', 1000);

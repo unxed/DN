@@ -1202,6 +1202,7 @@ DIALOG dlgCopyDialog, 78, 15, 'Копирование'
 ;$ENDIF
 ;$ENDIF
       ITEM '~У~далять исходные файлы'
+      ITEM '~С~разу в фоне'
     END
     Button 16, 12, 26, 14, 'ОК', cmOK, bfDefault, ofPostProcess, ofPreProcess
     Button 26, 12, 36, 14, 'О~т~мена', cmCancel, ofPostProcess, ofPreProcess
