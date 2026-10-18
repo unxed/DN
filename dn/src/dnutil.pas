@@ -1862,7 +1862,7 @@ begin
     for I := 0 to JobCount - 1 do
       if JobAt(I, Job) then
       begin
-        L.Insert(NewStr(JobLine(Job)));
+        L.Insert(NewStr(JobLineAt(Job, JobClock()))); { with the speed and the time left (dn#88 step 8) }
         SetLength(Ids, Length(Ids) + 1);
         Ids[High(Ids)] := Job.Id;
       end;

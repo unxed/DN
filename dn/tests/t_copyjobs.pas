@@ -8,6 +8,12 @@ var
   A, B, C, D, E, F, G, H, K, L, M, N: LongInt;
   J: TCopyJob;
   Req: TCopyRequest;
+  FakeNow: Int64 = 5000;
+
+function FakeClock: Int64;
+begin
+  Result := FakeNow;
+end;
 
 begin
   Check((JobCount = 0) and (JobNextQueued = 0) and (JobsActive = 0), 'no jobs at the start');
@@ -180,6 +186,23 @@ begin
   Check(JobGet(C, J) and J.HasRequest and (J.State = jsQueued) and (J.Request.Names[1] = 'dir one') and (JobNextQueued = C),
     'clearing the ended jobs does not touch the waiting one with its request');
   Check(JobCancel(C) and (JobsClearEnded = 1) and (JobCount = 0), 'the jobs of the request part are cleared');
+
+  { dn#88 step 8: the speed and the time left }
+  Check(JobRateText(0, 100, 5000) = '', 'nothing copied yet: no speed');
+  Check(JobRateText(1000, 100000, 500) = '', 'less than a second: no speed');
+  Check(JobRateText(10 * 1048576, 40 * 1048576, 2000) = '5.0 MB/s 0:06', '10 MB in 2 s of 40 MB: 5 MB/s, 6 s left');
+  Check(JobRateText(512 * 1024, 0, 1000) = '512 KB/s', 'without Total only the speed');
+  Check(JobRateText(1024, 1024 + 3723 * 1024, 1000) = '1 KB/s 1:02:03', 'hours, minutes and seconds left');
+  Check(JobRateText(100, 100, 1000) = '1 KB/s 0:00', 'all copied: nothing left');
+  JobClock := @FakeClock;
+  A := JobAdd('a.iso', 40 * 1048576);
+  Check(JobGet(A, J) and (JobLineAt(J, FakeNow) = '[wait] a.iso'), 'a waiting job has no speed');
+  Check(JobStart(A) and JobGet(A, J) and (J.StartMs = 5000), 'JobStart keeps the time of JobClock');
+  Check(JobLineAt(J, 5000) = '[run 0%] a.iso', 'the first second: the line of JobLine');
+  Check(JobProgress(A, 10 * 1048576) and JobGet(A, J) and (JobLineAt(J, 7000) = '[run 25% 5.0 MB/s 0:06] a.iso'),
+    'a running job with the speed and the time left: ' + JobLineAt(J, 7000));
+  Check(JobFinish(A) and JobGet(A, J) and (JobLineAt(J, 9000) = '[done] a.iso'), 'an ended job has no speed');
+  Check(JobsClearEnded = 1, 'the job of the speed part is cleared');
 
 Finish;
 end.

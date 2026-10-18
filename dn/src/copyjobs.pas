@@ -34,6 +34,7 @@ type
     Background: Boolean;  { the user sent the copy to the background: the panels work while it runs (JobSetBackground) }
     HasRequest: Boolean;  { Request is filled: the job comes from JobAddRequest }
     Request: TCopyRequest; { read-only for the readers of JobGet and JobAt: Names is shared with the stored job }
+    StartMs: Int64;       { JobClock when the job started (dn#88 step 8); 0 before that }
   end;
 
 { Adds a job in the state jsQueued and returns its Id. }
@@ -103,6 +104,20 @@ function JobsClearEnded: Integer;
   "[failed] b.log: disk full". The window shows the rows in the order of JobAt. }
 function JobLine(const Job: TCopyJob): String;
 
+{ The speed and the time left of a copy (dn#88 step 8): Done bytes in ElapsedMs milliseconds, Total bytes in all (0 when unknown).
+  "12.3 MB/s 0:41", "512 KB/s 1:02:03", "3.1 MB/s" without Total; '' before the first second or the first byte. }
+function JobRateText(Done, Total, ElapsedMs: Int64): String;
+
+{ JobLine with the speed and the time left of a running job at the time NowMs of JobClock: "[run 25% 12.3 MB/s 0:41] a.iso". }
+function JobLineAt(const Job: TCopyJob; NowMs: Int64): String;
+
+type
+  TJobClock = function: Int64;
+
+var
+  { Milliseconds from any fixed moment; JobStart keeps it in StartMs. A test puts a clock of its own here. }
+  JobClock: TJobClock;
+
 { The short state of the background copy for a place that is always on the screen (dn#88 step 2a): '' when no copy runs in the
   background; otherwise Name with the percent ("Copy 37%"; Name alone while Total is unknown) and "+N" when N more jobs wait
   ("Copy 37% +2"). A copy that was not sent to the background and the jobs that have ended give ''. Name comes from the caller, so
@@ -128,7 +143,12 @@ function BackgroundCopyRunning: Boolean;
 
 implementation
 
-uses Commands;
+uses Commands, SysUtils;
+
+function TickClock: Int64;
+begin
+  Result := Int64(GetTickCount64);
+end;
 
 var
   Jobs: array of TCopyJob;
@@ -163,6 +183,7 @@ begin
   Jobs[N].Error := '';
   Jobs[N].Background := False;
   Jobs[N].HasRequest := False;
+  Jobs[N].StartMs := 0;
   Result := NextId;
   Inc(NextId);
 end;
@@ -220,7 +241,10 @@ begin
   I := Find(Id);
   Result := (I >= 0) and (Jobs[I].State = jsQueued);
   if Result then
+  begin
     Jobs[I].State := jsRunning;
+    Jobs[I].StartMs := JobClock();
+  end;
 end;
 
 function JobProgress(Id: LongInt; Done: Int64): Boolean;
@@ -390,6 +414,78 @@ begin
     Result := Result + ': ' + Job.Error;
 end;
 
+function JobRateText(Done, Total, ElapsedMs: Int64): String;
+var
+  Rate, Left, H, M, S: Int64;
+  T: String;
+
+  function Two(N: Int64): String;
+  begin
+    Str(N, Result);
+    if N < 10 then
+      Result := '0' + Result;
+  end;
+
+begin
+  Result := '';
+  if (ElapsedMs < 1000) or (Done <= 0) then
+    Exit;
+  Rate := Done * 1000 div ElapsedMs;
+  if Rate <= 0 then
+    Exit;
+  if Rate >= 1024 * 1024 then
+  begin
+    Str(Rate / (1024 * 1024):0:1, T);
+    Result := T + ' MB/s';
+  end
+  else
+  begin
+    Str((Rate + 1023) div 1024, T);
+    Result := T + ' KB/s';
+  end;
+  if (Total > 0) and (Total >= Done) then
+  begin
+    Left := (Total - Done + Rate - 1) div Rate;
+    H := Left div 3600;
+    M := Left div 60 mod 60;
+    S := Left mod 60;
+    if H > 0 then
+    begin
+      Str(H, T);
+      Result := Result + ' ' + T + ':' + Two(M) + ':' + Two(S);
+    end
+    else
+    begin
+      Str(M, T);
+      Result := Result + ' ' + T + ':' + Two(S);
+    end;
+  end;
+end;
+
+function JobLineAt(const Job: TCopyJob; NowMs: Int64): String;
+var
+  R, P: String;
+begin
+  if (Job.State <> jsRunning) or (Job.StartMs = 0) then
+  begin
+    Result := JobLine(Job);
+    Exit;
+  end;
+  R := JobRateText(Job.Done, Job.Total, NowMs - Job.StartMs);
+  if R = '' then
+  begin
+    Result := JobLine(Job);
+    Exit;
+  end;
+  if Job.Total > 0 then
+  begin
+    Str(JobPercent(Job.Id), P);
+    Result := '[run ' + P + '% ' + R + '] ' + Job.Title;
+  end
+  else
+    Result := '[run ' + R + '] ' + Job.Title;
+end;
+
 function JobsStatusText(const Name: String): String;
 var
   Id: LongInt;
@@ -461,4 +557,6 @@ begin
     end;
 end;
 
+initialization
+  JobClock := @TickClock;
 end.
