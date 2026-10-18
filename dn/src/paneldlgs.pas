@@ -602,7 +602,7 @@ procedure CM_AdvancedFilter(AFP: Pointer);
       IL: TInputLine;
       Cmd: Word;
 
-    function MakeDialog: TDialog;
+    function MakeDialog(AExtList: TStringCollection; ASelectFilterLine: Boolean): TDialog;
       var
         Dlg: TDialog;
         b: Integer;
@@ -613,7 +613,7 @@ procedure CM_AdvancedFilter(AFP: Pointer);
         begin
         PL := TListBox(DirectLink[2]);
         ObjChangeType(PL, TClass(TExtSelList));
-        PL.NewLisT(PC);
+        PL.NewLisT(AExtList);
         IL := TInputLine(DirectLink[1]);
         ObjChangeType(IL, TClass(TFilterLine));
         OkButton := TButton(DirectLink[4]);
@@ -627,7 +627,7 @@ procedure CM_AdvancedFilter(AFP: Pointer);
         end;
       IL.SetState(sfSelected, True);
         { To put the buttons into the right states, see TFilterLine }
-      if not SelectFilterLine then
+      if not ASelectFilterLine then
         begin
         Dlg.SelectNext(False);
         end;
@@ -653,7 +653,7 @@ procedure CM_AdvancedFilter(AFP: Pointer);
       I, l: Integer;
     begin { GetMaskSelection: }
     GetMaskSelection := '';
-    D := MakeDialog;
+    D := MakeDialog(PC, SelectFilterLine);
     D.Options := D.Options or ofCentered;
     PL.FocusItem(FItem);
     IL.Data^ := FileMask;
