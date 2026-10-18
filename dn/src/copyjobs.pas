@@ -99,6 +99,9 @@ function JobsStatusText(const Name: String): String;
   the viewer, the menus and the rest pass. }
 function BackgroundCopyBlocks(Command: Word): Boolean;
 
+{ True while the running copy (JobRunning) is in the background. }
+function BackgroundCopyRunning: Boolean;
+
 implementation
 
 uses Commands;
@@ -380,6 +383,19 @@ const
     cmPanelReread, cmChangeDrive, cmChangeDir, cmPanelArcFiles, cmExtractArchive, cmSingleCopy, cmSingleRename, cmGroupRename,
     cmFastRename, cmRereadDir, cmRereadInfo, cmRereadTree, cmRereadForced, cmArchiveFiles, cmTouchFile, cmChangeDirectory,
     cmQuit);
+
+function BackgroundCopyRunning: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(Jobs) do
+    if (Jobs[I].State = jsRunning) and Jobs[I].Background then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
 
 function BackgroundCopyBlocks(Command: Word): Boolean;
 var

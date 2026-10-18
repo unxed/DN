@@ -526,6 +526,7 @@ dlCopyJobClear,           'О~ч~истить'
 dlCopyStatus,             'Копия'
 dlCopyFinished,           'Копирование завершено:'
 dlCopyFailed,             'Копирование не удалось:'
+dlCopyBlocked,            'Идёт фоновое копирование. Дождитесь его или отмените: Утилиты - Задания копирования.'
 dlStoreColorPal,           'Запомнить цветовую палитру'
 
 dlSystemInfo               'Системная информация'
