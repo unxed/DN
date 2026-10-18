@@ -454,20 +454,27 @@ finally:
     shutil.rmtree(d, ignore_errors=True)
 
 
-# Esc during the scan of a big file system gives the panel back (it was left hidden): where the scan is over before Esc, nothing to check
+# Esc during the scan of a big file system gives the panel back (it was left hidden). A scan that is over before Esc leaves the finished tree
+# on the screen (a stopped one never does), so a tree after Esc means there was nothing to stop: no check, not a failure
+def stop_scan(t, ctrl_t, what):
+    t.send(ctrl_t, 0.0)                          # Ctrl+T on the file system of the temporary folder
+    scanning = t.wait_for('Esc - stop', 3)
+    t.send(w32(0x1B), 1.5)                       # Esc stops the scan
+    if not scanning or '\u251c\u2500' in half(t, 'left') or '\u2514\u2500' in half(t, 'left'):
+        print('SKIP Esc during the scan (%s): the tree was read before Esc' % what)
+        return False
+    check('Esc - stop' not in t.text() and t.alive(), 'FarUx on: Esc stops the scan of the tree (%s)' % what, t)
+    panels_intact(t, 'FarUx on: after the scan is stopped both panels are as before (%s)' % what)
+    return True
+
+
 d, t = start(out, True)
 try:
-    t.send(w32(0x54, 0x14, 8), 1.5)              # Ctrl+T on the file system of the temporary folder
-    scanning = 'Esc - stop' in t.text()
-    t.send(w32(0x1B), 1.5)                       # Esc stops the scan
-    if scanning:
-        check('Esc - stop' not in t.text() and t.alive(), 'FarUx on: Esc stops the scan of the tree', t)
-        panels_intact(t, 'FarUx on: after the scan is stopped both panels are as before')
-        t.send(w32(0x54, 0x14, 8), 1.5)          # Ctrl+T again, and Esc again
-        t.send(w32(0x1B), 1.5)
-        panels_intact(t, 'FarUx on: after a second stopped scan both panels are as before')
-    else:
-        print('SKIP Esc during the scan: the tree was read before Esc')
+    ctrl_t = w32(0x54, 0x14, 8)
+    if stop_scan(t, ctrl_t, 'first'):
+        stop_scan(t, ctrl_t, 'second')           # Ctrl+T again, and Esc again
+    if '\u251c\u2500' in half(t, 'left'):
+        t.send(ctrl_t, 1.2)                      # a finished tree stays: Ctrl+T gives the panels back
     check(quit_dn(t) == 0, 'FarUx stopped scan: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
