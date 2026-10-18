@@ -861,10 +861,10 @@ procedure MakeArchive(S: String; Files: TCollection; MoveMode, AddToExisting: Bo
           if Arc.UseLFN
           then
 
-            PutDir(MakeNormName(SS, SR.FullName))
+            PutDir(MakeNormName(SS, SR.FullName), F, PF, B, S)
 
           else
-            PutDir(MakeNormName(SS, SR.SR.Name))
+            PutDir(MakeNormName(SS, SR.SR.Name), F, PF, B, S)
 
             ;
         DosError := 0;
