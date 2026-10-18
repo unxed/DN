@@ -1198,10 +1198,13 @@ WrongArc:
     end;
 
   procedure SelecType(S: Boolean);
+    var
+      PFType: Byte;
+
     procedure Sel(P_: Pointer);
     var P: PFileRec absolute P_;
       begin
-      if  (P^.TType = PF^.TType) and (P^.TType <> ttUpDir) then
+      if  (P^.TType = PFType) and (P^.TType <> ttUpDir) then
         P^.Selected := S;
       end;
     procedure SelAll(P_: Pointer);
@@ -1215,6 +1218,7 @@ WrongArc:
     then
       Exit;
     PF := Files.At(CurPos);
+    PFType := PF^.TType;
     if PF^.TType <> ttUpDir then
       Files.ForEach(Sel)
     else
