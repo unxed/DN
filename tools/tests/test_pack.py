@@ -37,6 +37,7 @@ class LinuxPackageLayoutTest(unittest.TestCase):
                     "lib/dn/en.lng",
                     "lib/dn/dn.dlg",
                     "lib/dn/dn.hlp",
+                    "lib/dn/fishhelper.sh",
                     "lib/dn/xlt",
                     "lib/dn/dn.ext",
                     "share/applications/dn.desktop",
@@ -48,6 +49,10 @@ class LinuxPackageLayoutTest(unittest.TestCase):
                 self.assertIn('"$PREFIX/lib/dn"', wrapper)
                 self.assertIn('exec "$LIB/dn" "$@"', wrapper)
                 self.assertTrue(tar.getmember(prefix + "bin/dn").mode & 0o111)
+                helper = tar.extractfile(prefix + "lib/dn/fishhelper.sh").read()
+                source = (ROOT / "dn/third-party/f4-fish/helper.sh").read_bytes()
+                self.assertEqual(helper, source)
+                self.assertIn(prefix + "lib/dn/LICENSE-F4-FISH.TXT", names)
 
 
 if __name__ == "__main__":
