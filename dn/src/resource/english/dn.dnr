@@ -2549,6 +2549,7 @@ DIALOG dlgCopyDialog, 78, 15, 'Copy'
 ;$ENDIF
 ;$ENDIF
       ITEM 'Remove so~u~rce files'
+      ITEM 'Start in ~b~ackground'
     END
     Button 17, 12, 27, 14, 'O~K~', cmOK, bfDefault, ofPostProcess, ofPreProcess
     Button 27, 12, 37, 14, 'Cance~l~', cmCancel, ofPostProcess, ofPreProcess

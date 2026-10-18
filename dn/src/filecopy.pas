@@ -151,6 +151,13 @@ const
   cpoFromTemp = $800;
   cpoCopyDesc = $400;
   cpoFitAll = $100;
+  cpoBackground = $20; { dn#88 step 6: the copy starts in the background (CopyJobs.JobSetBackground) }
+
+  { The check boxes of dlgCopyDialog in the order of the resource, and the options they stand for (dn#88 step 6). The boxes of
+    the access rights are under $IFDEF OS2 and WIN32 there, which the resource compiler never has, so "Remove source files" is
+    the fourth box (bit $08) while its option is cpoMove ($10). }
+  CopyBoxBits: array[0..4] of Word = ($01, $02, $04, $08, $10);
+  CopyBoxOptions: array[0..4] of Word = (cpoCheckFree, cpoVerify, cpoDesc, cpoMove, cpoBackground);
 
 var
   SeekPos: TFileSize;
@@ -2409,6 +2416,8 @@ qqqq:
   else
     JobId := JobAdd(CopyDir, 0);
   JobStart(JobId);
+  if CopyOptions and cpoBackground <> 0 then
+    JobSetBackground(JobId, True); { dn#88 step 6: "Start in background" in the Copy dialog }
   R := TRect.Create(0, 0, 60, 15); {John_SW 30-06-2005}
   Info := TWhileView.Create(R);
   if CopyOptions and cpoMove <> 0 then
@@ -2649,6 +2658,7 @@ function CopyDialog(var CopyDir: String; var Mask: String; var CopyOpt: Word; va
     DT.WW1 := DT.WW1 or cpoMove;
   if  (FMSetup.Options and fmoAlwaysCopyDesc <> 0) then
     DT.WW1 := DT.WW1 or cpoDesc; {JO}
+  DT.WW1 := MapBits(DT.WW1, CopyBoxOptions, CopyBoxBits); { the dialog holds the bits of its boxes }
   if MoveMode then
     S := GetString(dlFCMove1)
   else
@@ -2749,7 +2759,7 @@ function CopyDialog(var CopyDir: String; var Mask: String; var CopyOpt: Word; va
   
   S := DT.S3;
   CopyMode := DT.WW;
-  CopyOpt := DT.WW1;
+  CopyOpt := MapBits(DT.WW1, CopyBoxBits, CopyBoxOptions);
   DelRight(S);
   DelLeft(S); {AK155}
   {AK155 22-12-2002
@@ -2799,7 +2809,7 @@ future move from ShortString to AnsiString }
   {/AK155 02-01-2003}
 
   ccCopyMode := DT.WW;
-  ccCopyOpt := DT.WW1;
+  ccCopyOpt := CopyOpt;
 
   if  (FMSetup.Options and fmoAlwaysCopyDesc = 0) and
       (SourcePanel <> nil) and
