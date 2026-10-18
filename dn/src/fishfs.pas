@@ -7,7 +7,8 @@
   The helper script is not part of the unit: Connect gets its text (dn/third-party/f4-fish/helper.sh, or the file that is installed beside the
   program as fishhelper.sh). The listings of the hosts that have GNU find or GNU stat are read (the helper reports which one it uses); BSD stat and
   ls are told as rrUnsupported for now. A file is read in pieces of one request each (OpenRead gives a stream over them). OpenWrite truncates on open
-  and sends bounded binary or base64 ranges as the caller writes. The other changes of the tree are the next steps.
+  and sends bounded binary or base64 ranges as the caller writes. MkDir, Remove, Rename and SetMode ask the helper for the change after looking at the
+  paths, so that the answers are those of TLocalFS (rrExists for a taken name, rrNotEmpty for a directory with content).
 
   When a request does not get its answer in time, or the shell ends, the connection is broken for good: the next answer could not be told from the
   late one. LastError tells why; make a new TFishFS to try again.
@@ -1106,24 +1107,97 @@ begin
   Result := rrOk;
 end;
 
-function TFishFS.MkDir(const Path: AnsiString): TRemoteResult;
+{ The permission bits as the octal digits the helper takes. }
+function OctalText(Value: LongInt): AnsiString;
 begin
-  Result := Fail(rrUnsupported, 'making a directory is not done yet: ' + Path);
+  Result := '';
+  repeat
+    Result := Chr(Ord('0') + (Value and 7)) + Result;
+    Value := Value shr 3;
+  until Value = 0;
+end;
+
+function TFishFS.MkDir(const Path: AnsiString): TRemoteResult;
+var
+  Clean, Dir, Name: AnsiString;
+  E: TRemoteEntry;
+begin
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrExists, 'already exists: ' + Path));
+  { the helper makes the missing parents too (mkdir -p) and is content with a directory that is there, so both are looked at first }
+  Result := Stat(Clean, False, E);
+  if Result = rrOk then
+    Exit(Fail(rrExists, 'already exists: ' + Path));
+  if Result <> rrNotFound then
+    Exit;
+  RemoteSplit(Clean, Dir, Name);
+  Result := Stat(Dir, True, E);
+  if Result <> rrOk then
+    Exit;
+  if E.Kind <> rkDir then
+    Exit(Fail(rrNotDir, 'not a directory: ' + Dir));
+  Result := Ask('mkdir', [Clean], nil);
 end;
 
 function TFishFS.Remove(const Path: AnsiString): TRemoteResult;
+var
+  Clean: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'removing is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrDenied, 'the root cannot be removed'));
+  Result := Stat(Clean, False, E);
+  if Result = rrOk then
+  begin
+    { rmdir tells a directory that holds something (rrNotEmpty); a link to a directory is a link and goes with rm }
+    if E.Kind = rkDir then
+      Result := Ask('rmdir', [Clean], nil)
+    else
+      Result := Ask('rm', [Clean], nil);
+    Exit;
+  end;
+  if Result <> rrUnsupported then
+    Exit;
+  { the host lists with a tool that is not read yet: rm -f does not mind a missing path, so only a directory is told by its refusal }
+  Result := Ask('rm', [Clean], nil);
+  if Result = rrIsDir then
+    Result := Ask('rmdir', [Clean], nil);
 end;
 
 function TFishFS.Rename(const OldPath, NewPath: AnsiString): TRemoteResult;
+var
+  OldClean, NewClean: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'renaming is not done yet: ' + OldPath);
+  if (not RemoteCleanPath(OldPath, OldClean)) or (not RemoteCleanPath(NewPath, NewClean)) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + OldPath));
+  if (OldClean = '/') or (NewClean = '/') then
+    Exit(Fail(rrDenied, 'the root cannot be renamed'));
+  { mv -f replaces what is there, and moves into a directory of that name: the free name is looked at first }
+  Result := Stat(OldClean, False, E);
+  if Result <> rrOk then
+    Exit;
+  Result := Stat(NewClean, False, E);
+  if Result = rrOk then
+    Exit(Fail(rrExists, 'already exists: ' + NewPath));
+  if Result <> rrNotFound then
+    Exit;
+  Result := Ask('mv', [OldClean, NewClean], nil);
 end;
 
 function TFishFS.SetMode(const Path: AnsiString; Mode: LongInt): TRemoteResult;
+var
+  Clean: AnsiString;
 begin
-  Result := Fail(rrUnsupported, 'setting the permissions is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if (Mode < 0) or (Mode > &7777) then
+    Exit(Fail(rrFailed, 'the permission bits are not right: ' + Path));
+  Result := Ask('chmod ' + OctalText(Mode), [Clean], nil);
 end;
 
 {$ENDIF}
