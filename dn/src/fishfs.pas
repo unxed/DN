@@ -150,7 +150,8 @@ var
   L: AnsiString;
 begin
   L := LowerCase(Msg);
-  if (Pos('no such file', L) > 0) or (Pos('not found', L) > 0) then
+  { dash says "cannot create ...: Directory nonexistent" where bash says "No such file or directory" }
+  if (Pos('no such file', L) > 0) or (Pos('not found', L) > 0) or (Pos('nonexistent', L) > 0) then
     Result := rrNotFound
   else if Pos('not a directory', L) > 0 then
     Result := rrNotDir
@@ -809,6 +810,18 @@ begin
   Result := rrOk;
 end;
 
+{ The encoding of the data of a "write" request for the write method the helper reports: "b64" sends one base64 line, the dd
+  methods (ddbytes, ddbs1) read the bytes as they are, "raw". '' for a method this client does not know. }
+function WriteEncoding(const Method: AnsiString): AnsiString;
+begin
+  if Method = 'b64' then
+    Result := 'b64'
+  else if (Method = 'ddbytes') or (Method = 'ddbs1') then
+    Result := 'raw'
+  else
+    Result := '';
+end;
+
 function TFishFS.WriteRange(const Path: AnsiString; Offset: Int64; const Data: AnsiString): TRemoteResult;
 var
   Clean, Term, Line, Status, Msg, Encoding, Payload: AnsiString;
@@ -820,8 +833,8 @@ begin
     Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
   if (Offset < 0) or (Data = '') or (Length(Data) > ReadChunk) then
     Exit(Fail(rrFailed, 'the range of the file is not right'));
-  Encoding := FeatureValue('write');
-  if (Encoding <> 'ddbytes') and (Encoding <> 'b64') then
+  Encoding := WriteEncoding(FeatureValue('write'));
+  if Encoding = '' then
     Exit(Fail(rrUnsupported, 'the remote host cannot write files: ' + Path));
   if Encoding = 'b64' then
     Payload := EncodeStringBase64(Data) + #10
@@ -1084,7 +1097,7 @@ begin
   Stream := nil;
   if not RemoteCleanPath(Path, Clean) then
     Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
-  if (FeatureValue('write') <> 'ddbytes') and (FeatureValue('write') <> 'b64') then
+  if WriteEncoding(FeatureValue('write')) = '' then
     Exit(Fail(rrUnsupported, 'the remote host cannot write files: ' + Path));
   Result := Ask('trunc 0', [Clean], nil);
   if Result <> rrOk then

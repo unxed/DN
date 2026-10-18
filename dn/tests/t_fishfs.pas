@@ -323,10 +323,11 @@ begin
     end
     else
       Check(False, Tag + 'the write stream can be opened for a seek test: ' + FS.LastError);
-    Check(ReadRemote(FS, Tag, Base + '/seek-write.bin', 10) = 'aZ', Tag + 'a write at a position replaces bytes after truncation');
+    { the open truncated the file, so the byte before the one written is a zero }
+    Check(ReadRemote(FS, Tag, Base + '/seek-write.bin', 10) = #0'Z', Tag + 'a write at a position after the truncation leaves a zero before it');
     Check(FS.OpenWrite(Base + '/sub', S) = rrIsDir, Tag + 'a directory cannot be opened for writing');
     Check(S = nil, Tag + 'a failed write open gives no stream');
-    Check(FS.OpenWrite(Base + '/missing/file', S) = rrNotFound, Tag + 'a missing parent is reported');
+    Check(FS.OpenWrite(Base + '/missing/file', S) = rrNotFound, Tag + 'a missing parent is reported: ' + FS.LastError);
     Check(FS.OpenWrite('plain.txt', S) = rrDenied, Tag + 'a non-absolute write path is refused');
     Check(FS.MkDir('/new-dir') = rrUnsupported, Tag + 'making a directory is not done yet');
     Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, Tag + 'setting the permissions is not done yet');
@@ -423,7 +424,15 @@ begin
   try
     for I := 0 to High(Shells) do
       if FileExists(Shells[I]) then
+      begin
+        { the writes of the shell before changed these files: every shell starts from the same tree }
+        PutText(Base + '/plain.txt', 'abc');
+        fpChmod(Base + '/plain.txt', &640);
+        FileSetDate(Base + '/plain.txt', Stamp);
+        DeleteFile(Base + '/seek-write.bin');
+        DeleteFile(Weird + '/new' + #10 + 'line/upload');
         RunWithShell(Shells[I], Helper, Base, Weird, Big);
+      end;
     RunFailures(Helper);
   finally
     RemoveTree(Base);
