@@ -108,6 +108,22 @@ begin
   end;
 end;
 
+procedure WriteRemote(FS: TFishFS; const Tag, Path, Data: AnsiString);
+var
+  S: TStream;
+begin
+  S := nil;
+  Check(FS.OpenWrite(Path, S) = rrOk, Tag + 'OpenWrite of ' + ExtractFileName(Path) + ': ' + FS.LastError);
+  if S = nil then
+    Exit;
+  try
+    if Data <> '' then
+      S.WriteBuffer(Data[1], Length(Data));
+  finally
+    S.Free;
+  end;
+end;
+
 { The path on the remote side of a path of the tree: the host is this machine, so the tree stands where Base is (TLocalFS has Base as its root). }
 function RemotePath(const Base, Dir: AnsiString): AnsiString;
 begin
@@ -164,7 +180,7 @@ var
   I: Integer;
   Want: TDateTime;
   S: TStream;
-  Got: AnsiString;
+  Got, Patch: AnsiString;
 begin
   Tag := ExtractFileName(Shell) + ': ';
   P := TNetProc.Create;
@@ -286,8 +302,32 @@ begin
     Check(ReadRemote(FS, Tag, Base + '/link/inner.bin', 4096) = StringOfChar('z', 1000), Tag + 'a file behind a link to a directory');
     Check(FS.Connected, Tag + 'the reads leave the connection open');
 
-    { what is not done yet }
-    Check(FS.OpenWrite(Base + '/new-file', S) = rrUnsupported, Tag + 'writing a file is not done yet');
+    { writing truncates on open, streams raw bytes in bounded frames, and accepts line-based encoded paths }
+    Check(FS.HasFeature('write'), Tag + 'the helper reports a write method');
+    WriteRemote(FS, Tag, Base + '/plain.txt', 'replacement');
+    Check(ReadRemote(FS, Tag, Base + '/plain.txt', 3) = 'replacement', Tag + 'an existing file is truncated and replaced');
+    WriteRemote(FS, Tag, Weird + '/new' + #10 + 'line/upload', LoadText(Big));
+    Check(ReadRemote(FS, Tag, Weird + '/new' + #10 + 'line/upload', 65536) = LoadText(Big),
+      Tag + 'a 1 MB file with zero bytes and line endings is uploaded unchanged to an encoded path');
+    WriteRemote(FS, Tag, Base + '/seek-write.bin', 'abc');
+    if FS.OpenWrite(Base + '/seek-write.bin', S) = rrOk then
+    begin
+      try
+        Check(S.Seek(1, soBeginning) = 1, Tag + 'the write stream can seek');
+        Patch := 'Z';
+        S.WriteBuffer(Patch[1], 1);
+        Check(S.Size = 2, Tag + 'the write stream reports its current extent');
+      finally
+        S.Free;
+      end;
+    end
+    else
+      Check(False, Tag + 'the write stream can be opened for a seek test: ' + FS.LastError);
+    Check(ReadRemote(FS, Tag, Base + '/seek-write.bin', 10) = 'aZ', Tag + 'a write at a position replaces bytes after truncation');
+    Check(FS.OpenWrite(Base + '/sub', S) = rrIsDir, Tag + 'a directory cannot be opened for writing');
+    Check(S = nil, Tag + 'a failed write open gives no stream');
+    Check(FS.OpenWrite(Base + '/missing/file', S) = rrNotFound, Tag + 'a missing parent is reported');
+    Check(FS.OpenWrite('plain.txt', S) = rrDenied, Tag + 'a non-absolute write path is refused');
     Check(FS.MkDir('/new-dir') = rrUnsupported, Tag + 'making a directory is not done yet');
     Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, Tag + 'setting the permissions is not done yet');
   finally

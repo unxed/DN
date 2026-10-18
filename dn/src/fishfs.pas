@@ -6,8 +6,8 @@
 
   The helper script is not part of the unit: Connect gets its text (dn/third-party/f4-fish/helper.sh, or the file that is installed beside the
   program as fishhelper.sh). The listings of the hosts that have GNU find or GNU stat are read (the helper reports which one it uses); BSD stat and
-  ls are told as rrUnsupported for now. A file is read in pieces of one request each (OpenRead gives a stream over them). Writing a file, and the
-  changes of the tree, are the next steps: those methods answer rrUnsupported until then.
+  ls are told as rrUnsupported for now. A file is read in pieces of one request each (OpenRead gives a stream over them). OpenWrite truncates on open
+  and sends bounded binary or base64 ranges as the caller writes. The other changes of the tree are the next steps.
 
   When a request does not get its answer in time, or the shell ends, the connection is broken for good: the next answer could not be told from the
   late one. LastError tells why; make a new TFishFS to try again.
@@ -48,6 +48,7 @@ type
     function SendRequest(const Cmd: AnsiString; const Paths: array of AnsiString; out Id: Integer): Boolean;
     function Request(const Cmd: AnsiString; const Paths: array of AnsiString; Lines: TStrings; out Status, Msg: AnsiString): Boolean;
     function Ask(const Cmd: AnsiString; const Paths: array of AnsiString; Lines: TStrings): TRemoteResult;
+    function WriteRange(const Path: AnsiString; Offset: Int64; const Data: AnsiString): TRemoteResult;
   public
     { Proc is the program that talks the protocol (already started); OwnsProc: it is freed with this file system. }
     constructor Create(AProc: TNetProc; AOwnsProc: Boolean);
@@ -808,6 +809,67 @@ begin
   Result := rrOk;
 end;
 
+function TFishFS.WriteRange(const Path: AnsiString; Offset: Int64; const Data: AnsiString): TRemoteResult;
+var
+  Clean, Term, Line, Status, Msg, Encoding, Payload: AnsiString;
+  Id, P: Integer;
+  Deadline: QWord;
+  GotDataMark: Boolean;
+begin
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if (Offset < 0) or (Data = '') or (Length(Data) > ReadChunk) then
+    Exit(Fail(rrFailed, 'the range of the file is not right'));
+  Encoding := FeatureValue('write');
+  if (Encoding <> 'ddbytes') and (Encoding <> 'b64') then
+    Exit(Fail(rrUnsupported, 'the remote host cannot write files: ' + Path));
+  if Encoding = 'b64' then
+    Payload := EncodeStringBase64(Data) + #10
+  else
+    Payload := Data;
+  if not SendRequest('write ' + IntToStr(Offset) + ' ' + IntToStr(Length(Data)) + ' ' + Encoding, [Clean], Id) then
+    Exit(rrFailed);
+  if not FProc.Write(Payload) then
+  begin
+    Broke('cannot send file data to the remote shell');
+    Exit(rrFailed);
+  end;
+  Term := '.' + FToken + ' ' + IntToStr(Id) + ' ';
+  Deadline := GetTickCount64 + QWord(FTimeoutMs);
+  GotDataMark := False;
+  while True do
+  begin
+    if not ReadLine(Deadline, Line) then
+      Exit(rrFailed);
+    if Copy(Line, 1, Length(Term)) = Term then
+      Break;
+    if Copy(Line, 1, Length(FToken) + 2) = '.' + FToken + ' ' then
+    begin
+      Broke('the answers are out of step');
+      Exit(rrFailed);
+    end;
+    if Line = 'D' then
+      GotDataMark := True;
+  end;
+  if not GotDataMark then
+  begin
+    Broke('the remote side did not confirm receiving the file data');
+    Exit(rrFailed);
+  end;
+  Msg := Copy(Line, Length(Term) + 1, Length(Line));
+  P := Pos(' ', Msg);
+  if P = 0 then
+    Status := Msg
+  else
+  begin
+    Status := Copy(Msg, 1, P - 1);
+    Msg := Copy(Msg, P + 1, Length(Msg));
+  end;
+  if Status = 'ok' then
+    Exit(rrOk);
+  Result := Fail(ResultOfMessage(Msg), 'the remote side says: ' + Msg + ': ' + Path);
+end;
+
 { The stream of OpenRead: the piece of the file that was read last is kept, a read that goes outside it asks for the piece (ReadChunk bytes, from a
   multiple of ReadChunk) that holds the place. }
 type
@@ -895,6 +957,82 @@ begin
   Result := FPos;
 end;
 
+type
+  TFishWriteStream = class(TStream)
+  private
+    FFS: TFishFS;
+    FPath: AnsiString;
+    FPos, FSize: Int64;
+  protected
+    function GetSize: Int64; override;
+  public
+    constructor Create(AFS: TFishFS; const APath: AnsiString);
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TFishWriteStream.Create(AFS: TFishFS; const APath: AnsiString);
+begin
+  inherited Create;
+  FFS := AFS;
+  FPath := APath;
+end;
+
+function TFishWriteStream.GetSize: Int64;
+begin
+  Result := FSize;
+end;
+
+function TFishWriteStream.Read(var Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  raise EReadError.Create('the stream of a remote file is for writing only');
+end;
+
+function TFishWriteStream.Write(const Buffer; Count: LongInt): LongInt;
+var
+  Data: AnsiString;
+  Dest: PByte;
+  Take: Integer;
+begin
+  Result := 0;
+  if Count < 0 then
+    raise EWriteError.Create('the number of bytes to write is negative');
+  if Count = 0 then
+    Exit;
+  if FPos > High(Int64) - Count then
+    raise EWriteError.Create('the file position is too large');
+  Dest := @Buffer;
+  while Result < Count do
+  begin
+    Take := Count - Result;
+    if Take > ReadChunk then
+      Take := ReadChunk;
+    SetLength(Data, Take);
+    Move(Dest^, Data[1], Take);
+    if FFS.WriteRange(FPath, FPos, Data) <> rrOk then
+      raise EWriteError.Create(FFS.LastError);
+    Inc(FPos, Take);
+    Inc(Dest, Take);
+    Inc(Result, Take);
+    if FPos > FSize then
+      FSize := FPos;
+  end;
+end;
+
+function TFishWriteStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  case Origin of
+    soBeginning: FPos := Offset;
+    soCurrent: FPos := FPos + Offset;
+    soEnd: FPos := FSize + Offset;
+  end;
+  if FPos < 0 then
+    FPos := 0;
+  Result := FPos;
+end;
+
 function TFishFS.OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult;
 var
   Clean, Dummy: AnsiString;
@@ -931,9 +1069,19 @@ begin
 end;
 
 function TFishFS.OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+var
+  Clean: AnsiString;
 begin
   Stream := nil;
-  Result := Fail(rrUnsupported, 'writing a file is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if (FeatureValue('write') <> 'ddbytes') and (FeatureValue('write') <> 'b64') then
+    Exit(Fail(rrUnsupported, 'the remote host cannot write files: ' + Path));
+  Result := Ask('trunc 0', [Clean], nil);
+  if Result <> rrOk then
+    Exit;
+  Stream := TFishWriteStream.Create(Self, Clean);
+  Result := rrOk;
 end;
 
 function TFishFS.MkDir(const Path: AnsiString): TRemoteResult;
