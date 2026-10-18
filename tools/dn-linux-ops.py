@@ -244,6 +244,7 @@ def background_copy(out, d):
             check(returned, 'Background: the panels return', t.text())
             went_background = bool(returned)
             if still_copying:
+                t.send(F['UP'], 0.3)                    # the panel moves; back on source, which the waiting copy copies again
                 t.send(F['DOWN'], 0.5)
                 t.send(F['F5'], 0.5)
                 # dn#88 step 5b: F5 during the background copy opens the Copy dialog, and OK puts the copy in the job list as a
@@ -369,6 +370,17 @@ def background_copy(out, d):
               'Background: every source file finishes with the same contents '
               '(finished %r, %d of %d files exist, %d with other contents, source is a directory %r)' % (
                   finished, len(copied), nfiles, len(wrong), os.path.isdir(src)), t.text())
+        # dn#88 step 5c: the copy that waited in the list starts by itself when the first one ends, in the background too, and
+        # only the last copy says that it is done
+        if f5_queued:
+            queued_expected = [os.path.join(w, 'waiting', 'source', 'file%03d.dat' % i) for i in range(nfiles)]
+            queued_finished = t.until(lambda: all(os.path.isfile(p) for p in queued_expected), 120.0)
+            queued_copied = [p for p in queued_expected if os.path.isfile(p)]
+            queued_wrong = [p for p in queued_copied if open(p, 'rb').read() != payload]
+            check(queued_finished and not queued_wrong,
+                  'Background: the waiting copy starts after the first one and finishes every file with the same contents '
+                  '(finished %r, %d of %d files exist, %d with other contents)' % (
+                      queued_finished, len(queued_copied), nfiles, len(queued_wrong)), t.text())
         if went_background and (keys_met_end or list_met_end):
             # the message waits for a key and the Esc that closed the list of jobs can have closed it (dn-linux #781, head 14f7f94, both jobs with this check:
             # 3963 of 4096 files at 6 seconds, the copy ended while Alt-U, j and Esc were pressed): only a copy that still runs when the
