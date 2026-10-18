@@ -697,6 +697,37 @@ procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     end;
 {--- finish -------- Eugeny Zvyagintzev ---- 30-06-2005 -----}
 
+  function CheckI24Abort: Boolean;
+    begin
+    CheckI24Abort := Abort;
+    if not Abort then
+      Exit;
+    CopyCancel := True;
+    end;
+
+  procedure NoWrite;
+    begin
+    CopyCancel := True;
+    ForceDispatch;
+    CantWrite(CurNewName);
+    end;
+
+  function WriteCount: String;
+    begin
+    WriteCount := FStr(ToWrite)+GetString(dlBytes)+GetPercent(ToWrite)
+      +GetString(dlFC_Written);
+    SetTitle(GetPercent((ToWrite+ToRead) div 2)+GetString(dlCopied));
+    end;
+
+  procedure TrySetArch;
+    begin
+    if  (ExAttr and (ReadOnly+SysFile+Hidden) <> 0) then
+      begin
+      lSetFAttr(WriteStream, Archive);
+      ClrIO;
+      end;
+    end;
+
   procedure MaxWrite;
     label DoRewrite, DoAppend, 1, 2, lbStartWrite, lbStartCheck
       , lRetryToReset;
@@ -766,13 +797,6 @@ Moreover, on a negative answer the created file remains
       SkipRequested := iQueue >= CopyQueue.Count-1;
       end;
 
-    function CheckI24Abort: Boolean;
-      begin
-      CheckI24Abort := Abort;
-      if not Abort then
-        Exit;
-      CopyCancel := True;
-      end;
     const
       CrcTable: array[0..255] of Word = (
         $0000, $1021, $2042, $3063, $4084, $50a5, $60c6, $70e7,
@@ -829,29 +853,6 @@ Moreover, on a negative answer the created file remains
       for I := 0 to pred(BfLen) do
         Crc := UpdateCrc(Data[I], Crc);
       GetCrc := Crc;
-      end;
-
-    procedure NoWrite;
-      begin
-      CopyCancel := True;
-      ForceDispatch;
-      CantWrite(CurNewName);
-      end;
-
-    function WriteCount: String;
-      begin
-      WriteCount := FStr(ToWrite)+GetString(dlBytes)+GetPercent(ToWrite)
-        +GetString(dlFC_Written);
-      SetTitle(GetPercent((ToWrite+ToRead) div 2)+GetString(dlCopied));
-      end;
-
-    procedure TrySetArch;
-      begin
-      if  (ExAttr and (ReadOnly+SysFile+Hidden) <> 0) then
-        begin
-        lSetFAttr(WriteStream, Archive);
-        ClrIO;
-        end;
       end;
 
     var
