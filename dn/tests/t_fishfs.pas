@@ -181,6 +181,7 @@ var
   Want: TDateTime;
   S: TStream;
   Got, Patch: AnsiString;
+  Info: BaseUnix.Stat;
 begin
   Tag := ExtractFileName(Shell) + ': ';
   P := TNetProc.Create;
@@ -329,8 +330,56 @@ begin
     Check(S = nil, Tag + 'a failed write open gives no stream');
     Check(FS.OpenWrite(Base + '/missing/file', S) = rrNotFound, Tag + 'a missing parent is reported: ' + FS.LastError);
     Check(FS.OpenWrite('plain.txt', S) = rrDenied, Tag + 'a non-absolute write path is refused');
-    Check(FS.MkDir('/new-dir') = rrUnsupported, Tag + 'making a directory is not done yet');
-    Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, Tag + 'setting the permissions is not done yet');
+
+    { the changes of the tree answer as TLocalFS does: a taken name, a missing or wrong parent, a directory with content }
+    Check(FS.MkDir(Base + '/made') = rrOk, Tag + 'a directory is made: ' + FS.LastError);
+    Check(DirectoryExists(Base + '/made'), Tag + 'the directory is there');
+    Check(FS.MkDir(Base + '/made') = rrExists, Tag + 'a directory that is there is not made again');
+    Check(FS.MkDir(Base + '/plain.txt') = rrExists, Tag + 'a file of that name stops the directory');
+    Check(FS.MkDir(Base + '/no-parent/child') = rrNotFound, Tag + 'the missing parents are not made');
+    Check(not DirectoryExists(Base + '/no-parent'), Tag + 'no directory is left behind by the refusal');
+    Check(FS.MkDir(Base + '/plain.txt/child') = rrNotDir, Tag + 'a file is not a parent');
+    Check(FS.MkDir('relative') = rrDenied, Tag + 'a non-absolute path is refused for a directory');
+    Check(FS.MkDir('/') = rrExists, Tag + 'the root is there');
+    Check(FS.MkDir(Base + '/made' + #10 + 'line') = rrOk, Tag + 'a directory with a line end in its name is made');
+    Check(DirectoryExists(Base + '/made' + #10 + 'line'), Tag + 'and it is there under that name');
+    Check(FS.Remove(Base + '/made' + #10 + 'line') = rrOk, Tag + 'it is removed');
+    Check(not DirectoryExists(Base + '/made' + #10 + 'line'), Tag + 'and it is gone');
+
+    WriteRemote(FS, Tag, Base + '/tmp-a.txt', 'data');
+    Check(FS.Rename(Base + '/tmp-a.txt', Base + '/tmp-b.txt') = rrOk, Tag + 'a file is renamed: ' + FS.LastError);
+    Check((not FileExists(Base + '/tmp-a.txt')) and (ReadRemote(FS, Tag, Base + '/tmp-b.txt', 10) = 'data'), Tag + 'the file has the new name and its content');
+    Check(FS.Rename(Base + '/tmp-b.txt', Base + '/plain.txt') = rrExists, Tag + 'a file is not renamed over another');
+    Check(FS.Rename(Base + '/tmp-b.txt', Base + '/sub') = rrExists, Tag + 'a file is not renamed to the name of a directory');
+    Check(not FileExists(Base + '/sub/tmp-b.txt'), Tag + 'and is not moved into that directory');
+    Check(FS.Rename(Base + '/nothing-here', Base + '/other') = rrNotFound, Tag + 'a missing file is not renamed');
+    Check(FS.Rename(Base + '/tmp-b.txt', Base + '/no-parent/x') = rrNotFound, Tag + 'a missing directory for the new name is reported');
+    Check(FS.Rename(Base + '/made', Base + '/moved') = rrOk, Tag + 'a directory is renamed');
+    Check(DirectoryExists(Base + '/moved') and (not DirectoryExists(Base + '/made')), Tag + 'the directory has the new name');
+    Check(FS.Rename('relative', Base + '/x') = rrDenied, Tag + 'a non-absolute path is refused for a rename');
+    Check(FS.Rename('/', Base + '/x') = rrDenied, Tag + 'the root is not renamed');
+
+    Check(FS.SetMode(Base + '/tmp-b.txt', &600) = rrOk, Tag + 'the permissions are set: ' + FS.LastError);
+    Check((fpStat(PChar(Base + '/tmp-b.txt'), Info) = 0) and ((Info.st_mode and &7777) = &600), Tag + 'the file has the new permissions');
+    Check(FS.SetMode(Base + '/tmp-b.txt', &4755) = rrOk, Tag + 'the special bits are set too');
+    Check((fpStat(PChar(Base + '/tmp-b.txt'), Info) = 0) and ((Info.st_mode and &7777) = &4755), Tag + 'the file has them');
+    Check(FS.SetMode(Base + '/nothing-here', &600) = rrNotFound, Tag + 'the permissions of a missing path are not set');
+    Check(FS.SetMode(Base + '/tmp-b.txt', -1) = rrFailed, Tag + 'permissions that are no bits are refused');
+    Check(FS.SetMode('relative', &600) = rrDenied, Tag + 'a non-absolute path is refused for permissions');
+
+    fpSymlink(PChar('sub'), PChar(Base + '/tmp-link'));
+    Check(FS.Remove(Base + '/sub') = rrNotEmpty, Tag + 'a directory with content is not removed: ' + FS.LastError);
+    Check(DirectoryExists(Base + '/sub'), Tag + 'and stays');
+    Check(FS.Remove(Base + '/tmp-link') = rrOk, Tag + 'a link to a directory is removed as a link');
+    Check(DirectoryExists(Base + '/sub') and (fpLStat(PChar(Base + '/tmp-link'), Info) <> 0), Tag + 'the directory behind it stays');
+    Check(FS.Remove(Base + '/tmp-b.txt') = rrOk, Tag + 'a file is removed');
+    Check(not FileExists(Base + '/tmp-b.txt'), Tag + 'and is gone');
+    Check(FS.Remove(Base + '/moved') = rrOk, Tag + 'an empty directory is removed');
+    Check(not DirectoryExists(Base + '/moved'), Tag + 'and is gone as well');
+    Check(FS.Remove(Base + '/nothing-here') = rrNotFound, Tag + 'a missing path is not removed');
+    Check(FS.Remove('/') = rrDenied, Tag + 'the root is not removed');
+    Check(FS.Remove('relative') = rrDenied, Tag + 'a non-absolute path is refused for a remove');
+    Check(FS.Connected, Tag + 'the changes leave the connection open');
   finally
     Local.Free;
     FS.Free;
