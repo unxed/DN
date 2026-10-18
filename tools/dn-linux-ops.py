@@ -202,7 +202,8 @@ def background_copy(out, d):
         t.send(F['HOME'], 0.2)
         t.send(F['DOWN'], 0.2)                           # .., destination, source
         t.send(F['ENTER'], 0.6)                          # into destination
-        other_panel_ready = 'source' not in right_half(t.text())   # nothing is copied yet: only ".." is listed
+        other_panel_screen = t.text()
+        other_panel_ready = 'source' not in right_half(other_panel_screen)   # nothing is copied yet: only ".." is listed
         t.send(F['TAB'], 0.3)
         t.send(F['HOME'], 0.2)
         t.send(F['DOWN'], 0.2)                           # .., destination, source
@@ -346,6 +347,8 @@ def background_copy(out, d):
                     check(shown, 'Background: the receiving panel lists the copied directory after the copy ends', t.text())
                 else:
                     print('SKIP receiving panel: the other panel did not show the empty destination before the copy', flush=True)
+                    print('--- screen before the background copy (left and right panels):\n' + other_panel_screen, flush=True)
+                    print('--- right panel before the background copy:\n' + right_half(other_panel_screen), flush=True)
         clock_back = t.until(lambda: re.search(r'\bCopy\b', t.text().split('\n')[0]) is None, 5.0)
         check(clock_back, 'Background: the clock comes back when the copy ends (%r)' % t.text().split('\n')[0].strip()[-24:],
               t.text())
