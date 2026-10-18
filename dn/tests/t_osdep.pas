@@ -153,6 +153,20 @@ begin
 {$ELSE}
   Check(not SysSkipInTree('C:\', 'proc'), 'tree: nothing is skipped');
 {$ENDIF}
+{$IFDEF UNIX}
+  Check(SysMountPoint('/') = '/', 'mount point: the root is the mount point of itself');
+  Check((SysMountPoint('/tmp/') <> '') and (Copy('/tmp/', 1, Length(SysMountPoint('/tmp/'))) = SysMountPoint('/tmp/')),
+    'mount point: that of /tmp is /tmp/ or one of its parents, with a separator at the end');
+  Check(SysMountPoint('/tmp') = SysMountPoint('/tmp/'), 'mount point: a separator at the end of the folder changes nothing');
+  Check(SysMountPoint('/no/such/dir_osdep_xyz') = '', 'mount point: a folder that does not exist has none');
+  Check(not SysOtherFileSystem('/', '/'), 'file systems: the root is on its own');
+  Check(not SysOtherFileSystem(SysMountPoint('/tmp/'), '/tmp/'), 'file systems: /tmp is on that of its mount point');
+  if DirectoryExists('/proc') then
+    Check(SysOtherFileSystem('/', '/proc'), 'file systems: /proc is another one than the root');
+{$ELSE}
+  Check(SysMountPoint('C:\') = '', 'mount point: none where the drives have their roots');
+  Check(not SysOtherFileSystem('C:\', 'C:\dir'), 'file systems: one per drive');
+{$ENDIF}
   { the time of a search record is the DOS packed time on every target (on Unix SysUtils gives the Unix time: the panels showed garbage dates) }
 {$IFDEF UNIX}
   Stamp := DateTimeToFileDate(EncodeDate(2026, 10, 6) + EncodeTime(19, 46, 10, 0));

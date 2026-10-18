@@ -548,8 +548,7 @@ procedure TDoubleWindow.SwitchView(dtType: Byte);
     R1: TRect;
     V: TView;
     N, Selected: TPanelNum;
-    VisibleN: Boolean;
-  label Ex;
+    VisibleN, Made: Boolean;
   begin
   Lock;
 
@@ -578,12 +577,15 @@ hide the file panel}
       Free;
     end;
 
+  Made := False;
   if NonFilePanelType <> dtType then
     begin
     NonFilePanelType := 0;
     V := PanelConstructor[dtType](R1, Self, Panel[not N].FilePanel);
-    if V = nil then
-      goto Ex;
+    Made := V <> nil;
+    end;
+  if Made then
+    begin
     NonFilePanel := N;
     NonFilePanelType := dtType;
     Panel[N].AnyPanel := V;
@@ -617,7 +619,6 @@ hide the file panel}
         SwitchPanel(N);
     end;
 
-Ex:
   UnLock;
   end { TDoubleWindow.SwitchView };
 

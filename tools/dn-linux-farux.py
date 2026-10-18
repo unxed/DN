@@ -14,10 +14,13 @@ sort the focused panel by name, extension and modification time, Ctrl+F12 opens 
 win32 input mode (TV_WIN32_INPUT=1), the Alt trigger additionally
 over a plain ESC prefix. Ctrl+H toggles hidden files in the focused panel
 only when FarUxMode is on. With the mode on the keys DN shares with Far still work: Ctrl+R,
-Ctrl+PgDn/PgUp, Tab, Ctrl+U, Ctrl+Q and Ctrl+L. usage: tools/dn-linux-farux.py OUTDIR"""
+Ctrl+PgDn/PgUp, Tab, Ctrl+U, Ctrl+Q and Ctrl+L. Ctrl+T shows the tree of the file system of the current folder (the folders next to
+it, none of the file systems mounted inside it), the second Ctrl+T gives the file panel back, and Esc during the scan does the same.
+usage: tools/dn-linux-farux.py OUTDIR"""
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -34,7 +37,7 @@ def w32(vk, uc=0, cs=0, sc=0):
     return '\x1b[%d;%d;%d;1;%d;1_\x1b[%d;%d;%d;0;%d;1_' % (vk, sc, uc, cs, vk, sc, uc, cs)
 
 
-def start(out, farux, sort_files=False, hidden_files=False):
+def start(out, farux, sort_files=False, hidden_files=False, base=None):
     d = tempfile.mkdtemp(prefix='dnfar-')
     for f in os.listdir(out):
         if f == 'dn' or f.upper().endswith(('.LNG', '.DLG', '.HLP')):
@@ -44,7 +47,7 @@ def start(out, farux, sort_files=False, hidden_files=False):
     if farux:
         with open(os.path.join(d, 'dn.ini'), 'w') as f:
             f.write('[FilePanels]\nFarUxMode=1\n')
-    w = os.path.join(d, 'work')
+    w = os.path.join(base or d, 'work')
     os.makedirs(w)
     open(os.path.join(w, 'alpha1.txt'), 'w').write('first\n')
     open(os.path.join(w, 'alpha2.txt'), 'w').write('other\n')
@@ -377,6 +380,102 @@ try:
     title = ''.join(c for c, _ in t.screen.cells[1])[50:]
     check(' / ' in title and 'work' not in title, 'FarUx on: Ctrl+\\ goes to the root folder', t)
     check(quit_dn(t) == 0, 'FarUx Ctrl+\\: DN ends with 0')
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def mount_tmpfs(path):
+    return subprocess.run(['sudo', '-n', 'mount', '-t', 'tmpfs', '-o', 'size=8m,mode=1777', 'tmpfs', path],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
+def tree_base():
+    """a folder with two folders next to the one DN starts in; where sudo allows it the folder is a file system of its own (a tmpfs),
+    with another tmpfs mounted inside: the tree is then read in a moment, and the inner file system must not be in it"""
+    base = tempfile.mkdtemp(prefix='dnfartree-')
+    mounted = []
+    if shutil.which('sudo') and mount_tmpfs(base):
+        mounted.append(base)
+        inner = os.path.join(base, 'inner')
+        os.makedirs(inner)
+        if mount_tmpfs(inner):
+            mounted.append(inner)
+            os.makedirs(os.path.join(inner, 'foreign_probe'))
+    for name in ('zz_sibling_one', 'zz_sibling_two'):
+        os.makedirs(os.path.join(base, name))
+    return base, mounted
+
+
+def drop_tree_base(base, mounted):
+    for m in reversed(mounted):
+        subprocess.run(['sudo', '-n', 'umount', m], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    shutil.rmtree(base, ignore_errors=True)
+
+
+def half(t, side):
+    return '\n'.join(r[:50] if side == 'left' else r[50:] for r in screen_rows(t))
+
+
+def panels_intact(t, what):
+    # both halves hold the file panel of work (the file names, the titles), the right one is focused
+    l, r = panel_titles(t)
+    check('alpha1' in half(t, 'left') and 'alpha1' in half(t, 'right') and 'work' in l and 'work' in r
+          and focused_side(t) == 'right', what, t)
+
+
+# Ctrl+T: the tree of the file system of the current folder (a host without drives has no drive to take the tree of)
+base, mounted = tree_base()
+d, t = start(out, True, base=base)
+try:
+    ctrl_t = w32(0x54, 0x14, 8)
+    t.send(ctrl_t, 1.0)                          # Ctrl+T
+    # a tmpfs of its own is read in a moment; the whole file system of the runner is not
+    shown = t.wait_for('zz_sibling_one', 30 if mounted else 400)
+    check(shown and 'zz_sibling_two' in half(t, 'left'),
+          'FarUx on: Ctrl+T shows the tree with the folders next to the current one', t)
+    if len(mounted) == 2:
+        check('foreign_probe' not in t.text() and 'inner' not in half(t, 'left'),
+              'FarUx on: the tree does not enter a file system mounted inside it', t)
+    else:
+        print('SKIP the file system mounted inside the tree: no sudo to mount one')
+    t.send(ctrl_t, 1.2)                          # Ctrl+T again: the file panel is back
+    check('zz_sibling_one' not in t.text() and t.alive(), 'FarUx on: the second Ctrl+T closes the tree', t)
+    panels_intact(t, 'FarUx on: after the second Ctrl+T both panels are as before, none is shrunk')
+    t.send(ctrl_t, 1.5)                          # Ctrl+T: the tree again, now from the cache
+    check(t.wait_for('zz_sibling_one', 30), 'FarUx on: Ctrl+T shows the tree again', t)
+    t.send(w32(0x1B), 1.0)                       # Esc in the tree
+    t.send(ctrl_t, 1.2)                          # Ctrl+T: the panels, whether the tree has stayed or not
+    if 'zz_sibling_one' in t.text():
+        t.send(ctrl_t, 1.2)
+    panels_intact(t, 'FarUx on: after Esc and Ctrl+T both panels are as before')
+    check(quit_dn(t) == 0, 'FarUx Ctrl+T: DN ends with 0')
+finally:
+    drop_tree_base(base, mounted)
+    shutil.rmtree(d, ignore_errors=True)
+
+
+# Esc during the scan of a big file system gives the panel back (it was left hidden). A scan that is over before Esc leaves the finished tree
+# on the screen (a stopped one never does), so a tree after Esc means there was nothing to stop: no check, not a failure
+def stop_scan(t, ctrl_t, what):
+    t.send(ctrl_t, 0.0)                          # Ctrl+T on the file system of the temporary folder
+    scanning = t.wait_for('Esc - stop', 3)
+    t.send(w32(0x1B), 1.5)                       # Esc stops the scan
+    if not scanning or '\u251c\u2500' in half(t, 'left') or '\u2514\u2500' in half(t, 'left'):
+        print('SKIP Esc during the scan (%s): the tree was read before Esc' % what)
+        return False
+    check('Esc - stop' not in t.text() and t.alive(), 'FarUx on: Esc stops the scan of the tree (%s)' % what, t)
+    panels_intact(t, 'FarUx on: after the scan is stopped both panels are as before (%s)' % what)
+    return True
+
+
+d, t = start(out, True)
+try:
+    ctrl_t = w32(0x54, 0x14, 8)
+    if stop_scan(t, ctrl_t, 'first'):
+        stop_scan(t, ctrl_t, 'second')           # Ctrl+T again, and Esc again
+    if '\u251c\u2500' in half(t, 'left'):
+        t.send(ctrl_t, 1.2)                      # a finished tree stays: Ctrl+T gives the panels back
+    check(quit_dn(t) == 0, 'FarUx stopped scan: DN ends with 0')
 finally:
     shutil.rmtree(d, ignore_errors=True)
 
