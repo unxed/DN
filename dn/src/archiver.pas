@@ -814,16 +814,7 @@ procedure MakeArchive(S: String; Files: TCollection; MoveMode, AddToExisting: Bo
     B: Boolean;
     SIntern: String;
 
-  function MakeListFile(var B: Boolean): AnsiString;
-    var
-      F: lText;
-      PF: PFileRec;
-      I: Integer;
-      S: AnsiString;
-      S1: String;
-      SR: lSearchRec; {JO}
-
-    procedure PutDir(const SS: String);
+  procedure PutDir(const SS: String; var F: lText; PF: PFileRec; var B: Boolean; var S: AnsiString);
       var
         I: Integer;
         S1: String;
@@ -843,13 +834,13 @@ procedure MakeArchive(S: String; Files: TCollection; MoveMode, AddToExisting: Bo
       lFindFirst(MakeNormName(SS, x_x), AnyFileDir, SR); {JO}
       while (DosError = 0) and not Abort {and (Length(S) < 100)} do
         begin
-        
+
         if Arc.UseLFN
         then
           S1 := GetLongRelPath(MakeNormName(SS, SR.FullName))
         else
           S1 := GetShortRelPath(MakeNormName(SS, SR.SR.Name));
-        
+
         {JO:  use character #$14 for temporary separation of file names}
         if  (SR.SR.Attr and (Directory +VolumeID ) =
              0)
@@ -866,21 +857,30 @@ procedure MakeArchive(S: String; Files: TCollection; MoveMode, AddToExisting: Bo
             (D.Options and $40 <> 0)
         then
           {piwamoto.src.end}
-          
+
           if Arc.UseLFN
           then
-            
+
             PutDir(MakeNormName(SS, SR.FullName))
-            
+
           else
             PutDir(MakeNormName(SS, SR.SR.Name))
-            
+
             ;
         DosError := 0;
         lFindNext(SR);
         end;
       lFindClose(SR);
       end { PutDir };
+
+  function MakeListFile(var B: Boolean): AnsiString;
+    var
+      F: lText;
+      PF: PFileRec;
+      I: Integer;
+      S: AnsiString;
+      S1: String;
+      SR: lSearchRec; {JO}
 
     begin { MakeListFile }
     B := (CnvString(Arc.ComprListChar) = ' ')
@@ -925,7 +925,7 @@ procedure MakeArchive(S: String; Files: TCollection; MoveMode, AddToExisting: Bo
       else if B then
         S := S+#$14+SquashesName(S1+'\*.*')
       else if Arc.PutDirs then
-        PutDir(S1)
+        PutDir(S1, F, PF, B, S)
       else {JO}
         {for empty directories must supply the name without a mask, otherwise}
         begin
