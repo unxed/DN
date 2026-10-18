@@ -1,0 +1,2 @@
+# Files of dn/src and dn/compat that bring network code in (tools/net-audit.sh), one path relative to the root per line; the plan is unxed/dn#90.
+dn/src/fishfs.pas   # the FISH+ client (the protocol is spoken over a shell, later over ssh)

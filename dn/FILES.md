@@ -191,6 +191,7 @@ no silent gaps (post-class criterion A).
 | `inifiles.pas` | generic INI parse helpers under `iniengine` |
 | `listmakr.pas` | string-list maker used by the resource toolchain |
 | `messages.pas` | message boxes / `ErrMsg` wrappers over `tv/` |
+| `fishfs.pas` (ours) | `TFishFS`, the file system of a remote host reached through a shell over the FISH+ protocol (the helper script is sent, then lists and stat are asked for; the other methods follow, unxed/dn#90); empty in DOS and DN_MINI |
 | `netproc.pas` (ours) | a child process with its three pipes, read with a time limit: the transport for the file systems that talk to a remote side through a program (unxed/dn#90); empty in DOS and DN_MINI |
 | `netsplit.pas` (ours) | an address `scheme://user:password@host:port/path` split into its parts and put together again, the percent coding (unxed/dn#90) |
 | `objtype.pas` | stream object-type numbers (`ot*`) for DN classes |
