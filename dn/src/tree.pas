@@ -262,6 +262,52 @@ function ESC_Pressed: Boolean;
   GetKeyEvent(E);
   ESC_Pressed := (E.What = evKeyDown) and (DNKeyCode(E) = kbESC)
   end;
+
+var
+  { A host without drives has the one tree of files, drive C. The tree of a panel is made of the file system that its folder is on, so each such file system
+    is a drive of its own here (C, D, ...), with its own tree in DrvTrees and its own root in MountRoots. }
+  MountRoots: array['A'..'Z'] of String;
+
+{ The folder that the tree of the drive C starts at: the root of the drive ("C:\"); on a host without drives the root of the file system (its mount point). }
+function TreeRootOf(C: Char): String;
+  begin
+  C := UpCase(C);
+  if  (not HasDrives) and (C in ['A'..'Z']) and (MountRoots[C] <> '') then
+    Result := MountRoots[C]
+  else
+    Result := DriveRoot(C);
+  end;
+
+{ The drive whose tree shows Path. On a host without drives it is picked by the file system of Path: the folder of a panel
+  gets the tree of its file system, and not the tree of the whole host (other file systems mounted in it are not entered). }
+function TreeDriveOf(const Path: String): Char;
+  var
+    C: Char;
+    Root: String;
+  begin
+  if HasDrives then
+    begin
+    Result := UpCase(Path[1]);
+    Exit;
+    end;
+  Root := SysMountPoint(Path);
+  if Root = '' then
+    Root := DriveRoot('C');
+  Result := 'C';
+  for C := 'C' to 'Z' do
+    if MountRoots[C] = Root then
+      begin
+      Result := C;
+      Exit;
+      end;
+  for C := 'C' to 'Z' do
+    if MountRoots[C] = '' then
+      begin
+      MountRoots[C] := Root;
+      Result := C;
+      Exit;
+      end;
+  end;
 {DataCompBoy
 function NotStr(S: String): String;
  var I: Integer;
@@ -353,6 +399,8 @@ procedure ReadTree(C: Char; CountLen: Boolean);
         if (SR.SR.Attr and Directory <> 0) and (SR.SR.Attr and SysLinkAttr = 0)
            { the pseudo file systems of the root (Unix: /proc, /sys) are not a tree of files }
            and not SysSkipInTree(S, SR.SR.Name)
+           { nor is a file system mounted inside the tree: it has a tree of its own }
+           and not SysOtherFileSystem(PDirRec(DC.At(0))^.DirName[uLfn], MakeNormName(S, SR.SR.Name))
           then
           begin
           New(P);
@@ -397,7 +445,7 @@ procedure ReadTree(C: Char; CountLen: Boolean);
   DC := TDirCollection.Create(10, 10);
   New(P);
   FillChar(P^, SizeOf(P^), 0);
-  P^.DirName[uLfn] := DriveRoot(C);
+  CopyShortString(TreeRootOf(C), P^.DirName[uLfn]);   { the name may be longer than 12 characters }
   P^.Cluster := 0;
   P^.Level := 0;
   P^.Size := -1;
@@ -475,16 +523,24 @@ function GetDirCollection(C: Char; CountLen: Boolean): TCollection;
 function FindDir(DC: TCollection; const Dir: String): Integer;
   var
     I, Lv: Integer;
-    S, D: String;
+    S, D, Root: String;
     P: PDirRec;
   begin
   FindDir := -1;
-  if DC = nil then
+  if (DC = nil) or (DC.Count = 0) then
     Exit;
   D := Dir;
   Lv := 1;
   I := 1;
-  Delete(D, 1, 3);
+  Root := PDirRec(DC.At(0))^.DirName[uLfn];
+  if UpStrg(Copy(D, 1, Length(Root))) <> UpStrg(Root) then
+    begin
+    { the root itself, written without its last separator ("C:", "/mnt/usb"); any other folder is not in this tree }
+    if  (D <> '') and (UpStrg(D+DnSep) = UpStrg(Root)) then
+      FindDir := 0;
+    Exit;
+    end;
+  Delete(D, 1, Length(Root));
   if D = '' then
     begin
     FindDir := 0;
@@ -579,7 +635,7 @@ procedure FreeTree(C: Char);
 
 procedure TTreeReader.HandleEvent(var Event: TEvent);
   var
-    C: Char;
+    C, Drv: Char;
     S: String;
 
   begin
@@ -592,16 +648,16 @@ procedure TTreeReader.HandleEvent(var Event: TEvent);
         begin
         S := UpStrg(PString(Event.Message.InfoPtr)^);
         C := DriveOf(S);
+        if not HasDrives then
+          C := TreeDriveOf(PString(Event.Message.InfoPtr)^);
         if  (C in ['A'..'Z']) and (DrvTrees[C].C <> nil) then
           begin
           DrvTrees[C].C.Free;
           DrvTrees[C].C := nil;
+          Drv := C;
           GlobalMessage(evCommand, cmFindTree, @C);
           if C = #0 then
-            begin
-            C := S[1];
-            ReadTree(C, DrvTrees[C].len)
-            end
+            ReadTree(Drv, DrvTrees[Drv].len)
           else
             DrvTrees[C].len := False;
           end;
@@ -1415,7 +1471,7 @@ procedure TTreeView.HandleCommand(var Event: TEvent);
           CE;
           end;
         cmFindTree:
-          if Char(Event.Message.InfoPtr^) = LastPath[1] then
+          if Char(Event.Message.InfoPtr^) = TreeDriveOf(LastPath) then
             Char(Event.Message.InfoPtr^) := #0;
         cmRevert:
           begin
@@ -1461,13 +1517,13 @@ procedure TTreeView.HandleCommand(var Event: TEvent);
           LastPath := PString(Event.Message.InfoPtr)^;
           if Dirs = nil then
             begin
-            WasChanged := CurPath[1] <> LastPath[1];
+            WasChanged := TreeDriveOf(CurPath) <> TreeDriveOf(LastPath);
             CurPath := LastPath;
             Exit;
             end;
           LocateEnabled := False;
-          if  ( (LastPath[1] <> CurPath[1]) or WasChanged)
-            and (ValidDrive(LastPath[1]))
+          if  ( (TreeDriveOf(LastPath) <> TreeDriveOf(CurPath)) or WasChanged)
+            and (not HasDrives or ValidDrive(LastPath[1]))
           then
             begin
             LocateEnabled := False;
@@ -1902,7 +1958,7 @@ procedure TTreeView.ReadTree(CountLen: Boolean);
     DC.RemoveAll;
     DC.Free;
     end;
-  DC := GetDirCollection(CurPath[1], CountLen);
+  DC := GetDirCollection(TreeDriveOf(CurPath), CountLen);
   isValid := not Abort;
   if  (DC = nil) then
     begin
@@ -1917,7 +1973,7 @@ procedure TTreeView.ReadTree(CountLen: Boolean);
     PD^.Level := 0;
     PD^.Size := -1;
     PD^.Attr := 0;
-    S := Copy(CurPath, 1, 3);
+    S := TreeRootOf(TreeDriveOf(CurPath));
     for iLFN := Low(TUseLFN) to High(TUseLFN) do
       CopyShortString(S, PD^.DirName[iLFN]);
     DC.Insert(PD);

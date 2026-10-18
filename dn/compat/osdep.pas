@@ -110,6 +110,11 @@ function SysLinkIsBroken(const Name: string): Boolean;
 { Is the directory Name of the directory ParentDir one that a scan of a tree must not enter? On Unix the pseudo file systems of the root (/proc, /sys): thousands of
   entries that change as they are read; elsewhere never. }
 function SysSkipInTree(const ParentDir, Name: string): Boolean;
+{ The root of the file system that the directory Dir is on, with a separator at the end (its mount point): "/" or "/mnt/usb/". '' where a path has a drive (the root of
+  a drive is known to the caller) or when Dir cannot be read. }
+function SysMountPoint(const Dir: string): string;
+{ Is the directory Dir on another file system than the directory Root (a file system mounted inside the tree of Root)? Never where there is one file system per drive. }
+function SysOtherFileSystem(const Root, Dir: string): Boolean;
 { The DOS attributes of a file that was assigned (Dos.GetFAttr, SetFAttr): on Unix the RTL has none (it always says 0 and does nothing), so the attribute ReadOnly (1) is the missing
   write permission of the owner and setting it changes that permission; the other attributes (hidden, system, archive) mean nothing there. Elsewhere the calls of the unit Dos. }
 procedure SysGetFAttr(var F: File; var Attr: Word);
@@ -504,6 +509,55 @@ begin
   Result := False;
 {$ENDIF}
 end;
+
+function SysMountPoint(const Dir: string): string;
+{$IFDEF UNIX}
+var
+  P, Up: string;
+  St, StUp: Stat;
+  I: Integer;
+begin
+  Result := '';
+  P := Dir;
+  while (Length(P) > 1) and (P[Length(P)] = '/') do
+    SetLength(P, Length(P) - 1);
+  if (P = '') or (P[1] <> '/') or (fpStat(SysOsPath(P), St) <> 0) then
+    Exit;
+  while Length(P) > 1 do
+  begin
+    I := Length(P);
+    while P[I] <> '/' do
+      Dec(I);
+    if I > 1 then
+      Up := Copy(P, 1, I - 1)
+    else
+      Up := '/';
+    if (fpStat(SysOsPath(Up), StUp) <> 0) or (StUp.st_dev <> St.st_dev) then
+      Break;
+    P := Up;
+  end;
+  if P[Length(P)] <> '/' then
+    P := P + '/';
+  Result := P;
+end;
+{$ELSE}
+begin
+  Result := '';
+end;
+{$ENDIF}
+
+function SysOtherFileSystem(const Root, Dir: string): Boolean;
+{$IFDEF UNIX}
+var
+  StRoot, StDir: Stat;
+begin
+  Result := (fpStat(SysOsPath(Root), StRoot) = 0) and (fpStat(SysOsPath(Dir), StDir) = 0) and (StRoot.st_dev <> StDir.st_dev);
+end;
+{$ELSE}
+begin
+  Result := False;
+end;
+{$ENDIF}
 
 {$IFDEF UNIX}
 { The name that Assign has put into a file record: one byte per character or, with FPC 3.2 on Unix, UTF-16 (TFileTextRecChar), so the record is read by the size of the character }
