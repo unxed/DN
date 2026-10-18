@@ -2906,6 +2906,38 @@ with the entered name is created and files are copied into it.
   end { CopyDialog };
 {-DataCompBoy-}
 
+{ dn#88 step 5b: the copy asked for while another one runs in the background goes to the job list as a waiting job
+  (CopyJobs.JobAddRequest). False, and nothing added, when the files cannot be named from one source directory (a temporary
+  panel with files of several directories) or the copy goes to the printer. }
+function QueueCopy(Files: TCollection; const CopyDir, Mask: String; CopyMode, CopyOpt: Word; CopyPrn: Boolean): Boolean;
+  var
+    Req: TCopyRequest;
+    P: PFileRec;
+    I: Integer;
+  begin
+  Result := False;
+  if CopyPrn or (Files.Count = 0) then
+    Exit;
+  P := Files.At(0);
+  if P^.Owner = nil then
+    Exit;
+  Req.SrcDir := P^.Owner^;
+  SetLength(Req.Names, Files.Count);
+  for I := 0 to Files.Count - 1 do
+    begin
+    P := Files.At(I);
+    if (P^.Owner = nil) or (P^.Owner^ <> Req.SrcDir) then
+      Exit;
+    Req.Names[I] := P^.FlName[True];
+    end;
+  Req.DstDir := CopyDir;
+  Req.Mask := Mask;
+  Req.Mode := CopyMode;
+  Req.Options := CopyOpt;
+  JobAddRequest(CopyDir, 0, Req);
+  Result := True;
+  end;
+
 {-DataCompBoy-}
 procedure CopyFiles(Files: TCollection; SourcePanel: TView; MoveMode: Boolean; FromTemp: Byte);
 
@@ -2933,7 +2965,15 @@ procedure CopyFiles(Files: TCollection; SourcePanel: TView; MoveMode: Boolean; F
     begin
     CopyOpt := CopyOpt or cpoFromTemp;
     end;
-  
+  { dn#88 step 5b: while a copy runs in the background the new one waits for it in the job list; the running FilesCopy
+    is not entered a second time. }
+  if BackgroundCopyRunning then
+    begin
+    if not QueueCopy(Files, CopyDir, Mask, CopyMode, CopyOpt, CopyPrn) then
+      ExplainBlocked;
+    Exit;
+    end;
+
   Inc(SkyEnabled);
   NotifySuspend; {Cat}
   FilesCopy(Files, SourcePanel, CopyDir, Mask, CopyMode, CopyOpt,

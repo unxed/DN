@@ -115,6 +115,10 @@ function JobsStatusText(const Name: String): String;
   the viewer, the menus and the rest pass. }
 function BackgroundCopyBlocks(Command: Word): Boolean;
 
+{ True for the copy commands that do not wait for the copy in the background to end but put the new copy in the job list after
+  it (dn#88 step 5b): F5, F6, Shift+F5. The other commands of BackgroundCopyBlocks stay blocked. }
+function BackgroundCopyQueues(Command: Word): Boolean;
+
 { True while the running copy (JobRunning) is in the background. }
 function BackgroundCopyRunning: Boolean;
 
@@ -423,6 +427,11 @@ begin
       Result := True;
       Exit;
     end;
+end;
+
+function BackgroundCopyQueues(Command: Word): Boolean;
+begin
+  Result := (Command = cmCopyFiles) or (Command = cmMoveFiles) or (Command = cmSingleCopy);
 end;
 
 function BackgroundCopyBlocks(Command: Word): Boolean;
