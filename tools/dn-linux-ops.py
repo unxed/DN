@@ -194,6 +194,7 @@ def background_copy(out, d):
     os.makedirs(src)
     os.makedirs(dst)
     os.makedirs(os.path.join(w, 'waiting'))        # where the copy asked for during the background one goes (dn#88 step 5b)
+    os.makedirs(os.path.join(w, 'zcancelled'))     # where a third one would go; it is cancelled from the list (step 5c)
     # Many small files, not few big ones: the progress window is redrawn between files, and a window of 64 files of 8 MB was not
     # on the screen for 10 s on any runner ("the progress window offers Background" failed in all six jobs of dn-linux #714, while
     # 512 files of 256 KB passed it in five). 4096 files of 64 KB keep the copy running longer than 512 of 256 KB did; whether it
@@ -229,6 +230,8 @@ def background_copy(out, d):
         went_background = False                          # the copy was sent to the background (the panels came back)
         f5_queued = False                                # F5 during that copy left a waiting job (dn#88 step 5b)
         list_met_end = False                             # the copy ended while the keys of that list of jobs were pressed
+        cancel_tried = False                             # a third copy was queued and then cancelled from the list
+        third_cancelled = False                          # the list showed it as "[cancelled]"
         if offered:
             t.send(F['TAB'], 0.5)                       # Stop -> Background (the copy takes one event per 300 ms)
             t.send(F['ENTER'], 0.8)
@@ -280,6 +283,29 @@ def background_copy(out, d):
                             check('[wait]' in f5_jobs_screen and '[run' in f5_jobs_screen,
                                   'Background: Utilities, Copy jobs shows the running copy and the one asked for during it as "[wait]"',
                                   f5_jobs_screen)
+                            # dn#88 step 5c: a third copy, cancelled from the list while it waits, never starts
+                            t.send(F['F5'], 0.5)
+                            third_dialog = 'Cancel' in t.text()
+                            copy_ran_third = not all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i)) for i in range(nfiles))
+                            if third_dialog and copy_ran_third:
+                                t.send('zcancelled', 0.2)
+                                t.send(F['ENTER'], 1.0)
+                                t.send('\x1bu', 0.8)        # Alt-U: Utilities
+                                t.send('j', 1.0)            # Copy ~j~obs...
+                                t.send(F['END'], 0.3)       # the newest job, the third copy
+                                t.send(F['ENTER'], 1.0)     # Cancel job, the default button; the list is built again
+                                cancel_screen = t.text()
+                                t.send(F['ESC'], 0.5)
+                                cancel_tried = True
+                                third_cancelled = '[cancelled]' in cancel_screen
+                                if not third_cancelled:
+                                    print('--- the list of jobs after Cancel job on the third copy:\n' + cancel_screen, flush=True)
+                            elif third_dialog:
+                                t.send(F['ESC'], 0.5)       # the first copy is over: this would be a plain copy, not a waiting one
+                                print('SKIP Background: the copy finished before the third copy was asked for, its cancel is not checked', flush=True)
+                            # the copy may have ended during these keys, and Esc may have closed its message
+                            list_met_end = list_met_end or all(os.path.isfile(os.path.join(dst, 'source', 'file%03d.dat' % i))
+                                                               for i in range(nfiles))
                         else:
                             print('SKIP Background: the copy finished before the list of jobs was read, "[wait]" is not checked', flush=True)
                 if copy_ran_f5:
@@ -381,6 +407,11 @@ def background_copy(out, d):
                   'Background: the waiting copy starts after the first one and finishes every file with the same contents '
                   '(finished %r, %d of %d files exist, %d with other contents)' % (
                       queued_finished, len(queued_copied), nfiles, len(queued_wrong)), t.text())
+            if cancel_tried:
+                t.until(lambda: False, 2.0)             # time for a wrongly started third copy to make its first files
+                check(third_cancelled and not os.path.exists(os.path.join(w, 'zcancelled', 'source')),
+                      'Background: a waiting copy cancelled from the list does not start (shown as "[cancelled]" %r, '
+                      'its folder made %r)' % (third_cancelled, os.path.exists(os.path.join(w, 'zcancelled', 'source'))), t.text())
         if went_background and (keys_met_end or list_met_end):
             # the message waits for a key and the Esc that closed the list of jobs can have closed it (dn-linux #781, head 14f7f94, both jobs with this check:
             # 3963 of 4096 files at 6 seconds, the copy ended while Alt-U, j and Esc were pressed): only a copy that still runs when the
