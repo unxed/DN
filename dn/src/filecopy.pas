@@ -426,6 +426,10 @@ procedure TOverriteDialog.HandleEvent(var Event: TEvent);
      end;
   end;
 
+var
+  { dn#88 step 5c: the waiting job of CopyJobs that the next FilesCopy runs, instead of adding a job of its own; 0 for none }
+  QueuedJob: LongInt = 0;
+
 {-DataCompBoy-}
 procedure FilesCopy(Files: TCollection; SourcePanel: TView;
     const CopyDir, Mask: String; CopyMode, CopyOptions: Word;
@@ -2397,7 +2401,13 @@ qqqq:
   UserStop := False;
   JobStopped := False;
   JobMsg := '';
-  JobId := JobAdd(CopyDir, 0);
+  if QueuedJob <> 0 then
+    begin
+    JobId := QueuedJob;
+    QueuedJob := 0;
+    end
+  else
+    JobId := JobAdd(CopyDir, 0);
   JobStart(JobId);
   R := TRect.Create(0, 0, 60, 15); {John_SW 30-06-2005}
   Info := TWhileView.Create(R);
@@ -2406,7 +2416,9 @@ qqqq:
   else
     Info.Top := GetString(dlFCCopy);
   Desktop.Insert(Info);
-  Info.OfferBackground(True); { dn#40: the button "Background", see progress.SendToBackground }
+  { dn#40: the button "Background", see progress.SendToBackground; a waiting job started from the list (dn#88 step 5c) is
+    already in the background }
+  Info.OfferBackground(not (JobGet(JobId, EndJob) and EndJob.Background));
   Files.ForEach(DoReset);
   if  ( (SystemData.Options shl 3) and ossRemoveCD_RO <> 0)
   then
@@ -2493,6 +2505,9 @@ qqqq:
   if JobGet(JobId, EndJob) and EndJob.Background then
     case EndJob.State of
       jsDone:
+        { dn#88 step 5c: while another job waits, the copy goes on with it and only the last one says it is done; a failure
+          is told at once }
+        if JobNextQueued = 0 then
         begin
         EndMsg := ^C + GetString(dlCopyFinished) + ^M^C + Cut(EndJob.Title, 40);
         EndFlags := mfInformation + mfOKButton;
@@ -2906,6 +2921,96 @@ with the entered name is created and files are copied into it.
   end { CopyDialog };
 {-DataCompBoy-}
 
+{ dn#88 step 5b: the copy asked for while another one runs in the background goes to the job list as a waiting job
+  (CopyJobs.JobAddRequest). False, and nothing added, when the files cannot be named from one source directory (a temporary
+  panel with files of several directories) or the copy goes to the printer. }
+function QueueCopy(Files: TCollection; const CopyDir, Mask: String; CopyMode, CopyOpt: Word; CopyPrn: Boolean): Boolean;
+  var
+    Req: TCopyRequest;
+    P: PFileRec;
+    I: Integer;
+  begin
+  Result := False;
+  if CopyPrn or (Files.Count = 0) then
+    Exit;
+  P := Files.At(0);
+  if P^.Owner = nil then
+    Exit;
+  Req.SrcDir := P^.Owner^;
+  SetLength(Req.Names, Files.Count);
+  for I := 0 to Files.Count - 1 do
+    begin
+    P := Files.At(I);
+    if (P^.Owner = nil) or (P^.Owner^ <> Req.SrcDir) then
+      Exit;
+    Req.Names[I] := P^.FlName[True];
+    end;
+  Req.DstDir := CopyDir;
+  Req.Mask := Mask;
+  Req.Mode := CopyMode;
+  Req.Options := CopyOpt;
+  { it was asked for while the panels work, so it runs in the background as well }
+  JobSetBackground(JobAddRequest(CopyDir, 0, Req), True);
+  Result := True;
+  end;
+
+{ dn#88 step 5c: the waiting jobs of the list start one after another once the copy before them has ended, without the dialog:
+  the files are looked up again by their names in the source directory of the request. A job whose file is gone fails with its
+  name and the next one goes on; a job cancelled from the list is not started (JobNextQueued skips it). }
+procedure RunQueuedCopies;
+  var
+    Id: LongInt;
+    Job: TCopyJob;
+    FC: TFilesCollection;
+    FR: PFileRec;
+    I: Integer;
+    S, Missing: String;
+  begin
+  Id := JobNextQueued;
+  while Id <> 0 do
+    begin
+    if not JobGet(Id, Job) or not Job.HasRequest then
+      begin
+      JobCancel(Id);
+      Id := JobNextQueued;
+      Continue;
+      end;
+    FC := TFilesCollection.Create(Length(Job.Request.Names) + 1, 4);
+    Missing := '';
+    for I := 0 to High(Job.Request.Names) do
+      begin
+      S := MakeNormName(Job.Request.SrcDir, Job.Request.Names[I]);
+      if ExistFile(S) or PathExist(S) then
+        FC.AtInsert(FC.Count, CreateFileRec(S))
+      else if Missing = '' then
+        Missing := Job.Request.Names[I];
+      end;
+    if Missing <> '' then
+      begin
+      JobStart(Id);
+      JobFail(Id, 'not found: ' + Missing);
+      end
+    else
+      begin
+      QueuedJob := Id;
+      Inc(SkyEnabled);
+      NotifySuspend;
+      FilesCopy(FC, nil, Job.Request.DstDir, Job.Request.Mask, Job.Request.Mode, Job.Request.Options, False, True);
+      NotifyResume;
+      Dec(SkyEnabled);
+      QueuedJob := 0;
+      end;
+    { CreateFileRec gives every record its own Owner, which DelFileRec does not free }
+    for I := 0 to FC.Count - 1 do
+      begin
+      FR := FC.At(I);
+      DisposeStr(FR^.Owner);
+      end;
+    FC.Free;
+    Id := JobNextQueued;
+    end;
+  end;
+
 {-DataCompBoy-}
 procedure CopyFiles(Files: TCollection; SourcePanel: TView; MoveMode: Boolean; FromTemp: Byte);
 
@@ -2933,7 +3038,15 @@ procedure CopyFiles(Files: TCollection; SourcePanel: TView; MoveMode: Boolean; F
     begin
     CopyOpt := CopyOpt or cpoFromTemp;
     end;
-  
+  { dn#88 step 5b: while a copy runs in the background the new one waits for it in the job list; the running FilesCopy
+    is not entered a second time. }
+  if BackgroundCopyRunning then
+    begin
+    if not QueueCopy(Files, CopyDir, Mask, CopyMode, CopyOpt, CopyPrn) then
+      ExplainBlocked;
+    Exit;
+    end;
+
   Inc(SkyEnabled);
   NotifySuspend; {Cat}
   FilesCopy(Files, SourcePanel, CopyDir, Mask, CopyMode, CopyOpt,
@@ -2944,7 +3057,7 @@ procedure CopyFiles(Files: TCollection; SourcePanel: TView; MoveMode: Boolean; F
     NotifyUser('Move finished')
   else
     NotifyUser('Copy finished');
-  
+  RunQueuedCopies;
   end { CopyFiles };
 
 {JO}

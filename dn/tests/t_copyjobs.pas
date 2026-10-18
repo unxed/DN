@@ -111,6 +111,10 @@ begin
     'cancel, OK and the viewer pass');
   Check(BackgroundCopyBlocks(cmQuit), 'quitting is blocked while a background copy runs');
   Check(not BackgroundCopyBlocks(0), 'command 0 passes');
+  Check(BackgroundCopyQueues(cmCopyFiles) and BackgroundCopyQueues(cmMoveFiles) and BackgroundCopyQueues(cmSingleCopy),
+    'F5, F6 and Shift+F5 put the new copy in the job list (dn#88 step 5b)');
+  Check(not BackgroundCopyQueues(cmPanelErase) and not BackgroundCopyQueues(cmSingleRename) and not BackgroundCopyQueues(cmQuit),
+    'erase, rename and quit do not wait in the job list');
 
   { part 4b-5: the rows of the jobs list }
   A := JobAdd('a.iso', 1000);

@@ -115,9 +115,12 @@ procedure DispatchEvents(InfoView: TWhileView; var CancelParam: Boolean);
   (CopyJobs.BackgroundCopyBlocks). }
 procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolean);
 
+{ Tells the user that a command waits while a copy runs in the background (dn#88 step 4). }
+procedure ExplainBlocked;
+
 implementation
 uses
-  mainapp, Commands, CopyJobs, Dos, TitleSet, basics, strutil, fileutil, TvGlyphs, Messages
+  mainapp, Commands, CopyJobs, Dos, TitleSet, basics, strutil, fileutil, TvGlyphs, Messages, panelroot, PanelSetup
   ;
 
 constructor TPercentGauge.Create(const Bounds: TRect; AMaxValue: LongInt);
@@ -590,6 +593,14 @@ procedure ExplainBlocked;
   BlockedNoteShown := False;
   end;
 
+{ dn#88 step 5b: a copy from the active panel can wait in the job list (FileCopy.CopyFiles puts it there) when the panel shows
+  a directory or a temporary panel; an archive and the other drives copy by their own means, so for them the copy stays blocked. }
+function CopyCanWait: Boolean;
+  begin
+  Result := (panelroot.ActivePanel <> nil) and (TFilePanelRoot(panelroot.ActivePanel).Drive <> nil) and
+    (TFilePanelRoot(panelroot.ActivePanel).Drive.DriveType in [dtDisk, dtTemp]);
+  end;
+
 procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolean);
   var
     Event: TEvent;
@@ -597,9 +608,10 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
   Application.GetEvent(Event);
   { Panel function keys arrive here as evKeyDown; they have not yet become the
     evCommand checked below. Drop the direct copy/move/delete keys while the
-    background job owns its source and destination. }
+    background job owns its source and destination; F5 and F6 go on when the
+    new copy can wait for it (CopyCanWait). }
   if (Event.What = evKeyDown) and
-    ((DNKeyCode(Event) = kbF5) or (DNKeyCode(Event) = kbF6) or
+    ((DNKeyCode(Event) = kbF5) and not CopyCanWait or (DNKeyCode(Event) = kbF6) and not CopyCanWait or
      (DNKeyCode(Event) = kbF8)) then
     begin
     ClearEvent(Event);
@@ -613,7 +625,8 @@ procedure DispatchEventsBackground(InfoView: TWhileView; var CancelParam: Boolea
     InfoView.ClearEvent(Event);
     CancelParam := True;
     end;
-  if  (Event.What = evCommand) and BackgroundCopyBlocks(Event.Message.Command) then
+  if  (Event.What = evCommand) and BackgroundCopyBlocks(Event.Message.Command) and
+      not (BackgroundCopyQueues(Event.Message.Command) and CopyCanWait) then
     begin
     InfoView.ClearEvent(Event);
     ExplainBlocked;
