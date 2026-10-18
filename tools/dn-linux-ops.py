@@ -170,6 +170,11 @@ def blocked_note(screen):
     return 'background copy' in screen.replace('\n', ' ') or ('background' in screen and 'running' in screen)
 
 
+def right_half(screen):
+    """the right panel of the 100-column screen (dn#88 step 3b)"""
+    return '\n'.join(line[50:] for line in screen.split('\n'))
+
+
 def background_copy(out, d):
     """A background copy leaves the panels responsive and finishes every file."""
     w = os.path.join(d, 'background')
@@ -192,6 +197,13 @@ def background_copy(out, d):
     t.started()
     try:
         t.send(F['ESC'], 0.3)
+        # dn#88 step 3b: the other panel shows the destination before the copy starts, so the end of the copy has to refresh it
+        t.send(F['TAB'], 0.3)
+        t.send(F['HOME'], 0.2)
+        t.send(F['DOWN'], 0.2)                           # .., destination, source
+        t.send(F['ENTER'], 0.6)                          # into destination
+        other_panel_ready = 'source' not in right_half(t.text())   # nothing is copied yet: only ".." is listed
+        t.send(F['TAB'], 0.3)
         t.send(F['HOME'], 0.2)
         t.send(F['DOWN'], 0.2)                           # .., destination, source
         t.send(F['DOWN'], 0.2)
@@ -328,6 +340,12 @@ def background_copy(out, d):
             check(announced, 'Background: the end of the copy is announced ("Copy finished")', t.text())
             if announced:
                 t.send(F['ENTER'], 0.5)
+                # dn#88 step 3b: the other panel shows the destination; the copied directory appears there without a re-read by hand
+                if other_panel_ready:
+                    shown = t.until(lambda: 'source' in right_half(t.text()), 5.0)
+                    check(shown, 'Background: the receiving panel lists the copied directory after the copy ends', t.text())
+                else:
+                    print('SKIP receiving panel: the other panel did not show the empty destination before the copy', flush=True)
         clock_back = t.until(lambda: re.search(r'\bCopy\b', t.text().split('\n')[0]) is None, 5.0)
         check(clock_back, 'Background: the clock comes back when the copy ends (%r)' % t.text().split('\n')[0].strip()[-24:],
               t.text())
