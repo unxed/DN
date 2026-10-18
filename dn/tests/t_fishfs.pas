@@ -72,6 +72,42 @@ begin
       Exit(I);
 end;
 
+{ All that a stream gives, asked for Step bytes at a time. }
+function ReadAll(S: TStream; Step: Integer): AnsiString;
+var
+  Piece: AnsiString;
+  N, Total: Integer;
+begin
+  Result := '';
+  Total := 0;
+  SetLength(Piece, Step);
+  repeat
+    N := S.Read(Piece[1], Step);
+    if N > 0 then
+    begin
+      SetLength(Result, Total + N);
+      Move(Piece[1], Result[Total + 1], N);
+      Inc(Total, N);
+    end;
+  until N <= 0;
+end;
+
+{ What the file of the remote side gives when it is read through OpenRead, in pieces of Step bytes; '?' (and a failed Check) when it cannot be opened. }
+function ReadRemote(FS: TFishFS; const Tag, Path: AnsiString; Step: Integer): AnsiString;
+var
+  S: TStream;
+begin
+  Result := '?';
+  Check(FS.OpenRead(Path, S) = rrOk, Tag + 'OpenRead of ' + ExtractFileName(Path) + ': ' + FS.LastError);
+  if S = nil then
+    Exit;
+  try
+    Result := ReadAll(S, Step);
+  finally
+    S.Free;
+  end;
+end;
+
 { The path on the remote side of a path of the tree: the host is this machine, so the tree stands where Base is (TLocalFS has Base as its root). }
 function RemotePath(const Base, Dir: AnsiString): AnsiString;
 begin
@@ -116,7 +152,7 @@ begin
   Check(SameSize, Tag + 'the sizes of the files are the same');
 end;
 
-procedure RunWithShell(const Shell, Helper, Base, Weird: AnsiString);
+procedure RunWithShell(const Shell, Helper, Base, Weird, Big: AnsiString);
 var
   Tag, Dir, Dir2: AnsiString;
   P: TNetProc;
@@ -127,6 +163,8 @@ var
   R: TRemoteResult;
   I: Integer;
   Want: TDateTime;
+  S: TStream;
+  Got: AnsiString;
 begin
   Tag := ExtractFileName(Shell) + ': ';
   P := TNetProc.Create;
@@ -211,7 +249,45 @@ begin
     Check(FS.SetListingMode('nosuchtool') <> rrOk, Tag + 'a name of a tool that is not there is refused');
     Check(FS.Connected, Tag + 'the connection is still open');
 
+    { the content of a file }
+    Check(ReadRemote(FS, Tag, Base + '/plain.txt', 4096) = 'abc', Tag + 'a small file is read');
+    Check(ReadRemote(FS, Tag, Base + '/with space.txt', 2) = 'hello world', Tag + 'a name with a blank, two bytes at a time');
+    Check(ReadRemote(FS, Tag, Base + '/ lead and trail ', 100) = '', Tag + 'an empty file gives nothing');
+    Check(ReadRemote(FS, Tag, Base + '/caf' + #195#169 + '.txt', 100) = 'x', Tag + 'a name that is not ASCII');
+    Check(ReadRemote(FS, Tag, Weird + '/new' + #10 + 'line/x', 100) = 'q', Tag + 'a name with a line end in its directory');
+    Check(ReadRemote(FS, Tag, Weird + '/~tilde/y', 100) = 'w', Tag + 'a directory with a tilde in its name');
+    Check(ReadRemote(FS, Tag, Base + '/sub/inner.bin', 7) = StringOfChar('z', 1000), Tag + 'a file of a thousand bytes, seven at a time');
+    Got := ReadRemote(FS, Tag, Big, 65536);
+    Check(Got = LoadText(Big), Tag + 'a file of 1 MB with zero bytes, line ends and all byte values is the same as it is');
+    Check(ReadRemote(FS, Tag, Big, 1000) = Got, Tag + 'and the same when it is read a thousand bytes at a time');
+    if FS.OpenRead(Big, S) = rrOk then
+    begin
+      try
+        Check(S.Size = 1048576, Tag + 'the size of the stream is the size of the file');
+        Check(S.Seek(700000, soBeginning) = 700000, Tag + 'Seek goes to a place');
+        SetLength(Got, 300);
+        Check((S.Read(Got[1], 300) = 300) and (Got = Copy(LoadText(Big), 700001, 300)), Tag + 'and the bytes there are the bytes of the file');
+        Check(S.Seek(-10, soEnd) = 1048566, Tag + 'Seek from the end');
+        Check(S.Read(Got[1], 300) = 10, Tag + 'only what is left is read');
+        Check(S.Read(Got[1], 300) = 0, Tag + 'then nothing');
+        Check(S.Seek(5, soBeginning) = 5, Tag + 'Seek back');
+        Check((S.Read(Got[1], 4) = 4) and (Got[1] = LoadText(Big)[6]), Tag + 'and the bytes are there again');
+      finally
+        S.Free;
+      end;
+    end
+    else
+      Check(False, Tag + 'the big file is opened: ' + FS.LastError);
+    Check(FS.OpenRead(Base + '/sub', S) = rrIsDir, Tag + 'a directory is not read');
+    Check(S = nil, Tag + 'and gives no stream');
+    Check(FS.OpenRead(Base + '/no-such-file', S) = rrNotFound, Tag + 'a file that is not there is not found');
+    Check(FS.OpenRead('plain.txt', S) = rrDenied, Tag + 'a path that is not absolute is refused');
+    Check(FS.OpenRead(Base + '/dangling', S) = rrNotFound, Tag + 'a link to nothing is not found');
+    Check(ReadRemote(FS, Tag, Base + '/link/inner.bin', 4096) = StringOfChar('z', 1000), Tag + 'a file behind a link to a directory');
+    Check(FS.Connected, Tag + 'the reads leave the connection open');
+
     { what is not done yet }
+    Check(FS.OpenWrite(Base + '/new-file', S) = rrUnsupported, Tag + 'writing a file is not done yet');
     Check(FS.MkDir('/new-dir') = rrUnsupported, Tag + 'making a directory is not done yet');
     Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, Tag + 'setting the permissions is not done yet');
   finally
@@ -259,7 +335,7 @@ begin
 end;
 
 var
-  Helper, Tmp, Base, Weird: AnsiString;
+  Helper, Tmp, Base, Weird, Big, Pattern, Data: AnsiString;
   Shells: array[0..2] of AnsiString = ('/bin/sh', '/bin/bash', '/bin/dash');
   I: Integer;
   Stamp: LongInt;
@@ -285,6 +361,19 @@ begin
   PutText(Base + '/sub/other.txt', 'o');
   PutText(Weird + '/new' + #10 + 'line/x', 'q');
   PutText(Weird + '/~tilde/y', 'w');
+  { 1 MB: mostly zero bytes, with every byte value, line ends and the text of a request in it }
+  Big := Base + '/big.bin';
+  Pattern := '';
+  for I := 0 to 255 do
+    Pattern := Pattern + Chr(I);
+  Pattern := Pattern + #10#10 + '.0123456789abcdef 1 ok' + #13#10 + '#5' + #10;
+  SetLength(Data, 1048576);
+  FillChar(Data[1], 1048576, 0);
+  Move(Pattern[1], Data[1], Length(Pattern));
+  Move(Pattern[1], Data[524289], Length(Pattern));
+  Move(Pattern[1], Data[1048577 - Length(Pattern)], Length(Pattern));
+  PutText(Big, Data);
+  Data := '';
   fpChmod(Base + '/plain.txt', &640);
   Stamp := DateTimeToFileDate(EncodeDate(2020, 2, 3) + EncodeTime(4, 5, 6, 0));
   FileSetDate(Base + '/plain.txt', Stamp);
@@ -294,7 +383,7 @@ begin
   try
     for I := 0 to High(Shells) do
       if FileExists(Shells[I]) then
-        RunWithShell(Shells[I], Helper, Base, Weird);
+        RunWithShell(Shells[I], Helper, Base, Weird, Big);
     RunFailures(Helper);
   finally
     RemoveTree(Base);
