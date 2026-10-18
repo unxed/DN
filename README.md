@@ -36,7 +36,7 @@ The builds of DN are not kept in the repository: CI makes them from the sources 
 
 An archive holds the program, its resources (`*.lng`, `*.dlg`, `*.hlp`, `xlt/`), the default `dn.ini`, `README.TXT`,
 `BUILD.TXT` and the licence texts (DN: `LICENSE-DN.TXT`, `LICENSE-DN-FILES.md`, `PROVENANCE.md`; dn: `LICENSE.TXT`; tv3:
-`LICENSE-TV.TXT`, `COPYRIGHT-TV-MAGIBLOT.TXT`, `THIRD-PARTY-NOTICES-TV.md`; tve: `LICENSE-TVE.TXT`; DOS: `cwsdpmi.exe` and
+`LICENSE-TV.TXT`, `COPYRIGHT-TV-MAGIBLOT.TXT`, `THIRD-PARTY-NOTICES-TV.md`; tve: `LICENSE-TVE.TXT`; the FISH+ helper: `LICENSE-F4-FISH.TXT`, `NOTICE-F4-FISH.TXT`; DOS: `cwsdpmi.exe` and
 `cwsdpmi.doc`). The packing is `tools/dn-pack.sh` (`tools/dn-notices.sh` writes the licence texts and `README.TXT`).
 
 Linux release archives use the same `bin/`, `lib/dn/` and `share/` layout as `make install`. Extract one directly under

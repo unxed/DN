@@ -71,6 +71,14 @@ for c, (t, _) in TEXT.items():
 out.append('')
 for c, (t, d) in TEXT.items():
     out += ['## %s' % t, '', d, '', ', '.join('`%s`' % f for f in classes[c]) or '(none)', '']
+tp = os.path.join(root, 'dn', 'third-party')   # files of other projects, each directory with its own LICENSE and NOTICE
+parts = sorted(d for d in os.listdir(tp) if os.path.isdir(os.path.join(tp, d))) if os.path.isdir(tp) else []
+if parts:
+    out += ['## Files of other projects (their own licenses)', '',
+            'Kept apart in `dn/third-party/<project>/`, each directory with the `LICENSE` of its files and a `NOTICE` that names the source. They are not DN code and not MIT files of this project; the release archives carry the `LICENSE` and the `NOTICE` of each (`tools/dn-notices.sh`).', '']
+    for d in parts:
+        out.append('- `third-party/%s/`: %s' % (d, ', '.join('`%s`' % f for f in sorted(os.listdir(os.path.join(tp, d))))))
+    out.append('')
 text = '\n'.join(out)
 path = os.path.join(root, 'dn', 'PROVENANCE.md')
 if '--check' in sys.argv:

@@ -7,6 +7,7 @@
 #   LICENSE-DN-FILES.md          which license covers which file of dn/ (dn/LICENSE.md), PROVENANCE.md (the list it refers to)
 #   LICENSE-TV.TXT, COPYRIGHT-TV-MAGIBLOT.TXT, THIRD-PARTY-NOTICES-TV.md   tv/ (tv3)
 #   LICENSE-TVE.TXT              tve/
+#   LICENSE-F4-FISH.TXT, NOTICE-F4-FISH.TXT   dn/third-party/f4-fish/ (the helper of the FISH+ protocol, BSD 3-Clause)
 #   cwsdpmi.doc                  DOS only: the documentation and the terms of the DPMI host (CWSDPMI_DOC=FILE, else fetched from delorie.com)
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
@@ -23,6 +24,8 @@ copy tv/LICENSE LICENSE-TV.TXT
 copy tv/COPYRIGHT.magiblot COPYRIGHT-TV-MAGIBLOT.TXT
 copy tv/THIRD-PARTY-NOTICES.md THIRD-PARTY-NOTICES-TV.md
 copy tve/LICENSE LICENSE-TVE.TXT
+copy dn/third-party/f4-fish/LICENSE LICENSE-F4-FISH.TXT
+copy dn/third-party/f4-fish/NOTICE NOTICE-F4-FISH.TXT
 # the notice of the DN files, taken from the head of dn/src/dn.pas (the same in every file of DN code)
 head=$(tr -d '\r' < "$here/dn/src/dn.pas" | sed -n '3,/^\/\/\/\/*}$/p' | sed -e '$d' -e 's,^//,,' -e 's,^  ,,')
 case "$head" in *"RIT Research Labs"*"cannot be changed"*) ;; *) echo "dn-notices: no licence head in dn/src/dn.pas" >&2; exit 1;; esac
@@ -47,7 +50,7 @@ esac
 
 licences="LICENSE-DN.TXT (the DN code, RIT Research Labs; LICENSE-DN-FILES.md and PROVENANCE.md say which file is under it),
 LICENSE.TXT (the other files of dn, MIT), LICENSE-TV.TXT, COPYRIGHT-TV-MAGIBLOT.TXT and THIRD-PARTY-NOTICES-TV.md (Turbo Vision,
-tv3), LICENSE-TVE.TXT (the editor, tve)"
+tv3), LICENSE-TVE.TXT (the editor, tve), LICENSE-F4-FISH.TXT and NOTICE-F4-FISH.TXT (the FISH+ helper, BSD 3-Clause)"
 keys="Keys: F10 menu, Tab switches the panel, Enter enters a directory, F1 help, F3 view, F4 edit, F5 copy, F7 make a directory,
 Alt-X quit. Settings and history are written to the directory where DN is started (dn.ini, dn.his)."
 {
