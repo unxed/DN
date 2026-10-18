@@ -6,8 +6,8 @@
 
   The helper script is not part of the unit: Connect gets its text (dn/third-party/f4-fish/helper.sh, or the file that is installed beside the
   program as fishhelper.sh). The listings of the hosts that have GNU find or GNU stat are read (the helper reports which one it uses); BSD stat and
-  ls are told as rrUnsupported for now. Reading and writing a file, and the changes of the tree, are the next steps: those methods answer
-  rrUnsupported until then.
+  ls are told as rrUnsupported for now. A file is read in pieces of one request each (OpenRead gives a stream over them). Writing a file, and the
+  changes of the tree, are the next steps: those methods answer rrUnsupported until then.
 
   When a request does not get its answer in time, or the shell ends, the connection is broken for good: the next answer could not be told from the
   late one. LastError tells why; make a new TFishFS to try again.
@@ -42,7 +42,10 @@ type
     FTimeoutMs: Integer;
     procedure DrainErr;
     function Broke(const Text: AnsiString): Boolean;
+    function FillIn(Deadline: QWord): Boolean;
     function ReadLine(Deadline: QWord; out Line: AnsiString): Boolean;
+    function ReadBytes(Deadline: QWord; Count: Integer; var Dest: AnsiString): Boolean;
+    function SendRequest(const Cmd: AnsiString; const Paths: array of AnsiString; out Id: Integer): Boolean;
     function Request(const Cmd: AnsiString; const Paths: array of AnsiString; Lines: TStrings; out Status, Msg: AnsiString): Boolean;
     function Ask(const Cmd: AnsiString; const Paths: array of AnsiString; Lines: TStrings): TRemoteResult;
   public
@@ -63,6 +66,10 @@ type
     function SetListingMode(const Mode: AnsiString): TRemoteResult;
     function List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult; override;
     function Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult; override;
+    { Up to Len bytes of the file from Offset (fewer at the end of the file, none past it) in Data, and the size of the file as the helper saw it. }
+    function ReadRange(const Path: AnsiString; Offset: Int64; Len: Integer; out Data: AnsiString; out FileSize: Int64): TRemoteResult;
+    { A stream over the file, from its start; it asks the host for a piece of the file when a read goes past what it has, so Seek is cheap. A read that
+      fails raises EReadError (LastError tells why); the stream is the caller's, free it before the file system. }
     function OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
     function OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
     function MkDir(const Path: AnsiString): TRemoteResult; override;
@@ -86,6 +93,8 @@ const
   TokenMark = '__F4_TOKEN__';
   EndMark = 'F4EOF';
   MaxNoiseLines = 1000;
+  { The size of the piece of a file that is asked for at once, and the place where the pieces start: a multiple of the block size of dd. }
+  ReadChunk = 262144;
 
 { The field of S that starts at P, up to the next blank; P moves after the blank. }
 function TakeField(const S: AnsiString; var P: Integer): AnsiString;
@@ -329,13 +338,40 @@ begin
   Result := False;
 end;
 
+{ Takes one more piece of what the shell wrote into FIn, waiting for it until Deadline. False (and the connection broken) when the time is over or the
+  shell ended. }
+function TFishFS.FillIn(Deadline: QWord): Boolean;
+var
+  Chunk: array[0..16383] of Char;
+  N: Integer;
+  Left: Int64;
+begin
+  Left := Int64(Deadline) - Int64(GetTickCount64);
+  if Left <= 0 then
+    Exit(Broke('the remote side did not answer in time'));
+  if Left > 200 then
+    Left := 200;
+  N := FProc.Read(Chunk, SizeOf(Chunk), Integer(Left));
+  DrainErr;
+  if N < 0 then
+    Exit(Broke('the remote shell has ended'));
+  if N > 0 then
+  begin
+    if FInPos > 1 then
+    begin
+      Delete(FIn, 1, FInPos - 1);
+      FInPos := 1;
+    end;
+    SetLength(FIn, Length(FIn) + N);
+    Move(Chunk[0], FIn[Length(FIn) - N + 1], N);
+  end;
+  Result := True;
+end;
+
 { The next line of the standard output of the shell, without its line end. False (and the connection broken) when the time is over or the shell ended. }
 function TFishFS.ReadLine(Deadline: QWord; out Line: AnsiString): Boolean;
 var
   P: SizeInt;
-  Chunk: array[0..4095] of Char;
-  N: Integer;
-  Left: Int64;
 begin
   Line := '';
   while True do
@@ -347,39 +383,49 @@ begin
       FInPos := P + 1;
       Exit(True);
     end;
-    Left := Int64(Deadline) - Int64(GetTickCount64);
-    if Left <= 0 then
-      Exit(Broke('the remote side did not answer in time'));
-    if Left > 200 then
-      Left := 200;
-    N := FProc.Read(Chunk, SizeOf(Chunk), Integer(Left));
-    DrainErr;
-    if N < 0 then
-      Exit(Broke('the remote shell has ended'));
-    if N > 0 then
-    begin
-      if FInPos > 1 then
-      begin
-        Delete(FIn, 1, FInPos - 1);
-        FInPos := 1;
-      end;
-      SetLength(FIn, Length(FIn) + N);
-      Move(Chunk[0], FIn[Length(FIn) - N + 1], N);
-    end;
+    if not FillIn(Deadline) then
+      Exit(False);
   end;
 end;
 
-{ Sends a request and takes the answer: the lines before the end go to Lines (when it is not nil), Status is "ok" or "err", Msg what follows it. False when
-  the request could not be done at all (LastError tells, the connection is broken unless it was not there). }
-function TFishFS.Request(const Cmd: AnsiString; const Paths: array of AnsiString; Lines: TStrings; out Status, Msg: AnsiString): Boolean;
+{ Exactly Count raw bytes from the shell, put at the end of Dest. False (and the connection broken) when they do not come. }
+function TFishFS.ReadBytes(Deadline: QWord; Count: Integer; var Dest: AnsiString): Boolean;
 var
-  Id, I, P: Integer;
-  Packet, Term, Line, Rest: AnsiString;
-  Deadline: QWord;
+  Old, Put, Have, Take: Integer;
+begin
+  Old := Length(Dest);
+  Put := 0;
+  SetLength(Dest, Old + Count);
+  while Put < Count do
+  begin
+    Have := Length(FIn) - FInPos + 1;
+    if Have > 0 then
+    begin
+      Take := Count - Put;
+      if Take > Have then
+        Take := Have;
+      Move(FIn[FInPos], Dest[Old + Put + 1], Take);
+      Inc(FInPos, Take);
+      Inc(Put, Take);
+    end
+    else if not FillIn(Deadline) then
+    begin
+      SetLength(Dest, Old + Put);
+      Exit(False);
+    end;
+  end;
+  Result := True;
+end;
+
+{ Sends the request "<id> <Cmd>" and a line for each of the Paths; Id is the number it got. False when it could not be sent (LastError tells, the
+  connection is broken unless it was not there). }
+function TFishFS.SendRequest(const Cmd: AnsiString; const Paths: array of AnsiString; out Id: Integer): Boolean;
+var
+  I: Integer;
+  Packet: AnsiString;
 begin
   Result := False;
-  Status := '';
-  Msg := '';
+  Id := 0;
   if (not FConnected) or FBroken then
   begin
     Fail(rrFailed, 'the connection is not open');
@@ -395,6 +441,22 @@ begin
     Broke('cannot send to the remote shell');
     Exit;
   end;
+  Result := True;
+end;
+
+{ Sends a request and takes the answer: the lines before the end go to Lines (when it is not nil), Status is "ok" or "err", Msg what follows it. False when
+  the request could not be done at all (LastError tells, the connection is broken unless it was not there). }
+function TFishFS.Request(const Cmd: AnsiString; const Paths: array of AnsiString; Lines: TStrings; out Status, Msg: AnsiString): Boolean;
+var
+  Id, P: Integer;
+  Term, Line, Rest: AnsiString;
+  Deadline: QWord;
+begin
+  Result := False;
+  Status := '';
+  Msg := '';
+  if not SendRequest(Cmd, Paths, Id) then
+    Exit;
   Term := '.' + FToken + ' ' + IntToStr(Id) + ' ';
   Deadline := GetTickCount64 + QWord(FTimeoutMs);
   while True do
@@ -674,10 +736,198 @@ begin
   end;
 end;
 
+function TFishFS.ReadRange(const Path: AnsiString; Offset: Int64; Len: Integer; out Data: AnsiString; out FileSize: Int64): TRemoteResult;
+var
+  Clean, Term, Line, Rest, Msg: AnsiString;
+  Id, N, Code, P: Integer;
+  Deadline: QWord;
+  HaveFrame: Boolean;
+begin
+  Data := '';
+  FileSize := -1;
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if (Offset < 0) or (Len <= 0) then
+    Exit(Fail(rrFailed, 'the range of the file is not right'));
+  if not SendRequest('read ' + IntToStr(Offset) + ' ' + IntToStr(Len), [Clean], Id) then
+    Exit(rrFailed);
+  Term := '.' + FToken + ' ' + IntToStr(Id) + ' ';
+  Deadline := GetTickCount64 + QWord(FTimeoutMs);
+  HaveFrame := False;
+  while True do
+  begin
+    if not ReadLine(Deadline, Line) then
+      Exit(rrFailed);
+    if Copy(Line, 1, Length(Term)) = Term then
+      Break;
+    if Copy(Line, 1, Length(FToken) + 2) = '.' + FToken + ' ' then
+    begin
+      Broke('the answers are out of step');
+      Exit(rrFailed);
+    end;
+    if (Length(Line) > 2) and (Line[1] = 'S') and (Line[2] = ' ') then
+      FileSize := StrToInt64Def(Copy(Line, 3, Length(Line)), -1)
+    else if (Length(Line) > 1) and (Line[1] = '#') then
+    begin
+      { the frame: the bytes follow the line at once, as they are, and the end of the answer follows the last of them }
+      Val(Copy(Line, 2, Length(Line)), N, Code);
+      if (Code <> 0) or (N < 0) or (N > Len) or HaveFrame then
+      begin
+        Broke('the piece of the file is not as it was asked for');
+        Exit(rrFailed);
+      end;
+      if not ReadBytes(Deadline, N, Data) then
+        Exit(rrFailed);
+      HaveFrame := True;
+    end;
+  end;
+  Rest := Copy(Line, Length(Term) + 1, Length(Line));
+  P := Pos(' ', Rest);
+  if P = 0 then
+  begin
+    Msg := '';
+    Line := Rest;
+  end
+  else
+  begin
+    Line := Copy(Rest, 1, P - 1);
+    Msg := Copy(Rest, P + 1, Length(Rest));
+  end;
+  if Line <> 'ok' then
+  begin
+    Data := '';
+    FileSize := -1;
+    Exit(Fail(ResultOfMessage(Msg), 'the remote side says: ' + Msg + ': ' + Path));
+  end;
+  if (not HaveFrame) or (FileSize < 0) then
+  begin
+    Data := '';
+    Broke('the answer to a read has no data');
+    Exit(rrFailed);
+  end;
+  Result := rrOk;
+end;
+
+{ The stream of OpenRead: the piece of the file that was read last is kept, a read that goes outside it asks for the piece (ReadChunk bytes, from a
+  multiple of ReadChunk) that holds the place. }
+type
+  TFishReadStream = class(TStream)
+  private
+    FFS: TFishFS;
+    FPath: AnsiString;
+    FPos, FSize, FBufStart: Int64;
+    FBuf: AnsiString;
+  protected
+    function GetSize: Int64; override;
+  public
+    constructor Create(AFS: TFishFS; const APath: AnsiString; ASize: Int64);
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TFishReadStream.Create(AFS: TFishFS; const APath: AnsiString; ASize: Int64);
+begin
+  inherited Create;
+  FFS := AFS;
+  FPath := APath;
+  FSize := ASize;
+end;
+
+function TFishReadStream.GetSize: Int64;
+begin
+  Result := FSize;
+end;
+
+function TFishReadStream.Read(var Buffer; Count: LongInt): LongInt;
+var
+  Start, Seen: Int64;
+  Take: Integer;
+  Data: AnsiString;
+  Dest: PChar;
+begin
+  Result := 0;
+  Dest := @Buffer;
+  while (Count > 0) and (FPos < FSize) do
+  begin
+    if (FBuf = '') or (FPos < FBufStart) or (FPos >= FBufStart + Length(FBuf)) then
+    begin
+      Start := (FPos div ReadChunk) * ReadChunk;
+      if FFS.ReadRange(FPath, Start, ReadChunk, Data, Seen) <> rrOk then
+        raise EReadError.Create(FFS.LastError);
+      FBuf := Data;
+      FBufStart := Start;
+      { the file may have grown or shrunk since it was opened: the end is where the host sees it }
+      FSize := Seen;
+      if FPos >= Start + Length(Data) then
+      begin
+        { the host has nothing at this place (the file became shorter) }
+        FSize := FPos;
+        Break;
+      end;
+    end;
+    Take := Integer(FBufStart + Length(FBuf) - FPos);
+    if Take > Count then
+      Take := Count;
+    Move(FBuf[Integer(FPos - FBufStart) + 1], Dest^, Take);
+    Inc(FPos, Take);
+    Inc(Dest, Take);
+    Dec(Count, Take);
+    Inc(Result, Take);
+  end;
+end;
+
+function TFishReadStream.Write(const Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  raise EWriteError.Create('the stream of a remote file is for reading only');
+end;
+
+function TFishReadStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  case Origin of
+    soBeginning: FPos := Offset;
+    soCurrent: FPos := FPos + Offset;
+    soEnd: FPos := FSize + Offset;
+  end;
+  if FPos < 0 then
+    FPos := 0;
+  Result := FPos;
+end;
+
 function TFishFS.OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+var
+  Clean, Dummy: AnsiString;
+  E: TRemoteEntry;
+  Size: Int64;
 begin
   Stream := nil;
-  Result := Fail(rrUnsupported, 'reading a file is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  Result := Stat(Clean, True, E);
+  if Result = rrUnsupported then
+  begin
+    { the host lists with a tool that is not read yet; the read itself tells whether the path is a file, and its answer has the size }
+    E.Kind := rkFile;
+    E.Size := -1;
+    Result := rrOk;
+  end;
+  if Result <> rrOk then
+    Exit;
+  case E.Kind of
+    rkDir: Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+    rkLink: Exit(Fail(rrNotFound, 'the link points to nothing: ' + Path));
+    rkOther: Exit(Fail(rrFailed, 'not a regular file: ' + Path));
+  end;
+  Size := E.Size;
+  if Size < 0 then
+  begin
+    Result := ReadRange(Clean, 0, 1, Dummy, Size);
+    if Result <> rrOk then
+      Exit;
+  end;
+  Stream := TFishReadStream.Create(Self, Clean, Size);
+  Result := rrOk;
 end;
 
 function TFishFS.OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult;
