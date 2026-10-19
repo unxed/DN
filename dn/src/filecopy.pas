@@ -2316,29 +2316,30 @@ TryGetInfo:
       P^.Attr := P^.Attr or Marked;
     end;
 
-  procedure __Remove;
-    var
-      RRC: TStringCollection;
+  var
+    RRC: TStringCollection;
 
-    procedure DoRemove(P_: Pointer);
-    var P: PFileRec absolute P_;
+  procedure DoRemove(P_: Pointer);
+  var P: PFileRec absolute P_;
 
+    begin
+    {Cat: previously the next piece ran only for successfully copied
+    directories, i.e. (P^.Attr and Copied <> 0), but all should be reread}
+    if P^.Attr and Marked = 0 then
       begin
-      {Cat: previously the next piece ran only for successfully copied
-      directories, i.e. (P^.Attr and Copied <> 0), but all should be reread}
-      if P^.Attr and Marked = 0 then
-        begin
-        SSS := CnvString(P^.Owner);
-        if SSS[Length(SSS)] = DnSep then
-          SetLength(SSS, Length(SSS)-1);
-        if Copy(CopyDir, 1, Length(SSS)) = SSS then
-          Inhr := 0;
-        RRC.Insert(NewStr(SSS));
-        if P^.Attr and Directory <> 0 then
-          Red := Red+[DriveOf(SSS)];
-        Files.ForEach(MakeMark);
-        end;
-      end { DoRemove };
+      SSS := CnvString(P^.Owner);
+      if SSS[Length(SSS)] = DnSep then
+        SetLength(SSS, Length(SSS)-1);
+      if Copy(CopyDir, 1, Length(SSS)) = SSS then
+        Inhr := 0;
+      RRC.Insert(NewStr(SSS));
+      if P^.Attr and Directory <> 0 then
+        Red := Red+[DriveOf(SSS)];
+      Files.ForEach(MakeMark);
+      end;
+    end { DoRemove };
+
+  procedure __Remove;
 
     procedure DoReread(P_: Pointer);
     var P: PString absolute P_;
