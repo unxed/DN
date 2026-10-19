@@ -778,6 +778,26 @@ Moreover, on a negative answer the created file remains
     Created := Opened = 0;
     end { TryToReset };
 
+  procedure DoSkip(var iQueue: Integer);
+    begin
+    while (iQueue < CopyQueue.Count-1)
+      and (TLine(CopyQueue.At(iQueue)).Eof and eoEnd = 0)
+    do
+      Inc(iQueue);
+    SkipRequested := iQueue >= CopyQueue.Count-1;
+    end;
+
+  procedure WriteProgress(P: TLine);
+    var
+      CT: String;
+    begin
+    Info.Write(6, StrGrd(P.Size, Wrote, Info.Size.X-6, RevertBar));
+    Info.Write(7, WriteCount);
+    CT := CopyTime;
+    if CT <> '' then
+      Info.Write(9, CT); {John_SW 30-06-2005}
+    end;
+
   procedure MaxWrite;
     label DoRewrite, DoAppend, 1, 2, lbStartWrite, lbStartCheck
       , lRetryToReset;
@@ -798,15 +818,6 @@ Moreover, on a negative answer the created file remains
       
       LongNameWarn: String[50];
       I_LW: Byte;
-
-    procedure DoSkip;
-      begin
-      while (iQueue < CopyQueue.Count-1)
-        and (TLine(CopyQueue.At(iQueue)).Eof and eoEnd = 0)
-      do
-        Inc(iQueue);
-      SkipRequested := iQueue >= CopyQueue.Count-1;
-      end;
 
     const
       CrcTable: array[0..255] of Word = (
@@ -869,17 +880,6 @@ Moreover, on a negative answer the created file remains
     var
       WPWas: Boolean;
 
-    procedure WriteProgress;
-      var
-        CT: String;
-      begin
-      Info.Write(6, StrGrd(P.Size, Wrote, Info.Size.X-6, RevertBar));
-      Info.Write(7, WriteCount);
-      CT := CopyTime;
-      if CT <> '' then
-        Info.Write(9, CT); {John_SW 30-06-2005}
-      end;
-
     { **************** }
     { *** FileCopy *** }
     { **************** }
@@ -901,7 +901,7 @@ Moreover, on a negative answer the created file remains
         if iQueue = CopyQueue.Count then
           begin
           if WPWas then
-            WriteProgress;
+            WriteProgress(P);
           Break;
           end;
         P := CopyQueue.At(iQueue);
@@ -981,7 +981,7 @@ Moreover, on a negative answer the created file remains
               else
                 CopyCancel := False;
               NewTimer(Timer, 0);
-              DoSkip;
+              DoSkip(iQueue);
               if not SkipRequested then
                 goto 1;
               if  (not CopyCancel) then
@@ -1032,7 +1032,7 @@ lRetryToReset:
                           GetString(dlFCRenameNew), S1, 255, 0);
                       if  (J <> cmOK) or (S1 = '') then
                         begin
-                        DoSkip;
+                        DoSkip(iQueue);
                         if not SkipRequested then
                           goto 1;
                         Break;
@@ -1043,7 +1043,7 @@ lRetryToReset:
                       end;
                     cmNo:
                       begin
-                      DoSkip;
+                      DoSkip(iQueue);
                       if not SkipRequested then
                         goto 1;
                       Break;
@@ -1091,7 +1091,7 @@ lbStartCheck:
                   begin
                   Info.Write(2, GetString(dlFC_Exists));
                   Close(WriteStream.F);
-                  DoSkip;
+                  DoSkip(iQueue);
                   if not SkipRequested then
                     goto 1;
                   Break;
@@ -1103,7 +1103,7 @@ lbStartCheck:
                     begin
                     Info.Write(2, GetString(dlFC_Older));
                     Close(WriteStream.F);
-                    DoSkip;
+                    DoSkip(iQueue);
                     if not SkipRequested then
                       goto 1;
                     Break;
@@ -1124,7 +1124,7 @@ lbStartCheck:
                      P.Date) of
                     cmSkip:
                       begin
-                      DoSkip;
+                      DoSkip(iQueue);
                       if not SkipRequested then
                         goto 1;
                       Break;
@@ -1136,7 +1136,7 @@ lbStartCheck:
                           GetString(dlFCRenameNew), S1, 255, 0);
                       if  (J <> cmOK) or (S1 = '') then
                         begin
-                        DoSkip;
+                        DoSkip(iQueue);
                         if not SkipRequested then
                           goto 1;
                         Break;
@@ -1249,7 +1249,7 @@ DoRewrite:
                       GetString(dlFCRenameNew), S1, 255, 0);
                   if  (J <> cmOK) or (S1 = '') then
                     begin
-                    DoSkip;
+                    DoSkip(iQueue);
                     if not SkipRequested then
                       goto 1;
                     Break;
@@ -1326,7 +1326,7 @@ lbStartWrite:
 
         if GrdClick then
           begin
-          WriteProgress;
+          WriteProgress(P);
           GrdClick := False;
           WPWas := False
           end
@@ -1348,7 +1348,7 @@ lbStartWrite:
           end;
         if P.Eof and eoEnd <> 0 then
           begin
-          WriteProgress;
+          WriteProgress(P);
           WPWas := False;
           SetDateAttr;
           if  (P.Owner <> nil) then
