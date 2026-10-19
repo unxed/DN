@@ -97,7 +97,7 @@ jobs:
         with:
           submodules: true
       - name: Packages
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3 openssh-sftp-server
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3 openssh-sftp-server python3-pyftpdlib
       - name: Build and run the tests
         run: tools/dn-test.sh
 
@@ -110,6 +110,6 @@ jobs:
         with:
           submodules: true
       - name: Packages
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3 openssh-sftp-server
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3 openssh-sftp-server python3-pyftpdlib
       - name: Build and run the tests
         run: tools/dn-test.sh t_remotefs t_netsplit t_netproc t_fishfs t_sftpfs t_ftpfs t_netssh

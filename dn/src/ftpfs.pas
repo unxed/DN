@@ -7,7 +7,14 @@
     they are taken as times of this machine. A date of "ls -l" with a time and no year is of the last months: the year is the one that does not
     put it more than a day after Now.
 
-  The connection (the control channel, PASV/EPSV, RETR, STOR and the changes of the tree) follows in the next parts of the step.
+  TFtpFS is the TRemoteFS over a connection to a server: the control channel (a reply is "<code> text", or lines from "<code>-" to "<code> "), a
+  data connection for each listing in passive mode (EPSV, PASV when the server has not got it; the address is the one of the control channel, as
+  a server behind NAT often tells an inner one), TYPE I, FEAT, UTF8 when the server has it. List asks MLSD and falls back to LIST after CWD (an
+  argument of LIST is taken for a mask by some servers); Stat asks MLST, or finds the name in the list of the directory. The methods that move
+  data or change the tree answer rrUnsupported until the next part of the step.
+
+  When a reply does not come in time, or the server closes the control channel, the connection is broken for good: the next reply could not be
+  told from the late one. LastError tells why; make a new TFtpFS to try again.
 
   The unit is empty in the DOS build and in DN_MINI (as NetProc is).
 
@@ -21,7 +28,63 @@ interface
 
 {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
 uses
-  SysUtils, RemoteFS;
+  SysUtils, Classes, ssockets, RemoteFS;
+
+type
+  TFtpFS = class(TRemoteFS)
+  private
+    FCtl: TInetSocket;
+    FHost: AnsiString;
+    FIn: AnsiString;              { what came on the control channel and is not taken as lines yet, from FInPos }
+    FInPos: Integer;
+    FFeatures: TStringList;       { the lines of the answer to FEAT, each without its leading blank, in capitals up to the first blank }
+    FConnected: Boolean;
+    FBroken: Boolean;
+    FUseMlsd: Boolean;
+    FUseEpsv: Boolean;
+    FTimeoutMs: Integer;
+    FReplyCode: Integer;
+    FReplyText: AnsiString;
+    function Broke(const Text: AnsiString): Boolean;
+    function ReadSome(Sock: TInetSocket; Deadline: QWord; var Data: AnsiString): Integer;
+    function ReadLine(Deadline: QWord; out Line: AnsiString): Boolean;
+    function ReadReply(Lines: TStrings): Boolean;
+    function Command(const Cmd: AnsiString; Lines: TStrings = nil): Boolean;
+    function ReplyResult(const Path: AnsiString): TRemoteResult;
+    function OpenData(out Data: TInetSocket): TRemoteResult;
+    function Transfer(const Cmd, Path: AnsiString; out Text: AnsiString): TRemoteResult;
+    function ListLines(const Dir: AnsiString; out Lines: TStringList; out Machine: Boolean): TRemoteResult;
+    function MlstEntry(const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
+    function FindInParent(const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    { Connects to Host:Port and logs in (User "anonymous" with any password for an open server). rrOk; rrDenied when the login is refused;
+      rrFailed with LastError otherwise. }
+    function Connect(const Host: AnsiString; Port: Word; const User, Password: AnsiString): TRemoteResult;
+    { Sends QUIT and closes the connection. Safe to call again; the file system cannot be connected again after it. }
+    procedure Disconnect;
+    { The directory in which the server put the session (PWD). }
+    function Pwd(out Dir: AnsiString): TRemoteResult;
+    { A line of the answer to FEAT, by its first word ("MLST", "UTF8", "EPSV"). }
+    function HasFeature(const Name: AnsiString): Boolean;
+    function List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult; override;
+    function Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult; override;
+    function OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
+    function OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
+    function MkDir(const Path: AnsiString): TRemoteResult; override;
+    function Remove(const Path: AnsiString): TRemoteResult; override;
+    function Rename(const OldPath, NewPath: AnsiString): TRemoteResult; override;
+    function SetMode(const Path: AnsiString; Mode: LongInt): TRemoteResult; override;
+    { How long one reply (or one listing) may take, in milliseconds; 30000 at the start. }
+    property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
+    property Connected: Boolean read FConnected;
+    { List asks MLSD while this is True (it is set at Connect when the server tells MLST in its FEAT); False: LIST. }
+    property UseMlsd: Boolean read FUseMlsd write FUseMlsd;
+    { The code and the text of the last reply of the server. }
+    property ReplyCode: Integer read FReplyCode;
+    property ReplyText: AnsiString read FReplyText;
+  end;
 
 { One line of an answer to MLSD, or the line of an answer to MLST without its leading blank. False for a line that is not one, and for the entries of
   the directory itself and of its parent (type cdir and pdir). }
@@ -36,7 +99,7 @@ implementation
 {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
 
 uses
-  DateUtils;
+  StrUtils, DateUtils, Math;
 
 const
   MonthNames: array[1..12] of AnsiString = ('jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec');
@@ -156,15 +219,19 @@ begin
   Result := True;
 end;
 
-{ The permission bits written in octal ("0755", "755"); -1 when it is not a number of up to four octal digits after the zeros. }
+{ The permission bits written in octal ("0755", "755", and "0o755" as some servers written in Python send it); -1 when it is not a number of up to
+  four octal digits after the zeros. }
 function OctalValue(const S: AnsiString): LongInt;
 var
-  I: Integer;
+  I, Start: Integer;
 begin
   Result := 0;
-  if S = '' then
+  Start := 1;
+  if (Length(S) > 2) and (S[1] = '0') and (S[2] in ['o', 'O']) then
+    Start := 3;
+  if Start > Length(S) then
     Exit(-1);
-  for I := 1 to Length(S) do
+  for I := Start to Length(S) do
   begin
     if not (S[I] in ['0'..'7']) then
       Exit(-1);
@@ -468,6 +535,645 @@ begin
   end;
   if not Result then
     ClearEntry(E);
+end;
+
+const
+  { the codes of LastError of a socket whose read waited past its IOTimeout: EAGAIN of Linux and of the BSDs, WSAEWOULDBLOCK, WSAETIMEDOUT }
+  WaitCodes: array[0..3] of Integer = (11, 35, 10035, 10060);
+  { how long one read of a socket may block, so that the deadline of the reply is looked at often }
+  ReadStepMs = 200;
+
+{ TFtpFS }
+
+constructor TFtpFS.Create;
+begin
+  inherited Create;
+  FInPos := 1;
+  FTimeoutMs := 30000;
+  FFeatures := TStringList.Create;
+end;
+
+destructor TFtpFS.Destroy;
+begin
+  Disconnect;
+  FFeatures.Free;
+  inherited Destroy;
+end;
+
+function TFtpFS.Broke(const Text: AnsiString): Boolean;
+begin
+  FBroken := True;
+  Fail(rrFailed, Text);
+  Result := False;
+end;
+
+{ Takes what came on Sock (up to 16 KiB) at the end of Data, waiting for it until Deadline: the count of bytes, 0 at the end of the stream, -1 when
+  the time is over or the socket failed (LastError tells which). }
+function TFtpFS.ReadSome(Sock: TInetSocket; Deadline: QWord; var Data: AnsiString): Integer;
+var
+  Chunk: array[0..16383] of Char;
+  I: Integer;
+  Waiting: Boolean;
+begin
+  while True do
+  begin
+    if GetTickCount64 >= Deadline then
+    begin
+      Fail(rrFailed, 'the server did not answer in time');
+      Exit(-1);
+    end;
+    Result := Sock.Read(Chunk, SizeOf(Chunk));
+    if Result > 0 then
+    begin
+      SetLength(Data, Length(Data) + Result);
+      Move(Chunk[0], Data[Length(Data) - Result + 1], Result);
+      Exit;
+    end;
+    if Result = 0 then
+      Exit;
+    Waiting := False;
+    for I := 0 to High(WaitCodes) do
+      if Sock.LastError = WaitCodes[I] then
+        Waiting := True;
+    if not Waiting then
+    begin
+      Fail(rrFailed, 'the connection failed (error ' + IntToStr(Sock.LastError) + ')');
+      Exit(-1);
+    end;
+  end;
+end;
+
+{ The next line of the control channel without its line end. False (and the connection broken) when the time is over or the server closed it. }
+function TFtpFS.ReadLine(Deadline: QWord; out Line: AnsiString): Boolean;
+var
+  P, N: SizeInt;
+begin
+  Line := '';
+  while True do
+  begin
+    P := PosEx(#10, FIn, FInPos);
+    if P > 0 then
+    begin
+      Line := Copy(FIn, FInPos, P - FInPos);
+      FInPos := P + 1;
+      if (Line <> '') and (Line[Length(Line)] = #13) then
+        SetLength(Line, Length(Line) - 1);
+      Exit(True);
+    end;
+    if FInPos > 1 then
+    begin
+      Delete(FIn, 1, FInPos - 1);
+      FInPos := 1;
+    end;
+    N := ReadSome(FCtl, Deadline, FIn);
+    if N = 0 then
+      Exit(Broke('the server closed the connection'));
+    if N < 0 then
+      Exit(Broke(LastError));
+  end;
+end;
+
+{ One reply: ReplyCode and ReplyText (of its last line); the lines between the first and the last go to Lines when it is not nil. }
+function TFtpFS.ReadReply(Lines: TStrings): Boolean;
+var
+  Line, Code: AnsiString;
+  Deadline: QWord;
+begin
+  Result := False;
+  FReplyCode := 0;
+  FReplyText := '';
+  Deadline := GetTickCount64 + QWord(FTimeoutMs);
+  if not ReadLine(Deadline, Line) then
+    Exit;
+  if (Length(Line) < 3) or (not (Line[1] in ['1'..'5'])) or (not (Line[2] in ['0'..'9'])) or (not (Line[3] in ['0'..'9'])) then
+    Exit(Broke('the server does not answer as an FTP server: ' + Copy(Line, 1, 80)));
+  Code := Copy(Line, 1, 3);
+  if (Length(Line) >= 4) and (Line[4] = '-') then
+    { a reply of many lines ends with a line that starts with the code and a blank }
+    repeat
+      if not ReadLine(Deadline, Line) then
+        Exit;
+      if (Copy(Line, 1, 3) = Code) and ((Length(Line) = 3) or (Line[4] = ' ')) then
+        Break;
+      if Lines <> nil then
+        Lines.Add(Line);
+    until False;
+  FReplyCode := StrToInt(Code);
+  FReplyText := Copy(Line, 5, Length(Line));
+  Result := True;
+end;
+
+{ Sends Cmd and reads the reply that ends it (a preliminary 1xx is taken only by the callers that wait for one). }
+function TFtpFS.Command(const Cmd: AnsiString; Lines: TStrings): Boolean;
+var
+  Packet: AnsiString;
+begin
+  Result := False;
+  if (FCtl = nil) or FBroken then
+  begin
+    Fail(rrFailed, 'the connection is not open');
+    Exit;
+  end;
+  Packet := Cmd + #13#10;
+  try
+    if FCtl.Write(Packet[1], Length(Packet)) <> Length(Packet) then
+      Exit(Broke('cannot send to the server'));
+  except
+    on E: Exception do
+      Exit(Broke('cannot send to the server: ' + E.Message));
+  end;
+  Result := ReadReply(Lines);
+end;
+
+{ The result for a reply that refuses: 550 is a path that is not there or not usable, 530 and 553 are refusals, 50x are commands the server has not
+  got. LastError tells the reply. }
+function TFtpFS.ReplyResult(const Path: AnsiString): TRemoteResult;
+var
+  Where: AnsiString;
+begin
+  Where := '';
+  if Path <> '' then
+    Where := ': ' + Path;
+  case FReplyCode of
+    550: Result := rrNotFound;
+    530, 532, 553: Result := rrDenied;
+    500, 501, 502, 504: Result := rrUnsupported;
+  else
+    Result := rrFailed;
+  end;
+  Result := Fail(Result, 'the server says: ' + IntToStr(FReplyCode) + ' ' + FReplyText + Where);
+end;
+
+{ A data connection in passive mode: EPSV "(|||port|)", or PASV "(h1,h2,h3,h4,p1,p2)" of which only the port is taken. }
+function TFtpFS.OpenData(out Data: TInetSocket): TRemoteResult;
+var
+  P, Q, I, Port: Integer;
+  Parts: TStringList;
+  Inner: AnsiString;
+begin
+  Data := nil;
+  Port := -1;
+  if FUseEpsv then
+  begin
+    if not Command('EPSV') then
+      Exit(rrFailed);
+    if FReplyCode = 229 then
+    begin
+      P := Pos('(', FReplyText);
+      Q := Pos(')', FReplyText);
+      if (P > 0) and (Q > P + 4) then
+      begin
+        Inner := Copy(FReplyText, P + 1, Q - P - 1);
+        { the delimiter is the first character, three of them before the port and one after it }
+        Inner := Copy(Inner, 4, Length(Inner) - 4);
+        Port := StrToIntDef(Inner, -1);
+      end;
+    end
+    else
+      FUseEpsv := False;
+  end;
+  if Port < 0 then
+  begin
+    if not Command('PASV') then
+      Exit(rrFailed);
+    if FReplyCode <> 227 then
+      Exit(ReplyResult(''));
+    P := Pos('(', FReplyText);
+    Q := Pos(')', FReplyText);
+    if (P = 0) or (Q < P) then
+    begin
+      { some servers leave out the brackets: the numbers start at the first digit after the code }
+      P := 0;
+      while (P < Length(FReplyText)) and (not (FReplyText[P + 1] in ['0'..'9'])) do
+        Inc(P);
+      Q := P + 1;
+      while (Q <= Length(FReplyText)) and (FReplyText[Q] in ['0'..'9', ',']) do
+        Inc(Q);
+    end;
+    Parts := TStringList.Create;
+    try
+      Parts.Delimiter := ',';
+      Parts.StrictDelimiter := True;
+      Parts.DelimitedText := Copy(FReplyText, P + 1, Q - P - 1);
+      if Parts.Count = 6 then
+      begin
+        for I := 0 to 5 do
+          if StrToIntDef(Trim(Parts[I]), -1) < 0 then
+            Parts.Clear;
+        if Parts.Count = 6 then
+          Port := StrToInt(Trim(Parts[4])) * 256 + StrToInt(Trim(Parts[5]));
+      end;
+    finally
+      Parts.Free;
+    end;
+  end;
+  if (Port <= 0) or (Port > 65535) then
+    Exit(Fail(rrFailed, 'the server did not tell a port for the data: ' + FReplyText));
+  try
+    Data := TInetSocket.Create(FHost, Port, Max(1000, FTimeoutMs));
+    Data.IOTimeout := ReadStepMs;
+  except
+    on E: Exception do
+    begin
+      FreeAndNil(Data);
+      Exit(Fail(rrFailed, 'cannot open the data connection: ' + E.Message));
+    end;
+  end;
+  Result := rrOk;
+end;
+
+{ A command that sends its answer over a data connection (MLSD, LIST): the data in Text. Path is for the messages. }
+function TFtpFS.Transfer(const Cmd, Path: AnsiString; out Text: AnsiString): TRemoteResult;
+var
+  Data: TInetSocket;
+  Deadline: QWord;
+  N: Integer;
+begin
+  Text := '';
+  Result := OpenData(Data);
+  if Result <> rrOk then
+    Exit;
+  try
+    if not Command(Cmd) then
+      Exit(rrFailed);
+    if (FReplyCode <> 125) and (FReplyCode <> 150) then
+    begin
+      if FReplyCode div 100 = 2 then
+        Exit(Fail(rrFailed, 'the server ended the transfer before it began: ' + FReplyText));
+      Exit(ReplyResult(Path));
+    end;
+    Deadline := GetTickCount64 + QWord(FTimeoutMs);
+    repeat
+      N := ReadSome(Data, Deadline, Text);
+    until N <= 0;
+    FreeAndNil(Data);
+    if N < 0 then
+    begin
+      Broke(LastError);
+      Exit(rrFailed);
+    end;
+    if not ReadReply(nil) then
+      Exit(rrFailed);
+    if FReplyCode div 100 <> 2 then
+      Exit(ReplyResult(Path));
+    Result := rrOk;
+  finally
+    Data.Free;
+  end;
+end;
+
+{ The lines of the listing of Dir; Machine: they are of MLSD (else of LIST). }
+function TFtpFS.ListLines(const Dir: AnsiString; out Lines: TStringList; out Machine: Boolean): TRemoteResult;
+var
+  Text: AnsiString;
+begin
+  Lines := nil;
+  Machine := FUseMlsd;
+  if FUseMlsd then
+    Result := Transfer('MLSD ' + Dir, Dir, Text)
+  else
+  begin
+    if not Command('CWD ' + Dir) then
+      Exit(rrFailed);
+    if FReplyCode div 100 <> 2 then
+      Exit(ReplyResult(Dir));
+    Result := Transfer('LIST -a', Dir, Text);
+    if (Result = rrUnsupported) and (not FBroken) then
+      Result := Transfer('LIST', Dir, Text);
+  end;
+  { a path that cannot be listed is told with 550 or with 501 ("no such directory"): the caller looks at the path }
+  if (Result = rrUnsupported) and (FReplyCode = 501) then
+    Result := rrNotFound;
+  if Result <> rrOk then
+    Exit;
+  Lines := TStringList.Create;
+  Lines.Text := Text;
+end;
+
+{ The entry of Path by MLST: the facts are on the line of the reply that starts with a blank. }
+function TFtpFS.MlstEntry(const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
+var
+  Lines: TStringList;
+  I: Integer;
+  Line, Dir, Name: AnsiString;
+begin
+  ClearEntry(Entry);
+  Lines := TStringList.Create;
+  try
+    if not Command('MLST ' + Path, Lines) then
+      Exit(rrFailed);
+    if FReplyCode div 100 <> 2 then
+      Exit(ReplyResult(Path));
+    for I := 0 to Lines.Count - 1 do
+      if (Lines[I] <> '') and (Lines[I][1] = ' ') then
+      begin
+        { the entry of a directory may be told as the directory itself }
+        Line := Copy(Lines[I], 2, Length(Lines[I]));
+        Line := StringReplace(Line, 'type=cdir;', 'type=dir;', [rfIgnoreCase]);
+        Line := StringReplace(Line, 'type=pdir;', 'type=dir;', [rfIgnoreCase]);
+        if FtpParseMlsx(Line, Entry) then
+        begin
+          RemoteSplit(Path, Dir, Name);
+          Entry.Name := Name;
+          Exit(rrOk);
+        end;
+      end;
+    Result := Fail(rrFailed, 'the server sent no facts for ' + Path);
+  finally
+    Lines.Free;
+  end;
+end;
+
+{ The entry of Path found by its name in the list of its directory, for a server without MLST. }
+function TFtpFS.FindInParent(const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
+var
+  Dir, Name: AnsiString;
+  Entries: TRemoteEntries;
+  I: Integer;
+begin
+  ClearEntry(Entry);
+  RemoteSplit(Path, Dir, Name);
+  Result := List(Dir, Entries);
+  if Result = rrNotDir then
+    Exit(Fail(rrNotFound, 'not found: ' + Path));
+  if Result <> rrOk then
+    Exit;
+  for I := 0 to High(Entries) do
+    if Entries[I].Name = Name then
+    begin
+      Entry := Entries[I];
+      Exit(rrOk);
+    end;
+  Result := Fail(rrNotFound, 'not found: ' + Path);
+end;
+
+function TFtpFS.Connect(const Host: AnsiString; Port: Word; const User, Password: AnsiString): TRemoteResult;
+const
+  WantFacts: array[0..3] of AnsiString = (';type;', ';size;', ';modify;', ';unix.mode;');
+var
+  I: Integer;
+  S, Facts: AnsiString;
+begin
+  if FConnected then
+    Exit(rrOk);
+  if FBroken then
+    Exit(Fail(rrFailed, 'the connection cannot be opened'));
+  FHost := Host;
+  try
+    FCtl := TInetSocket.Create(Host, Port, Max(1000, FTimeoutMs));
+    FCtl.IOTimeout := ReadStepMs;
+  except
+    on E: Exception do
+    begin
+      FreeAndNil(FCtl);
+      FBroken := True;
+      Exit(Fail(rrFailed, 'cannot connect to ' + Host + ':' + IntToStr(Port) + ': ' + E.Message));
+    end;
+  end;
+  { the greeting: 120 asks to wait for the 220 that follows }
+  if not ReadReply(nil) then
+    Exit(rrFailed);
+  if FReplyCode = 120 then
+    if not ReadReply(nil) then
+      Exit(rrFailed);
+  if FReplyCode <> 220 then
+  begin
+    Broke('the server does not take the connection: ' + IntToStr(FReplyCode) + ' ' + FReplyText);
+    Exit(rrFailed);
+  end;
+  if not Command('USER ' + User) then
+    Exit(rrFailed);
+  if FReplyCode = 331 then
+    if not Command('PASS ' + Password) then
+      Exit(rrFailed);
+  if FReplyCode <> 230 then
+  begin
+    if FReplyCode div 100 = 5 then
+      Result := Fail(rrDenied, 'the server refused the login: ' + IntToStr(FReplyCode) + ' ' + FReplyText)
+    else
+      Result := Fail(rrFailed, 'the login was not finished: ' + IntToStr(FReplyCode) + ' ' + FReplyText);
+    FBroken := True;
+    FreeAndNil(FCtl);
+    Exit;
+  end;
+  FFeatures.Clear;
+  if Command('FEAT', FFeatures) and (FReplyCode = 211) then
+    for I := 0 to FFeatures.Count - 1 do
+    begin
+      S := TrimLeft(FFeatures[I]);
+      FFeatures[I] := UpperCase(Copy2Space(S + ' ')) + Copy(S, Length(Copy2Space(S + ' ')) + 1, Length(S));
+    end
+  else
+    FFeatures.Clear;
+  if FBroken then
+    Exit(rrFailed);
+  FUseMlsd := HasFeature('MLST');
+  FUseEpsv := True;
+  { the facts that a server does not send unless asked (unix.mode is one of them) are asked for, the ones it has of those that are read }
+  if FUseMlsd then
+  begin
+    S := '';
+    for I := 0 to FFeatures.Count - 1 do
+      if Copy(FFeatures[I], 1, 5) = 'MLST ' then
+        S := LowerCase(Copy(FFeatures[I], 6, Length(FFeatures[I])));
+    Facts := '';
+    for I := 0 to High(WantFacts) do
+      if Pos(WantFacts[I], ';' + StringReplace(S, '*', '', [rfReplaceAll])) > 0 then
+        Facts := Facts + Copy(WantFacts[I], 2, Length(WantFacts[I]));
+    if (Facts <> '') and Command('OPTS MLST ' + Facts) and (FReplyCode div 100 <> 2) then
+      Fail(rrFailed, 'the server does not take the facts: ' + FReplyText);
+  end;
+  if HasFeature('UTF8') then
+    Command('OPTS UTF8 ON');
+  if (not FBroken) and Command('TYPE I') and (FReplyCode div 100 <> 2) then
+    Fail(rrFailed, 'the server has no binary mode: ' + FReplyText);
+  if FBroken then
+    Exit(rrFailed);
+  FConnected := True;
+  Result := rrOk;
+end;
+
+procedure TFtpFS.Disconnect;
+var
+  Saved: Integer;
+begin
+  if FConnected and (not FBroken) then
+  begin
+    Saved := FTimeoutMs;
+    FTimeoutMs := 2000;
+    Command('QUIT');
+    FTimeoutMs := Saved;
+  end;
+  FConnected := False;
+  FBroken := True;
+  FreeAndNil(FCtl);
+end;
+
+function TFtpFS.Pwd(out Dir: AnsiString): TRemoteResult;
+var
+  P, Q: Integer;
+begin
+  Dir := '';
+  if not Command('PWD') then
+    Exit(rrFailed);
+  if FReplyCode <> 257 then
+    Exit(ReplyResult(''));
+  { the name is in double quotes, a quote in it is doubled }
+  P := Pos('"', FReplyText);
+  if P = 0 then
+    Exit(Fail(rrFailed, 'the reply to PWD has no name: ' + FReplyText));
+  Q := P + 1;
+  while Q <= Length(FReplyText) do
+  begin
+    if FReplyText[Q] = '"' then
+    begin
+      if (Q < Length(FReplyText)) and (FReplyText[Q + 1] = '"') then
+        Inc(Q)
+      else
+        Break;
+    end;
+    Dir := Dir + FReplyText[Q];
+    Inc(Q);
+  end;
+  Result := rrOk;
+end;
+
+function TFtpFS.HasFeature(const Name: AnsiString): Boolean;
+var
+  I: Integer;
+  U: AnsiString;
+begin
+  U := UpperCase(Name);
+  for I := 0 to FFeatures.Count - 1 do
+    if (FFeatures[I] = U) or (Copy(FFeatures[I], 1, Length(U) + 1) = U + ' ') then
+      Exit(True);
+  Result := False;
+end;
+
+function TFtpFS.List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult;
+var
+  Clean: AnsiString;
+  Lines: TStringList;
+  Machine, Ok: Boolean;
+  I, N: Integer;
+  E: TRemoteEntry;
+  Now_: TDateTime;
+begin
+  SetLength(Entries, 0);
+  if not RemoteCleanPath(Dir, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Dir));
+  Result := ListLines(Clean, Lines, Machine);
+  if Result = rrNotFound then
+  begin
+    { 550 is told for a file where a directory is needed as well: the kind of the path decides }
+    if (not FBroken) and (Stat(Clean, True, E) = rrOk) then
+    begin
+      if E.Kind <> rkDir then
+        Exit(Fail(rrNotDir, 'not a directory: ' + Dir));
+      Exit(Fail(rrDenied, 'the directory cannot be read: ' + Dir));
+    end;
+    if not FBroken then
+      Result := Fail(rrNotFound, 'not found: ' + Dir);
+  end;
+  if Result <> rrOk then
+    Exit;
+  try
+    Now_ := SysUtils.Now;
+    SetLength(Entries, Lines.Count);
+    N := 0;
+    for I := 0 to Lines.Count - 1 do
+    begin
+      if Machine then
+        Ok := FtpParseMlsx(Lines[I], E)
+      else
+        Ok := FtpParseList(Lines[I], Now_, E);
+      if Ok and (E.Name <> '.') and (E.Name <> '..') then
+      begin
+        Entries[N] := E;
+        Inc(N);
+      end;
+    end;
+    SetLength(Entries, N);
+  finally
+    Lines.Free;
+  end;
+end;
+
+function TFtpFS.Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult;
+var
+  Clean, Dir, Name, Target: AnsiString;
+  Hops: Integer;
+  Next: TRemoteEntry;
+begin
+  ClearEntry(Entry);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  RemoteSplit(Clean, Dir, Name);
+  if Clean = '/' then
+  begin
+    Entry.Kind := rkDir;
+    Exit(rrOk);
+  end;
+  if HasFeature('MLST') then
+    Result := MlstEntry(Clean, Entry)
+  else
+    Result := FindInParent(Clean, Entry);
+  if Result <> rrOk then
+    Exit;
+  { a link the server tells as a link, followed to what it points to (a link to nothing stays the link) }
+  Hops := 0;
+  while FollowLinks and (Entry.Kind = rkLink) and (Entry.LinkTarget <> '') and (Hops < 8) do
+  begin
+    if Entry.LinkTarget[1] = '/' then
+      Target := Entry.LinkTarget
+    else
+      Target := RemoteJoin(Dir, Entry.LinkTarget);
+    if (not RemoteCleanPath(Target, Target)) or (Stat(Target, False, Next) <> rrOk) then
+    begin
+      if FBroken then
+        Exit(rrFailed);
+      Break;
+    end;
+    RemoteSplit(Target, Dir, Name);
+    Next.Name := Entry.Name;
+    Entry := Next;
+    Inc(Hops);
+  end;
+  RemoteSplit(Clean, Dir, Name);
+  Entry.Name := Name;
+  Result := rrOk;
+end;
+
+function TFtpFS.OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+begin
+  Stream := nil;
+  Result := Fail(rrUnsupported, 'reading a file over FTP is not done yet: ' + Path);
+end;
+
+function TFtpFS.OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+begin
+  Stream := nil;
+  Result := Fail(rrUnsupported, 'writing a file over FTP is not done yet: ' + Path);
+end;
+
+function TFtpFS.MkDir(const Path: AnsiString): TRemoteResult;
+begin
+  Result := Fail(rrUnsupported, 'making a directory over FTP is not done yet: ' + Path);
+end;
+
+function TFtpFS.Remove(const Path: AnsiString): TRemoteResult;
+begin
+  Result := Fail(rrUnsupported, 'removing over FTP is not done yet: ' + Path);
+end;
+
+function TFtpFS.Rename(const OldPath, NewPath: AnsiString): TRemoteResult;
+begin
+  Result := Fail(rrUnsupported, 'renaming over FTP is not done yet: ' + OldPath);
+end;
+
+function TFtpFS.SetMode(const Path: AnsiString; Mode: LongInt): TRemoteResult;
+begin
+  Result := Fail(rrUnsupported, 'setting the mode over FTP is not done yet: ' + Path);
 end;
 
 {$ENDIF}
