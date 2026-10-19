@@ -10,8 +10,11 @@
   TFtpFS is the TRemoteFS over a connection to a server: the control channel (a reply is "<code> text", or lines from "<code>-" to "<code> "), a
   data connection for each listing in passive mode (EPSV, PASV when the server has not got it; the address is the one of the control channel, as
   a server behind NAT often tells an inner one), TYPE I, FEAT, UTF8 when the server has it. List asks MLSD and falls back to LIST after CWD (an
-  argument of LIST is taken for a mask by some servers); Stat asks MLST, or finds the name in the list of the directory. The methods that move
-  data or change the tree answer rrUnsupported until the next part of the step.
+  argument of LIST is taken for a mask by some servers); Stat asks MLST, or finds the name in the list of the directory. OpenRead is a stream over
+  RETR (a Seek elsewhere ends the transfer with ABOR and starts it again with REST); OpenWrite is a stream over STOR, which writes the file from
+  its start to its end. While a stream is open the control channel is its own, and the other requests fail until it is freed. MkDir (MKD),
+  Remove (DELE, RMD), Rename (RNFR, RNTO) and SetMode (SITE CHMOD, which not every server has) look at the paths first, so that the answers are
+  those of TLocalFS whatever the server says (rrExists for a taken name, rrNotEmpty for a directory with content).
 
   When a reply does not come in time, or the server closes the control channel, the connection is broken for good: the next reply could not be
   told from the late one. LastError tells why; make a new TFtpFS to try again.
@@ -45,7 +48,9 @@ type
     FTimeoutMs: Integer;
     FReplyCode: Integer;
     FReplyText: AnsiString;
+    FBusy: Boolean;               { a stream of a file has the control channel }
     function Broke(const Text: AnsiString): Boolean;
+    function RecvSome(Sock: TInetSocket; Buf: Pointer; Size: Integer; Deadline: QWord): Integer;
     function ReadSome(Sock: TInetSocket; Deadline: QWord; var Data: AnsiString): Integer;
     function ReadLine(Deadline: QWord; out Line: AnsiString): Boolean;
     function ReadReply(Lines: TStrings): Boolean;
@@ -56,6 +61,10 @@ type
     function ListLines(const Dir: AnsiString; out Lines: TStringList; out Machine: Boolean): TRemoteResult;
     function MlstEntry(const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
     function FindInParent(const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
+    function StartData(const Cmd, Path: AnsiString; out Data: TInetSocket): TRemoteResult;
+    function EndData(var Data: TInetSocket; const Path: AnsiString): TRemoteResult;
+    procedure AbortData(var Data: TInetSocket);
+    function SendAll(Sock: TInetSocket; Buf: Pointer; Size: Integer): Boolean;
   public
     constructor Create;
     destructor Destroy; override;
@@ -70,7 +79,11 @@ type
     function HasFeature(const Name: AnsiString): Boolean;
     function List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult; override;
     function Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult; override;
+    { A stream over the file from its start (RETR). A read that fails raises EReadError (LastError tells why); free the stream before the other
+      requests and before the file system. }
     function OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
+    { A stream that writes the file from its start to its end (STOR); Seek can only tell the place. A write that fails raises EWriteError; the reply
+      to the transfer is read when the stream is freed, a refusal is left in LastError. }
     function OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
     function MkDir(const Path: AnsiString): TRemoteResult; override;
     function Remove(const Path: AnsiString): TRemoteResult; override;
@@ -567,11 +580,10 @@ begin
   Result := False;
 end;
 
-{ Takes what came on Sock (up to 16 KiB) at the end of Data, waiting for it until Deadline: the count of bytes, 0 at the end of the stream, -1 when
-  the time is over or the socket failed (LastError tells which). }
-function TFtpFS.ReadSome(Sock: TInetSocket; Deadline: QWord; var Data: AnsiString): Integer;
+{ Up to Size bytes of Sock into Buf, waiting for them until Deadline: the count, 0 at the end of the stream, -1 when the time is over or the socket
+  failed (LastError tells which). }
+function TFtpFS.RecvSome(Sock: TInetSocket; Buf: Pointer; Size: Integer; Deadline: QWord): Integer;
 var
-  Chunk: array[0..16383] of Char;
   I: Integer;
   Waiting: Boolean;
 begin
@@ -582,14 +594,8 @@ begin
       Fail(rrFailed, 'the server did not answer in time');
       Exit(-1);
     end;
-    Result := Sock.Read(Chunk, SizeOf(Chunk));
-    if Result > 0 then
-    begin
-      SetLength(Data, Length(Data) + Result);
-      Move(Chunk[0], Data[Length(Data) - Result + 1], Result);
-      Exit;
-    end;
-    if Result = 0 then
+    Result := Sock.Read(Buf^, Size);
+    if Result >= 0 then
       Exit;
     Waiting := False;
     for I := 0 to High(WaitCodes) do
@@ -601,6 +607,47 @@ begin
       Exit(-1);
     end;
   end;
+end;
+
+{ What came on Sock (up to 16 KiB) put at the end of Data; the answers of RecvSome. }
+function TFtpFS.ReadSome(Sock: TInetSocket; Deadline: QWord; var Data: AnsiString): Integer;
+var
+  Chunk: array[0..16383] of Char;
+begin
+  Result := RecvSome(Sock, @Chunk[0], SizeOf(Chunk), Deadline);
+  if Result > 0 then
+  begin
+    SetLength(Data, Length(Data) + Result);
+    Move(Chunk[0], Data[Length(Data) - Result + 1], Result);
+  end;
+end;
+
+function TFtpFS.SendAll(Sock: TInetSocket; Buf: Pointer; Size: Integer): Boolean;
+var
+  N: Integer;
+  P: PByte;
+begin
+  P := Buf;
+  while Size > 0 do
+  begin
+    try
+      N := Sock.Write(P^, Size);
+    except
+      on E: Exception do
+      begin
+        Fail(rrFailed, 'cannot send to the server: ' + E.Message);
+        Exit(False);
+      end;
+    end;
+    if N <= 0 then
+    begin
+      Fail(rrFailed, 'cannot send to the server (error ' + IntToStr(Sock.LastError) + ')');
+      Exit(False);
+    end;
+    Inc(P, N);
+    Dec(Size, N);
+  end;
+  Result := True;
 end;
 
 { The next line of the control channel without its line end. False (and the connection broken) when the time is over or the server closed it. }
@@ -674,14 +721,14 @@ begin
     Fail(rrFailed, 'the connection is not open');
     Exit;
   end;
-  Packet := Cmd + #13#10;
-  try
-    if FCtl.Write(Packet[1], Length(Packet)) <> Length(Packet) then
-      Exit(Broke('cannot send to the server'));
-  except
-    on E: Exception do
-      Exit(Broke('cannot send to the server: ' + E.Message));
+  if FBusy then
+  begin
+    Fail(rrFailed, 'a stream of a file has the connection: free it first');
+    Exit;
   end;
+  Packet := Cmd + #13#10;
+  if not SendAll(FCtl, @Packet[1], Length(Packet)) then
+    Exit(Broke(LastError));
   Result := ReadReply(Lines);
 end;
 
@@ -783,6 +830,57 @@ begin
 end;
 
 { A command that sends its answer over a data connection (MLSD, LIST): the data in Text. Path is for the messages. }
+{ Opens a data connection and sends Cmd on the control channel; rrOk when the server began the transfer (125 or 150), Data is then open. }
+function TFtpFS.StartData(const Cmd, Path: AnsiString; out Data: TInetSocket): TRemoteResult;
+begin
+  Result := OpenData(Data);
+  if Result <> rrOk then
+    Exit;
+  if not Command(Cmd) then
+  begin
+    FreeAndNil(Data);
+    Exit(rrFailed);
+  end;
+  if (FReplyCode = 125) or (FReplyCode = 150) then
+    Exit(rrOk);
+  FreeAndNil(Data);
+  if FReplyCode div 100 = 2 then
+    Exit(Fail(rrFailed, 'the server ended the transfer before it began: ' + FReplyText));
+  Result := ReplyResult(Path);
+end;
+
+{ Closes the data connection of a transfer and reads the reply that ends it. }
+function TFtpFS.EndData(var Data: TInetSocket; const Path: AnsiString): TRemoteResult;
+begin
+  FreeAndNil(Data);
+  if not ReadReply(nil) then
+    Exit(rrFailed);
+  if FReplyCode div 100 <> 2 then
+    Exit(ReplyResult(Path));
+  Result := rrOk;
+end;
+
+{ Ends a transfer before its end: the data connection is closed and ABOR sent; the server answers with one reply (226) or two (426, then 226),
+  so the replies are read while they come. }
+procedure TFtpFS.AbortData(var Data: TInetSocket);
+var
+  Packet: AnsiString;
+begin
+  FreeAndNil(Data);
+  if (FCtl = nil) or FBroken then
+    Exit;
+  Packet := 'ABOR'#13#10;
+  if not SendAll(FCtl, @Packet[1], Length(Packet)) then
+  begin
+    Broke(LastError);
+    Exit;
+  end;
+  if not ReadReply(nil) then
+    Exit;
+  if (FReplyCode = 426) or (FReplyCode = 450) or (FReplyCode = 451) or (FReplyCode = 125) or (FReplyCode = 150) then
+    ReadReply(nil);
+end;
+
 function TFtpFS.Transfer(const Cmd, Path: AnsiString; out Text: AnsiString): TRemoteResult;
 var
   Data: TInetSocket;
@@ -790,33 +888,21 @@ var
   N: Integer;
 begin
   Text := '';
-  Result := OpenData(Data);
+  Result := StartData(Cmd, Path, Data);
   if Result <> rrOk then
     Exit;
   try
-    if not Command(Cmd) then
-      Exit(rrFailed);
-    if (FReplyCode <> 125) and (FReplyCode <> 150) then
-    begin
-      if FReplyCode div 100 = 2 then
-        Exit(Fail(rrFailed, 'the server ended the transfer before it began: ' + FReplyText));
-      Exit(ReplyResult(Path));
-    end;
     Deadline := GetTickCount64 + QWord(FTimeoutMs);
     repeat
       N := ReadSome(Data, Deadline, Text);
     until N <= 0;
-    FreeAndNil(Data);
     if N < 0 then
     begin
+      FreeAndNil(Data);
       Broke(LastError);
       Exit(rrFailed);
     end;
-    if not ReadReply(nil) then
-      Exit(rrFailed);
-    if FReplyCode div 100 <> 2 then
-      Exit(ReplyResult(Path));
-    Result := rrOk;
+    Result := EndData(Data, Path);
   finally
     Data.Free;
   end;
@@ -1144,36 +1230,385 @@ begin
   Result := rrOk;
 end;
 
+type
+  TFtpReadStream = class(TStream)
+  private
+    FFS: TFtpFS;
+    FPath: AnsiString;
+    FData: TInetSocket;           { nil when no transfer runs (at the end of the file, or after a Seek past it) }
+    FPos, FSize: Int64;           { FPos: the place in the file of the next byte of FData }
+    function Start(Offset: Int64): TRemoteResult;
+    procedure Finish;
+  protected
+    function GetSize: Int64; override;
+  public
+    constructor Create(AFS: TFtpFS; const APath: AnsiString; ASize: Int64);
+    destructor Destroy; override;
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TFtpReadStream.Create(AFS: TFtpFS; const APath: AnsiString; ASize: Int64);
+begin
+  inherited Create;
+  FFS := AFS;
+  FPath := APath;
+  FSize := ASize;
+end;
+
+destructor TFtpReadStream.Destroy;
+begin
+  if FData <> nil then
+    FFS.AbortData(FData);
+  FFS.FBusy := False;
+  inherited Destroy;
+end;
+
+function TFtpReadStream.GetSize: Int64;
+begin
+  Result := FSize;
+end;
+
+{ A transfer from Offset: REST before RETR when it is not the start. }
+function TFtpReadStream.Start(Offset: Int64): TRemoteResult;
+begin
+  FFS.FBusy := False;
+  try
+    if Offset > 0 then
+    begin
+      if not FFS.Command('REST ' + IntToStr(Offset)) then
+        Exit(rrFailed);
+      if FFS.FReplyCode <> 350 then
+        Exit(FFS.Fail(rrUnsupported, 'the server cannot start a file in its middle: ' + FFS.FReplyText));
+    end;
+    Result := FFS.StartData('RETR ' + FPath, FPath, FData);
+  finally
+    FFS.FBusy := True;
+  end;
+  if Result = rrOk then
+    FPos := Offset;
+end;
+
+{ The end of the data: the reply to the transfer. }
+procedure TFtpReadStream.Finish;
+begin
+  FFS.FBusy := False;
+  try
+    if FFS.EndData(FData, FPath) <> rrOk then
+      raise EReadError.Create(FFS.LastError);
+  finally
+    FFS.FBusy := True;
+  end;
+end;
+
+function TFtpReadStream.Read(var Buffer; Count: LongInt): LongInt;
+var
+  N: Integer;
+  Dest: PByte;
+begin
+  Result := 0;
+  Dest := @Buffer;
+  while (Count > 0) and (FData <> nil) do
+  begin
+    N := FFS.RecvSome(FData, Dest, Count, GetTickCount64 + QWord(FFS.FTimeoutMs));
+    if N < 0 then
+    begin
+      FreeAndNil(FData);
+      FFS.Broke(FFS.LastError);
+      raise EReadError.Create(FFS.LastError);
+    end;
+    if N = 0 then
+    begin
+      { the end of the file, as the server sees it now }
+      FSize := FPos;
+      Finish;
+      Break;
+    end;
+    Inc(FPos, N);
+    if FPos > FSize then
+      FSize := FPos;
+    Inc(Dest, N);
+    Dec(Count, N);
+    Inc(Result, N);
+  end;
+end;
+
+function TFtpReadStream.Write(const Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  raise EWriteError.Create('the stream of a remote file is for reading only');
+end;
+
+function TFtpReadStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+var
+  Target: Int64;
+begin
+  case Origin of
+    soBeginning: Target := Offset;
+    soCurrent: Target := FPos + Offset;
+  else
+    Target := FSize + Offset;
+  end;
+  if Target < 0 then
+    Target := 0;
+  if Target <> FPos then
+  begin
+    if FData <> nil then
+      FFS.AbortData(FData);
+    FPos := Target;
+    { past the end nothing is asked for: a read there gives nothing }
+    if (Target < FSize) and (Start(Target) <> rrOk) then
+      raise EReadError.Create(FFS.LastError);
+  end;
+  Result := FPos;
+end;
+
+type
+  TFtpWriteStream = class(TStream)
+  private
+    FFS: TFtpFS;
+    FPath: AnsiString;
+    FData: TInetSocket;
+    FPos: Int64;
+  protected
+    function GetSize: Int64; override;
+  public
+    constructor Create(AFS: TFtpFS; const APath: AnsiString; AData: TInetSocket);
+    destructor Destroy; override;
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TFtpWriteStream.Create(AFS: TFtpFS; const APath: AnsiString; AData: TInetSocket);
+begin
+  inherited Create;
+  FFS := AFS;
+  FPath := APath;
+  FData := AData;
+end;
+
+{ The reply to the transfer cannot be passed on from here: a refusal is left in LastError of the file system. }
+destructor TFtpWriteStream.Destroy;
+begin
+  FFS.FBusy := False;
+  if FData <> nil then
+    FFS.EndData(FData, FPath);
+  inherited Destroy;
+end;
+
+function TFtpWriteStream.GetSize: Int64;
+begin
+  Result := FPos;
+end;
+
+function TFtpWriteStream.Read(var Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  raise EReadError.Create('the stream of a remote file is for writing only');
+end;
+
+function TFtpWriteStream.Write(const Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  if Count < 0 then
+    raise EWriteError.Create('the number of bytes to write is negative');
+  if Count = 0 then
+    Exit;
+  if FData = nil then
+    raise EWriteError.Create(FFS.LastError);
+  if not FFS.SendAll(FData, @Buffer, Count) then
+  begin
+    FreeAndNil(FData);
+    FFS.Broke(FFS.LastError);
+    raise EWriteError.Create(FFS.LastError);
+  end;
+  Inc(FPos, Count);
+  Result := Count;
+end;
+
+function TFtpWriteStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+var
+  Target: Int64;
+begin
+  case Origin of
+    soBeginning: Target := Offset;
+    soCurrent: Target := FPos + Offset;
+  else
+    Target := FPos + Offset;
+  end;
+  if Target <> FPos then
+    raise EWriteError.Create('a file is written over FTP from its start to its end');
+  Result := FPos;
+end;
+
 function TFtpFS.OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+var
+  Clean: AnsiString;
+  E: TRemoteEntry;
+  S: TFtpReadStream;
 begin
   Stream := nil;
-  Result := Fail(rrUnsupported, 'reading a file over FTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  Result := Stat(Clean, True, E);
+  if Result <> rrOk then
+    Exit;
+  case E.Kind of
+    rkDir: Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+    rkLink: Exit(Fail(rrNotFound, 'the link points to nothing: ' + Path));
+    rkOther: Exit(Fail(rrFailed, 'not a regular file: ' + Path));
+  end;
+  if E.Size < 0 then
+    E.Size := 0;
+  S := TFtpReadStream.Create(Self, Clean, E.Size);
+  Result := S.Start(0);
+  if Result <> rrOk then
+  begin
+    S.Free;
+    Exit;
+  end;
+  Stream := S;
 end;
 
 function TFtpFS.OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+var
+  Clean, Dir, Name: AnsiString;
+  E: TRemoteEntry;
+  Data: TInetSocket;
 begin
   Stream := nil;
-  Result := Fail(rrUnsupported, 'writing a file over FTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+  Result := Stat(Clean, True, E);
+  if Result = rrOk then
+    case E.Kind of
+      rkDir: Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+      rkOther: Exit(Fail(rrFailed, 'not a regular file: ' + Path));
+    end
+  else if Result <> rrNotFound then
+    Exit;
+  { STOR into a directory that is not there is refused with words of the server: the directory is looked at first }
+  RemoteSplit(Clean, Dir, Name);
+  Result := Stat(Dir, True, E);
+  if Result <> rrOk then
+    Exit;
+  if E.Kind <> rkDir then
+    Exit(Fail(rrNotFound, 'not a directory: ' + Dir));
+  Result := StartData('STOR ' + Clean, Clean, Data);
+  if Result <> rrOk then
+    Exit;
+  FBusy := True;
+  Stream := TFtpWriteStream.Create(Self, Clean, Data);
 end;
 
 function TFtpFS.MkDir(const Path: AnsiString): TRemoteResult;
+var
+  Clean, Dir, Name: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'making a directory over FTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrExists, 'already exists: ' + Path));
+  Result := Stat(Clean, False, E);
+  if Result = rrOk then
+    Exit(Fail(rrExists, 'already exists: ' + Path));
+  if Result <> rrNotFound then
+    Exit;
+  RemoteSplit(Clean, Dir, Name);
+  Result := Stat(Dir, True, E);
+  if Result <> rrOk then
+    Exit;
+  if E.Kind <> rkDir then
+    Exit(Fail(rrNotDir, 'not a directory: ' + Dir));
+  if not Command('MKD ' + Clean) then
+    Exit(rrFailed);
+  if FReplyCode div 100 <> 2 then
+    Exit(ReplyResult(Path));
+  Result := rrOk;
 end;
 
 function TFtpFS.Remove(const Path: AnsiString): TRemoteResult;
+var
+  Clean: AnsiString;
+  E: TRemoteEntry;
+  Entries: TRemoteEntries;
 begin
-  Result := Fail(rrUnsupported, 'removing over FTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrDenied, 'the root cannot be removed'));
+  Result := Stat(Clean, False, E);
+  if Result <> rrOk then
+    Exit;
+  if E.Kind <> rkDir then
+  begin
+    if not Command('DELE ' + Clean) then
+      Exit(rrFailed);
+    if FReplyCode div 100 <> 2 then
+      Exit(ReplyResult(Path));
+    Exit(rrOk);
+  end;
+  if not Command('RMD ' + Clean) then
+    Exit(rrFailed);
+  if FReplyCode div 100 = 2 then
+    Exit(rrOk);
+  Result := ReplyResult(Path);
+  { the servers tell a directory with content as a refusal of any kind: its list decides }
+  if (not FBroken) and (List(Clean, Entries) = rrOk) and (Length(Entries) > 0) then
+    Result := Fail(rrNotEmpty, 'the directory is not empty: ' + Path);
 end;
 
 function TFtpFS.Rename(const OldPath, NewPath: AnsiString): TRemoteResult;
+var
+  OldClean, NewClean: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'renaming over FTP is not done yet: ' + OldPath);
+  if (not RemoteCleanPath(OldPath, OldClean)) or (not RemoteCleanPath(NewPath, NewClean)) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + OldPath));
+  if (OldClean = '/') or (NewClean = '/') then
+    Exit(Fail(rrDenied, 'the root cannot be renamed'));
+  Result := Stat(OldClean, False, E);
+  if Result <> rrOk then
+    Exit;
+  { RNTO replaces what is there on many servers: the free name is looked at first }
+  Result := Stat(NewClean, False, E);
+  if Result = rrOk then
+    Exit(Fail(rrExists, 'already exists: ' + NewPath));
+  if Result <> rrNotFound then
+    Exit;
+  if not Command('RNFR ' + OldClean) then
+    Exit(rrFailed);
+  if FReplyCode <> 350 then
+    Exit(ReplyResult(OldPath));
+  if not Command('RNTO ' + NewClean) then
+    Exit(rrFailed);
+  if FReplyCode div 100 <> 2 then
+    Exit(ReplyResult(NewPath));
+  Result := rrOk;
 end;
 
 function TFtpFS.SetMode(const Path: AnsiString; Mode: LongInt): TRemoteResult;
+var
+  Clean: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'setting the mode over FTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if (Mode < 0) or (Mode > &7777) then
+    Exit(Fail(rrFailed, 'the permission bits are not right: ' + Path));
+  Result := Stat(Clean, False, E);
+  if Result <> rrOk then
+    Exit;
+  if not Command('SITE CHMOD ' + OctStr(Mode, 4) + ' ' + Clean) then
+    Exit(rrFailed);
+  if FReplyCode div 100 <> 2 then
+    Exit(ReplyResult(Path));
+  Result := rrOk;
 end;
 
 {$ENDIF}
