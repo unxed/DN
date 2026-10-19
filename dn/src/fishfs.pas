@@ -5,8 +5,8 @@
   of the answer.
 
   The helper script is not part of the unit: Connect gets its text (dn/third-party/f4-fish/helper.sh, or the file that is installed beside the
-  program as fishhelper.sh). The listings of the hosts that have GNU find or GNU stat are read (the helper reports which one it uses); BSD stat and
-  ls are told as rrUnsupported for now. A file is read in pieces of one request each (OpenRead gives a stream over them). OpenWrite truncates on open
+  program as fishhelper.sh). The listings of all four tools of the helper are read: GNU find, GNU stat, BSD stat and ls (in the three ways in which ls
+  prints the time; the helper reports which one it uses). A file is read in pieces of one request each (OpenRead gives a stream over them). OpenWrite truncates on open
   and sends bounded binary or base64 ranges as the caller writes. MkDir, Remove, Rename and SetMode ask the helper for the change after looking at the
   paths, so that the answers are those of TLocalFS (rrExists for a taken name, rrNotEmpty for a directory with content).
 
@@ -64,7 +64,7 @@ type
     function FeatureValue(const Name: AnsiString): AnsiString;
     { The directory in which the remote shell was started. }
     function Pwd(out Dir: AnsiString): TRemoteResult;
-    { Makes the helper list with the tool Mode ("find", "stat", "statbsd"); rrFailed when the host has not got it. }
+    { Makes the helper list with the tool Mode ("find", "stat", "statbsd", "ls"); rrFailed when the host has not got it. }
     function SetListingMode(const Mode: AnsiString): TRemoteResult;
     function List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult; override;
     function Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult; override;
@@ -83,7 +83,8 @@ type
     property Connected: Boolean read FConnected;
   end;
 
-{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd"); False when the line does not fit it. }
+{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd", or "ls " and the way of ls to print the time:
+  "ls epoch", "ls iso", "ls bsd"); False when the line does not fit it. }
 function ParseEntry(const Mode, Line: AnsiString; out E: TRemoteEntry): Boolean;
 {$ENDIF}
 
@@ -204,8 +205,212 @@ begin
     Result := UniversalTimeToLocal(UnixToDateTime(V));
 end;
 
-{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd"). False when the line does not fit it (a name with
-  a line end in it shows up as two lines, the helper cannot do better). }
+{ The next word of S from P, the blanks before it passed over; P is left at the blank after the word ('' at the end of the line). }
+function TakeWord(const S: AnsiString; var P: Integer): AnsiString;
+var
+  Q: Integer;
+begin
+  while (P <= Length(S)) and (S[P] in [' ', #9]) do
+    Inc(P);
+  Q := P;
+  while (Q <= Length(S)) and not (S[Q] in [' ', #9]) do
+    Inc(Q);
+  Result := Copy(S, P, Q - P);
+  P := Q;
+end;
+
+function IsDigits(const S: AnsiString): Boolean;
+var
+  I: Integer;
+begin
+  Result := S <> '';
+  for I := 1 to Length(S) do
+    if not (S[I] in ['0'..'9']) then
+      Exit(False);
+end;
+
+{ The type and the permission bits of the first word of a line of ls ("drwxr-sr-t", a mark of an attribute or an ACL after it is of no matter); -1 when it is
+  not such a word. }
+function LsModeBits(const S: AnsiString; out Kind: TRemoteKind): LongInt;
+var
+  T, I: Integer;
+  Sh: LongInt;
+begin
+  Result := -1;
+  Kind := rkOther;
+  if Length(S) < 10 then
+    Exit;
+  case S[1] of
+    'd': Kind := rkDir;
+    '-': Kind := rkFile;
+    'l': Kind := rkLink;
+    'c', 'b', 'p', 's': Kind := rkOther;
+  else
+    Exit;
+  end;
+  for I := 2 to 10 do
+    if not (S[I] in ['r', 'w', 'x', 's', 'S', 't', 'T', '-']) then
+      Exit;
+  Result := 0;
+  for T := 0 to 2 do
+  begin
+    Sh := 6 - 3 * T;
+    if S[2 + 3 * T] = 'r' then
+      Result := Result or (4 shl Sh);
+    if S[3 + 3 * T] = 'w' then
+      Result := Result or (2 shl Sh);
+    { the place of x is also the place of the setuid, setgid and sticky bits: a small letter is the bit and x, a capital one is the bit alone }
+    case S[4 + 3 * T] of
+      'x': Result := Result or (1 shl Sh);
+      's', 't': Result := Result or (1 shl Sh) or (&4000 shr T);
+      'S', 'T': Result := Result or (&4000 shr T);
+    end;
+  end;
+end;
+
+{ The time of a line of ls on the clock of this machine. Epoch: W1 is the seconds. Iso: W1 "2026-06-05", W2 "15:09:23" or "15:09:23.480954998", W3 the zone
+  "+0300". Bsd: W1 the month "Jun", W2 the day, W3 "15:09:23", W4 the year; this form has no zone, so it is taken to be the zone of this machine. }
+function LsTime(const Dialect, W1, W2, W3, W4: AnsiString; out T: TDateTime): Boolean;
+const
+  Months = 'JanFebMarAprMayJunJulAugSepOctNovDec';
+var
+  D, Tm: TDateTime;
+  Y, Mo, Dy, H, Mi, Sc, M, ZH, ZM: Integer;
+  Clock, Zone: AnsiString;
+  Off: Integer;
+begin
+  Result := False;
+  T := 0;
+  if Dialect = 'epoch' then
+  begin
+    if not IsDigits(W1) then
+      Exit;
+    T := EpochTime(W1);
+    Exit(True);
+  end;
+  if Dialect = 'iso' then
+  begin
+    Clock := W2;
+    Zone := W3;
+    if (Length(W1) <> 10) or (W1[5] <> '-') or (W1[8] <> '-') or (Length(Zone) <> 5) or not (Zone[1] in ['+', '-']) then
+      Exit;
+    Y := StrToIntDef(Copy(W1, 1, 4), -1);
+    Mo := StrToIntDef(Copy(W1, 6, 2), -1);
+    Dy := StrToIntDef(Copy(W1, 9, 2), -1);
+    ZH := StrToIntDef(Copy(Zone, 2, 2), -1);
+    ZM := StrToIntDef(Copy(Zone, 4, 2), -1);
+    if (ZH < 0) or (ZM < 0) then
+      Exit;
+    Off := ZH * 60 + ZM;
+    if Zone[1] = '-' then
+      Off := -Off;
+  end
+  else if Dialect = 'bsd' then
+  begin
+    Clock := W3;
+    M := Pos(W1, Months);
+    if (Length(W1) <> 3) or (M = 0) or ((M - 1) mod 3 <> 0) or not IsDigits(W2) or not IsDigits(W4) then
+      Exit;
+    Y := StrToIntDef(W4, -1);
+    Mo := (M - 1) div 3 + 1;
+    Dy := StrToIntDef(W2, -1);
+    Off := 0;
+  end
+  else
+    Exit;
+  if (Length(Clock) < 8) or (Clock[3] <> ':') or (Clock[6] <> ':') then
+    Exit;
+  H := StrToIntDef(Copy(Clock, 1, 2), -1);
+  Mi := StrToIntDef(Copy(Clock, 4, 2), -1);
+  Sc := StrToIntDef(Copy(Clock, 7, 2), -1);
+  if (Y < 0) or (Mo < 0) or (Dy < 0) or (H < 0) or (Mi < 0) or (Sc < 0) then
+    Exit;
+  if not TryEncodeDate(Y, Mo, Dy, D) or not TryEncodeTime(H, Mi, Sc, 0, Tm) then
+    Exit;
+  if Dialect = 'iso' then
+    T := UniversalTimeToLocal(D + Tm - Off / 1440)
+  else
+    T := D + Tm;
+  Result := True;
+end;
+
+{ One line of ls -lan in the way Dialect (epoch, iso or bsd) prints the time. The fields before the name are a fixed number of words (ids are numbers, so
+  no name of a user can be one of them): the name is all that is left after the blank that follows them, with its own blanks. The line "total ..." and the
+  lines that are not a long listing are refused. }
+function ParseLsEntry(const Dialect, Line: AnsiString; out E: TRemoteEntry): Boolean;
+var
+  P, Arrow, Slash, TimeWords: Integer;
+  ModeS, LinksS, UidS, GidS, SizeS, W1, W2, W3, W4: AnsiString;
+begin
+  Result := False;
+  W1 := '';
+  W2 := '';
+  W3 := '';
+  W4 := '';
+  if Dialect = 'epoch' then
+    TimeWords := 1
+  else if Dialect = 'iso' then
+    TimeWords := 3
+  else if Dialect = 'bsd' then
+    TimeWords := 4
+  else
+    Exit;
+  P := 1;
+  ModeS := TakeWord(Line, P);
+  LinksS := TakeWord(Line, P);
+  UidS := TakeWord(Line, P);
+  GidS := TakeWord(Line, P);
+  SizeS := TakeWord(Line, P);
+  E.Mode := LsModeBits(ModeS, E.Kind);
+  if (E.Mode < 0) or not IsDigits(LinksS) or not IsDigits(UidS) or not IsDigits(GidS) then
+    Exit;
+  if (SizeS <> '') and (SizeS[Length(SizeS)] = ',') then
+  begin
+    { a device: "major, minor" stands where the size is }
+    if not IsDigits(Copy(SizeS, 1, Length(SizeS) - 1)) or not IsDigits(TakeWord(Line, P)) then
+      Exit;
+    E.Size := 0;
+  end
+  else
+  begin
+    if not IsDigits(SizeS) then
+      Exit;
+    E.Size := StrToInt64Def(SizeS, -1);
+  end;
+  W1 := TakeWord(Line, P);
+  if TimeWords > 1 then
+    W2 := TakeWord(Line, P);
+  if TimeWords > 2 then
+    W3 := TakeWord(Line, P);
+  if TimeWords > 3 then
+    W4 := TakeWord(Line, P);
+  if not LsTime(Dialect, W1, W2, W3, W4, E.MTime) then
+    Exit;
+  { P is at the blank after the last word: a single blank is the column gap, the rest is the name }
+  if (P >= Length(Line)) or not (Line[P] in [' ', #9]) then
+    Exit;
+  E.Name := Copy(Line, P + 1, Length(Line));
+  if E.Kind = rkLink then
+  begin
+    Arrow := Pos(' -> ', E.Name);
+    if Arrow > 0 then
+    begin
+      E.LinkTarget := Copy(E.Name, Arrow + 4, Length(E.Name));
+      E.Name := Copy(E.Name, 1, Arrow - 1);
+    end;
+  end;
+  while (Length(E.Name) > 1) and (E.Name[Length(E.Name)] = '/') do
+    SetLength(E.Name, Length(E.Name) - 1);
+  if E.Name <> '/' then
+  begin
+    Slash := LastDelimiter('/', E.Name);
+    E.Name := Copy(E.Name, Slash + 1, Length(E.Name));
+  end;
+  Result := E.Name <> '';
+end;
+
+{ One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd", "ls epoch", "ls iso", "ls bsd"). False when the line
+  does not fit it (a name with a line end in it shows up as two lines, the helper cannot do better). }
 function ParseEntry(const Mode, Line: AnsiString; out E: TRemoteEntry): Boolean;
 var
   P, Code, Slash, Arrow: Integer;
@@ -219,6 +424,8 @@ begin
   E.MTime := 0;
   E.Mode := -1;
   E.LinkTarget := '';
+  if Copy(Mode, 1, 3) = 'ls ' then
+    Exit(ParseLsEntry(Copy(Mode, 4, Length(Mode)), Line, E));
   P := 1;
   if Mode = 'find' then
   begin
@@ -315,18 +522,19 @@ begin
   Result := True;
 end;
 
-{ The tool of the first line of a list ("M find", "M ls epoch"). }
+{ The tool of the first line of a list ("M find" gives "find", "M ls epoch" gives "ls epoch"). }
 function ModeOfLine(const Line: AnsiString; out Mode: AnsiString): Boolean;
-var
-  P: Integer;
 begin
   Mode := '';
   Result := (Length(Line) > 2) and (Line[1] = 'M') and (Line[2] = ' ');
   if Result then
-  begin
-    P := 3;
-    Mode := TakeField(Line, P);
-  end;
+    Mode := Trim(Copy(Line, 3, Length(Line)));
+end;
+
+{ ParseEntry knows the tool. }
+function ReadableMode(const Mode: AnsiString): Boolean;
+begin
+  Result := (Mode = 'find') or (Mode = 'stat') or (Mode = 'statbsd') or (Mode = 'ls epoch') or (Mode = 'ls iso') or (Mode = 'ls bsd');
 end;
 
 { TFishFS }
@@ -726,7 +934,7 @@ begin
       Exit;
     if (Lines.Count < 1) or (not ModeOfLine(Lines[0], Mode)) then
       Exit(Fail(rrFailed, 'the list has no line with the tool that made it'));
-    if (Mode <> 'find') and (Mode <> 'stat') and (Mode <> 'statbsd') then
+    if not ReadableMode(Mode) then
       Exit(Fail(rrUnsupported, 'the remote host lists with "' + Mode + '", which is not read yet'));
     SetLength(Entries, Lines.Count);
     N := 0;
@@ -767,7 +975,7 @@ begin
       Exit;
     if (Lines.Count < 2) or (not ModeOfLine(Lines[0], Mode)) then
       Exit(Fail(rrFailed, 'the answer has no line with the tool that made it'));
-    if (Mode <> 'find') and (Mode <> 'stat') and (Mode <> 'statbsd') then
+    if not ReadableMode(Mode) then
       Exit(Fail(rrUnsupported, 'the remote host lists with "' + Mode + '", which is not read yet'));
     if not ParseEntry(Mode, Lines[1], Entry) then
       Exit(Fail(rrFailed, 'cannot read the answer: ' + Lines[1]));

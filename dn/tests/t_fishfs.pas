@@ -260,6 +260,16 @@ begin
       CompareLists(Tag, FS, Local, Base, '/');
       Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Name = 'plain.txt') and (E.Size = 3) and (E.Mode = &640), Tag + 'Stat with stat');
       Check((FS.Stat(Base + '/link', True, E) = rrOk) and (E.Kind = rkDir), Tag + 'a link to a directory is followed by stat');
+      Check(FS.SetListingMode('ls') = rrOk, Tag + 'the helper lists with ls');
+      CompareLists(Tag, FS, Local, Base, '/');
+      CompareLists(Tag, FS, Local, Base, '/sub');
+      Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Name = 'plain.txt') and (E.Size = 3) and (E.Mode = &640), Tag + 'Stat with ls');
+      Check(Abs(E.MTime - (EncodeDate(2020, 2, 3) + EncodeTime(4, 5, 6, 0))) < 3 / 86400, Tag + 'the time that ls tells is the time that was set');
+      Check((FS.Stat(Base + '/link', False, E) = rrOk) and (E.Kind = rkLink) and (E.Name = 'link') and (E.LinkTarget = 'sub'), Tag + 'a link has its target with ls');
+      Check((FS.Stat(Base + '/link', True, E) = rrOk) and (E.Kind = rkDir), Tag + 'a link to a directory is followed by ls');
+      Check((FS.Stat(Base + '/ lead and trail ', False, E) = rrOk) and (E.Name = ' lead and trail '), Tag + 'the blanks of a name are kept by ls');
+      Check((FS.Stat('/', False, E) = rrOk) and (E.Kind = rkDir), Tag + 'Stat of the root with ls');
+      Check(FS.Stat('/nothing-here', False, E) = rrNotFound, Tag + 'what is not there is not found with ls');
       Check(FS.SetListingMode('find') = rrOk, Tag + 'and back to find');
     end;
     Check(FS.SetListingMode('no-such-tool') <> rrOk, Tag + 'a tool that is not there is refused');
@@ -441,6 +451,71 @@ begin
   Check(not ParseEntry('statbsd', '', E), 'statbsd: an empty line is refused');
 end;
 
+{ The lines that ls -lan prints, made up here: the three ways to print the time are told by the helper, and a host that prints the third is not at hand. }
+procedure CheckLsLines;
+var
+  E: TRemoteEntry;
+  Want: TDateTime;
+begin
+  { epoch: the time is a number of seconds }
+  Check(ParseEntry('ls epoch', '-rw-r--r-- 1 1000 100 5 1580000000 a file.txt', E), 'ls epoch: a file line is read');
+  Check((E.Kind = rkFile) and (E.Size = 5) and (E.Mode = &644) and (E.Name = 'a file.txt') and (E.LinkTarget = ''), 'ls epoch: a file has its type, size, mode and name');
+  Check(E.MTime = UniversalTimeToLocal(UnixToDateTime(1580000000)), 'ls epoch: the time is the seconds');
+  Check(ParseEntry('ls epoch', 'drwxr-xr-x 2 0 0 4096 1580000000 sub dir', E) and (E.Kind = rkDir) and (E.Mode = &755) and (E.Name = 'sub dir'), 'ls epoch: a directory');
+  Check(ParseEntry('ls epoch', 'lrwxrwxrwx 1 0 0 10 1580000000 link -> a file.txt', E) and (E.Kind = rkLink) and (E.Name = 'link') and (E.LinkTarget = 'a file.txt'), 'ls epoch: a link has its target apart from its name');
+  Check(ParseEntry('ls epoch', '-rwsr-Sr-T 1 0 0 0 1580000000 odd', E) and (E.Mode = &7744), 'ls epoch: setuid, setgid and sticky, with and without x');
+  Check(ParseEntry('ls epoch', '-rwxr-xr-t 1 0 0 0 1580000000 sticky', E) and (E.Mode = &1755), 'ls epoch: sticky with x');
+  Check(ParseEntry('ls epoch', '-rw-r--r--@ 1 501 20 7 1580000000 marked', E) and (E.Name = 'marked') and (E.Mode = &644), 'ls epoch: the mark of an attribute after the mode is let go');
+  Check(ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 0 1580000000  lead and trail ', E) and (E.Name = ' lead and trail '), 'ls epoch: the blanks of a name are kept');
+  Check(ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 0 1580000000 two  blanks -> not a link', E) and (E.Name = 'two  blanks -> not a link') and (E.LinkTarget = ''), 'ls epoch: an arrow in the name of a file is a part of it');
+  Check(ParseEntry('ls epoch', '   -rw-r--r--   1   0   0     12   1580000000 padded', E) and (E.Size = 12) and (E.Name = 'padded'), 'ls epoch: the columns may be padded');
+  Check(ParseEntry('ls epoch', 'crw-rw-rw- 1 0 0 1, 3 1580000000 null', E) and (E.Kind = rkOther) and (E.Size = 0) and (E.Name = 'null'), 'ls epoch: a device has two numbers in place of the size');
+  Check(ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 3 1580000000 /tmp/x/plain.txt', E) and (E.Name = 'plain.txt'), 'ls epoch: the name of an answer to a stat is the last part of the path');
+  Check(ParseEntry('ls epoch', 'drwxr-xr-x 2 0 0 4096 1580000000 /tmp/x/sub/', E) and (E.Name = 'sub'), 'ls epoch: a slash at the end is let go');
+  Check(ParseEntry('ls epoch', 'drwxr-xr-x 20 0 0 4096 1580000000 /', E) and (E.Name = '/'), 'ls epoch: the root keeps its slash');
+  Check(not ParseEntry('ls epoch', 'total 24', E), 'ls epoch: the line "total" is refused');
+  Check(not ParseEntry('ls epoch', '', E), 'ls epoch: an empty line is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 0 1580000000', E), 'ls epoch: a line without a name is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 0 1580000000 ', E), 'ls epoch: a line with nothing but a blank after the time is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-- 1 nobody 0 0 1580000000 x', E), 'ls epoch: a name of a user in place of the number is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 many 1580000000 x', E), 'ls epoch: a size that is not a number is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 0 yesterday x', E), 'ls epoch: a time that is not a number is refused');
+  Check(not ParseEntry('ls epoch', '?rw-r--r-- 1 0 0 0 1580000000 x', E), 'ls epoch: a type that ls does not print is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-z 1 0 0 0 1580000000 x', E), 'ls epoch: a letter that is not a permission is refused');
+  Check(not ParseEntry('ls epoch', '-rw-r--r-- 1 0 0 0 2026-06-05 15:09:23 +0300 x', E), 'ls epoch: the time of the other form is refused');
+
+  { iso: the date, the time and the zone }
+  Check(ParseEntry('ls iso', 'drwxr-xr-x 20 0 0 4096 2026-06-05 15:09:23 +0300 a dir', E) and (E.Kind = rkDir) and (E.Name = 'a dir') and (E.Size = 4096), 'ls iso: a directory line is read');
+  Want := UniversalTimeToLocal(EncodeDate(2026, 6, 5) + EncodeTime(12, 9, 23, 0));
+  Check(Abs(E.MTime - Want) < 0.5 / 86400, 'ls iso: the zone is taken off');
+  Check(ParseEntry('ls iso', '-rw-r--r-- 1 1000 1000 12 2026-08-03 19:40:32.480954998 -0530 x.txt', E) and (E.Name = 'x.txt') and (E.Size = 12), 'ls iso: a fraction of a second is let go');
+  Want := UniversalTimeToLocal(EncodeDate(2026, 8, 4) + EncodeTime(1, 10, 32, 0));
+  Check(Abs(E.MTime - Want) < 0.5 / 86400, 'ls iso: a zone behind UTC is put back, over midnight');
+  Check(not ParseEntry('ls iso', '-rw-r--r-- 1 0 0 0 2026-06-05 15:09:23 x', E), 'ls iso: a line without the zone is refused');
+  Check(not ParseEntry('ls iso', '-rw-r--r-- 1 0 0 0 2026-13-05 15:09:23 +0300 x', E), 'ls iso: a month that is not there is refused');
+  Check(not ParseEntry('ls iso', '-rw-r--r-- 1 0 0 0 2026-06-05 25:09:23 +0300 x', E), 'ls iso: an hour that is not there is refused');
+  Check(not ParseEntry('ls iso', '-rw-r--r-- 1 0 0 0 2026-06-05 15:09 +0300 x', E), 'ls iso: a time without the seconds is refused');
+  Check(not ParseEntry('ls iso', '-rw-r--r-- 1 0 0 0 1580000000 x y z', E), 'ls iso: the time of the other form is refused');
+
+  { bsd: the month, the day, the time and the year, no zone }
+  Check(ParseEntry('ls bsd', '-rw-r--r-- 1 501 20 18765 Jul 23 00:57:04 2026 LICENSE.txt', E) and (E.Kind = rkFile) and (E.Size = 18765) and (E.Name = 'LICENSE.txt'), 'ls bsd: a file line is read');
+  Want := EncodeDate(2026, 7, 23) + EncodeTime(0, 57, 4, 0);
+  Check(Abs(E.MTime - Want) < 0.5 / 86400, 'ls bsd: the time is the one of this machine');
+  Check(ParseEntry('ls bsd', '-rw-r--r--  1 501  20 18765 Jul  3 00:57:04 2026 two  blanks', E) and (E.Name = 'two  blanks'), 'ls bsd: a day with a blank before it, and the blanks of a name');
+  Want := EncodeDate(2026, 7, 3) + EncodeTime(0, 57, 4, 0);
+  Check(Abs(E.MTime - Want) < 0.5 / 86400, 'ls bsd: a day of one digit');
+  Check(ParseEntry('ls bsd', 'lrwxr-xr-x@ 1 501 20 3 Dec 31 23:59:59 1999 l -> t', E) and (E.Kind = rkLink) and (E.Name = 'l') and (E.LinkTarget = 't'), 'ls bsd: a link');
+  Check(not ParseEntry('ls bsd', '-rw-r--r-- 1 501 20 5 Foo 23 00:57:04 2026 x', E), 'ls bsd: a month that is not there is refused');
+  Check(not ParseEntry('ls bsd', '-rw-r--r-- 1 501 20 5 Feb 30 00:57:04 2026 x', E), 'ls bsd: a day that is not there is refused');
+  Check(not ParseEntry('ls bsd', '-rw-r--r-- 1 501 20 5 Jul 23 00:57:04 x', E), 'ls bsd: a line without the year is refused');
+  Check(not ParseEntry('ls bsd', '-rw-r--r-- 1 501 20 5 Jul 23 00:57 2026 x', E), 'ls bsd: a time without the seconds is refused');
+  Check(not ParseEntry('ls bsd', '-rw-r--r-- 1 0 0 0 1580000000 x', E), 'ls bsd: the time of the other form is refused');
+
+  { the way is needed }
+  Check(not ParseEntry('ls', '-rw-r--r-- 1 0 0 0 1580000000 x', E), 'ls: no way to print the time, no entry');
+  Check(not ParseEntry('ls weird', '-rw-r--r-- 1 0 0 0 1580000000 x', E), 'ls: a way that is not known, no entry');
+end;
+
 var
   Helper, Tmp, Base, Weird, Big, Pattern, Data: AnsiString;
   Shells: array[0..2] of AnsiString = ('/bin/sh', '/bin/bash', '/bin/dash');
@@ -452,6 +527,7 @@ begin
   if Helper = '' then
     Finish;
   CheckBsdLines;
+  CheckLsLines;
 
   Tmp := GetEnvironmentVariable('TMPDIR');
   if Tmp = '' then
