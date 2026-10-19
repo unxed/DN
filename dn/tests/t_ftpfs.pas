@@ -1,8 +1,9 @@
 program t_ftpfs;
 { Tests of src/ftpfs.pas: the listings of FTP servers, on lines made for the test in each form (MLSD of RFC 3659, LIST as "ls -l", DOS/IIS,
-  NetWare). }
+  NetWare); then TFtpFS against pyftpdlib (python3 -m pyftpdlib, an anonymous server over a tree made for the test, on a port of this machine).
+  On CI a pyftpdlib that is not found is a failure, elsewhere the checks that need it are left out. }
 {$mode objfpc}{$H+}
-uses SysUtils, DateUtils, RemoteFS, FtpFS;
+uses SysUtils, Classes, DateUtils, BaseUnix, Process, RemoteFS, FtpFS;
 {$I dntest.inc}
 
 var
@@ -35,6 +36,8 @@ begin
   Check(FtpParseMlsx('type=file;size=x;modify=2020;unix.mode=0999; bad', E), 'mlsd: facts that cannot be read');
   Check((E.Size = -1) and (E.MTime = 0) and (E.Mode = -1), 'mlsd: are left unknown');
   Check(FtpParseMlsx('type=file;size=5000000000; big', E) and (E.Size = 5000000000), 'mlsd: a size above 4 GiB');
+  Check(FtpParseMlsx('type=file;unix.mode=0o4755; py', E) and (E.Mode = &4755), 'mlsd: a mode written as 0o4755');
+  Check(FtpParseMlsx('type=file;unix.mode=0o; py', E) and (E.Mode = -1), 'mlsd: 0o alone is not a mode');
   Check(not FtpParseMlsx('garbage', E), 'mlsd: a line without a blank');
   Check(not FtpParseMlsx('type=file;size=1; ', E), 'mlsd: a line without a name');
   Check(not FtpParseMlsx('', E), 'mlsd: an empty line');
@@ -103,9 +106,264 @@ begin
   Check((E.Mode = -1) and (E.LinkTarget = ''), 'netware: no mode, nothing from the forms tried before');
 end;
 
+procedure PutText(const Path, Text: AnsiString);
+var
+  F: TFileStream;
+begin
+  F := TFileStream.Create(Path, fmCreate);
+  try
+    if Text <> '' then
+      F.WriteBuffer(Text[1], Length(Text));
+  finally
+    F.Free;
+  end;
+end;
+
+procedure RemoveTree(const Dir: AnsiString);
+var
+  SR: TSearchRec;
+begin
+  if FindFirst(Dir + '/*', faAnyFile, SR) = 0 then
+  begin
+    repeat
+      if (SR.Name <> '.') and (SR.Name <> '..') then
+      begin
+        if ((SR.Attr and faDirectory) <> 0) and ((SR.Attr and faSymLink) = 0) then
+          RemoveTree(Dir + '/' + SR.Name)
+        else
+          DeleteFile(Dir + '/' + SR.Name);
+      end;
+    until FindNext(SR) <> 0;
+  end;
+  FindClose(SR);
+  RemoveDir(Dir);
+end;
+
+function IndexOf(const Entries: TRemoteEntries; const Name: AnsiString): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(Entries) do
+    if Entries[I].Name = Name then
+      Exit(I);
+  Result := -1;
+end;
+
+function HavePyftpdlib: Boolean;
+var
+  Output: AnsiString;
+begin
+  Result := RunCommand('python3', ['-c', 'import pyftpdlib'], Output) and (Trim(Output) = '');
+end;
+
+{ The names, kinds and sizes of the files of List against TLocalFS over the same tree, leaving out the links (a server may tell what they point to). }
+function SameAsLocal(const Remote, Want: TRemoteEntries): Boolean;
+var
+  I, J, Links: Integer;
+begin
+  Result := True;
+  Links := 0;
+  for I := 0 to High(Want) do
+  begin
+    if Want[I].Kind = rkLink then
+    begin
+      Inc(Links);
+      Continue;
+    end;
+    J := IndexOf(Remote, Want[I].Name);
+    if (J < 0) or (Remote[J].Kind <> Want[I].Kind) or ((Want[I].Kind = rkFile) and (Remote[J].Size <> Want[I].Size)) then
+    begin
+      WriteLn('  differs: "', Want[I].Name, '"');
+      Result := False;
+    end;
+  end;
+  if Length(Remote) <> Length(Want) then
+  begin
+    WriteLn('  ', Length(Remote), ' entries, the reference has ', Length(Want));
+    Result := False;
+  end;
+end;
+
+procedure CheckServer(const Base: AnsiString; Port: Integer; Stamp: LongInt);
+var
+  FS: TFtpFS;
+  Local: TLocalFS;
+  Remote, Want: TRemoteEntries;
+  Dir: AnsiString;
+  I: Integer;
+  Stream: TStream;
+begin
+  FS := TFtpFS.Create;
+  try
+    FS.TimeoutMs := 5000;
+    Check(FS.Connect('127.0.0.1', Port, 'no-such-user', 'x') = rrDenied, 'a login that the server does not know is refused: ' + FS.LastError);
+  finally
+    FS.Free;
+  end;
+  FS := TFtpFS.Create;
+  try
+    FS.TimeoutMs := 3000;
+    Check(FS.Connect('127.0.0.1', 1, 'anonymous', 'x') = rrFailed, 'a port where nothing listens fails');
+    Check(not FS.Connected, 'not connected');
+  finally
+    FS.Free;
+  end;
+
+  FS := TFtpFS.Create;
+  Local := TLocalFS.Create(Base);
+  try
+    Check(FS.Connect('127.0.0.1', Port, 'anonymous', 'dn@') = rrOk, 'Connect: ' + FS.LastError);
+    Check(FS.Connected and FS.HasFeature('MLST') and FS.UseMlsd, 'the server tells MLST, the lists are of MLSD');
+    Check((FS.Pwd(Dir) = rrOk) and (Dir = '/'), 'PWD: ' + Dir);
+
+    Check(FS.List('/', Remote) = rrOk, 'the tree is listed: ' + FS.LastError);
+    Check(Local.List('/', Want) = rrOk, 'the reference lists the tree');
+    Check(SameAsLocal(Remote, Want), 'MLSD: every name, kind and size is that of the reference');
+    Check(IndexOf(Remote, 'with space.txt') >= 0, 'a name with a blank');
+    Check(IndexOf(Remote, ' lead and trail ') >= 0, 'a name with blanks at both ends');
+    Check(IndexOf(Remote, 'caf' + #195#169 + '.txt') >= 0, 'a name in UTF-8');
+    I := IndexOf(Remote, 'plain.txt');
+    Check(I >= 0, 'plain.txt is in the list');
+    if I >= 0 then
+    begin
+      Check((Remote[I].Kind = rkFile) and (Remote[I].Size = 3), 'it is a file of 3 bytes');
+      Check(Remote[I].Mode = &640, 'its permissions are 640');
+      Check(Abs(Remote[I].MTime - FileDateToDateTime(Stamp)) < 2 / 86400, 'its time is the time that was set');
+    end;
+    Check((FS.List('/many', Remote) = rrOk) and (Length(Remote) = 300), 'a long list is whole: ' + IntToStr(Length(Remote)));
+    Check((FS.List('/sub/', Remote) = rrOk) and (Length(Remote) = 1) and (Remote[0].Name = 'inner.bin') and (Remote[0].Size = 1000),
+      'a path with "/" at the end');
+    Check((FS.List('/dir with space', Remote) = rrOk) and (Length(Remote) = 1), 'a directory with a blank in its name');
+    Check((FS.List('/empty', Remote) = rrOk) and (Length(Remote) = 0), 'an empty directory');
+    Check(FS.List('/plain.txt', Remote) = rrNotDir, 'a file is not a directory: ' + FS.LastError);
+    Check(FS.List('/no-such', Remote) = rrNotFound, 'a missing directory is not found: ' + FS.LastError);
+    Check(FS.List('relative', Remote) = rrDenied, 'a path that is not absolute is refused');
+
+    Check(FS.Stat('/plain.txt', False, E) = rrOk, 'stat of a file: ' + FS.LastError);
+    Check((E.Name = 'plain.txt') and (E.Kind = rkFile) and (E.Size = 3) and (E.Mode = &640), 'its name, kind, size and permissions');
+    Check((FS.Stat('/sub', True, E) = rrOk) and (E.Kind = rkDir) and (E.Name = 'sub'), 'stat of a directory');
+    Check((FS.Stat('/dir with space', True, E) = rrOk) and (E.Kind = rkDir), 'stat of a directory with a blank');
+    Check((FS.Stat('/', True, E) = rrOk) and (E.Kind = rkDir), 'the root is a directory');
+    Check((FS.Stat('/link', True, E) = rrOk) and (E.Kind = rkDir), 'a link followed is a directory');
+    Check(FS.Stat('/no-such', True, E) = rrNotFound, 'a missing path is not found: ' + FS.LastError);
+
+    { LIST: the same tree as "ls -l" from the server }
+    FS.UseMlsd := False;
+    Check(FS.List('/', Remote) = rrOk, 'LIST: the tree is listed: ' + FS.LastError);
+    Check(SameAsLocal(Remote, Want), 'LIST: every name, kind and size is that of the reference');
+    Check((FS.List('/dir with space', Remote) = rrOk) and (Length(Remote) = 1), 'LIST: a directory with a blank in its name');
+    Check((FS.List('/many', Remote) = rrOk) and (Length(Remote) = 300), 'LIST: a long list');
+    Check(FS.List('/no-such', Remote) = rrNotFound, 'LIST: a missing directory');
+    FS.UseMlsd := True;
+
+    Check((FS.OpenRead('/plain.txt', Stream) = rrUnsupported) and (Stream = nil), 'reading is not done yet');
+    Check((FS.OpenWrite('/new.txt', Stream) = rrUnsupported) and (Stream = nil), 'writing is not done yet');
+    Check(FS.MkDir('/d') = rrUnsupported, 'MkDir is not done yet');
+    Check(FS.Remove('/plain.txt') = rrUnsupported, 'Remove is not done yet');
+    Check(FS.Rename('/plain.txt', '/p') = rrUnsupported, 'Rename is not done yet');
+    Check(FS.SetMode('/plain.txt', &600) = rrUnsupported, 'SetMode is not done yet');
+    Check(FS.Connected, 'the refusals leave the connection open');
+
+    FS.Disconnect;
+    Check(not FS.Connected, 'Disconnect ends the session');
+    Check(FS.List('/', Remote) = rrFailed, 'nothing can be asked after it');
+  finally
+    Local.Free;
+    FS.Free;
+  end;
+end;
+
+{ Starts pyftpdlib over Base on a free port of this machine and waits until it answers; the port, or 0. }
+function StartServer(const Base: AnsiString; out Server: TProcess): Integer;
+var
+  Try_, Waited: Integer;
+  FS: TFtpFS;
+  Up: Boolean;
+begin
+  Result := 0;
+  Server := nil;
+  for Try_ := 0 to 4 do
+  begin
+    Result := 20000 + (fpGetPid * 7 + Try_ * 997) mod 30000;
+    Server := TProcess.Create(nil);
+    Server.Executable := '/bin/sh';
+    Server.Parameters.Add('-c');
+    Server.Parameters.Add('exec python3 -m pyftpdlib -i 127.0.0.1 -p ' + IntToStr(Result) + ' -d "$0" >/dev/null 2>&1');
+    Server.Parameters.Add(Base);
+    Server.Execute;
+    Up := False;
+    Waited := 0;
+    while (not Up) and Server.Running and (Waited < 10000) do
+    begin
+      Sleep(100);
+      Inc(Waited, 100);
+      FS := TFtpFS.Create;
+      FS.TimeoutMs := 2000;
+      Up := FS.Connect('127.0.0.1', Result, 'anonymous', 'dn@') = rrOk;
+      FS.Free;
+    end;
+    if Up then
+      Exit;
+    if Server.Running then
+      Server.Terminate(1);
+    Server.WaitOnExit;
+    FreeAndNil(Server);
+  end;
+  Result := 0;
+end;
+
+var
+  Tmp, Base: AnsiString;
+  Stamp: LongInt;
+  I, Port: Integer;
+  Server: TProcess;
 begin
   CheckMlsx;
   CheckUnix;
   CheckDosNetWare;
+
+  if not HavePyftpdlib then
+  begin
+    if GetEnvironmentVariable('CI') <> '' then
+      Check(False, 'pyftpdlib is installed')
+    else
+      WriteLn('SKIP the checks against pyftpdlib: it is not installed');
+    Finish;
+    Exit;
+  end;
+  Tmp := GetEnvironmentVariable('TMPDIR');
+  if Tmp = '' then
+    Tmp := '/tmp';
+  Base := Tmp + '/ftpfs-' + IntToStr(fpGetPid);
+  RemoveTree(Base);
+  Check(ForceDirectories(Base + '/sub') and ForceDirectories(Base + '/many') and ForceDirectories(Base + '/empty') and
+    ForceDirectories(Base + '/dir with space'), 'the test tree is made');
+  PutText(Base + '/plain.txt', 'abc');
+  PutText(Base + '/with space.txt', 'hello world');
+  PutText(Base + '/ lead and trail ', '');
+  PutText(Base + '/caf' + #195#169 + '.txt', 'x');
+  PutText(Base + '/sub/inner.bin', StringOfChar('z', 1000));
+  PutText(Base + '/dir with space/f', 'f');
+  for I := 1 to 300 do
+    PutText(Base + '/many/file-' + IntToStr(I) + '-' + StringOfChar('n', 40), '');
+  fpChmod(Base + '/plain.txt', &640);
+  Stamp := DateTimeToFileDate(EncodeDate(2020, 2, 3) + EncodeTime(4, 5, 6, 0));
+  FileSetDate(Base + '/plain.txt', Stamp);
+  fpSymlink(PChar('sub'), PChar(Base + '/link'));
+  Port := StartServer(Base, Server);
+  Check(Port > 0, 'pyftpdlib answers');
+  try
+    if Port > 0 then
+      CheckServer(Base, Port, Stamp);
+  finally
+    if Server <> nil then
+    begin
+      if Server.Running then
+        Server.Terminate(1);
+      Server.WaitOnExit;
+      Server.Free;
+    end;
+    RemoveTree(Base);
+  end;
   Finish;
 end.

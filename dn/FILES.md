@@ -186,7 +186,7 @@ no silent gaps (post-class criterion A).
 | `filetype.pas` | file-type / extension classification for panels |
 | `findobj.pas` | find-object UI pieces for file find |
 | `hash.pas` | hash-table helpers (file collections, etc.) |
-| `ftpfs.pas` | the listings of FTP servers read into entries of `TRemoteFS`: MLSD/MLST (RFC 3659) and LIST as `ls -l`, DOS/IIS and NetWare write it; the connection follows (unxed/dn#90 step 11); empty in DOS and DN_MINI |
+| `ftpfs.pas` | `TFtpFS`, the file system of a remote host over FTP: the control channel, passive data connections (EPSV, PASV), lists by MLSD or LIST and stat by MLST; the listings of MLSD/MLST (RFC 3659) and of LIST as `ls -l`, DOS/IIS and NetWare write it; reading, writing and the changes of the tree follow (unxed/dn#90 step 11); empty in DOS and DN_MINI |
 | `helpfile.pas` | help file reader (Borland help format glue) |
 | `helpkern.pas` | help kernel / topic navigation |
 | `inifiles.pas` | generic INI parse helpers under `iniengine` |
