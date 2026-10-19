@@ -340,6 +340,87 @@ begin
   Check(FS.Connected, 'the refusals leave the connection open');
 end;
 
+{ MkDir, Remove, Rename and SetMode against the server, in a tree of their own; what they did is looked at on this machine. }
+procedure CheckChanges(FS: TSftpFS; const Base: AnsiString);
+var
+  C, Odd: AnsiString;
+  St: Stat;
+  Entries: TRemoteEntries;
+begin
+  C := Base + '/ch';
+  Odd := C + '/caf' + #195#169 + ' dir';
+  ForceDirectories(C + '/full/inner');
+  PutText(C + '/file.txt', 'f');
+  PutText(C + '/taken.txt', 't');
+  PutText(C + '/full/x', 'x');
+  fpSymlink(PChar('full'), PChar(C + '/dirlink'));
+  fpSymlink(PChar('nothing'), PChar(C + '/deadlink'));
+
+  Check(FS.MkDir(C + '/new') = rrOk, 'MkDir: ' + FS.LastError);
+  Check(DirectoryExists(C + '/new'), 'the directory is made');
+  Check(FS.MkDir(Odd) = rrOk, 'MkDir of a name in UTF-8 with a blank');
+  Check(DirectoryExists(Odd), 'it is made');
+  Check(FS.MkDir(C + '/new') = rrExists, 'MkDir of a directory that is there');
+  Check(FS.MkDir(C + '/file.txt') = rrExists, 'MkDir of a file that is there');
+  Check(FS.MkDir(C + '/no-such/x') = rrNotFound, 'MkDir in a missing directory: ' + FS.LastError);
+  Check(FS.MkDir(C + '/file.txt/x') = rrNotDir, 'MkDir under a file');
+  Check(not DirectoryExists(C + '/no-such'), 'the missing parent is not made');
+  Check(FS.MkDir('/') = rrExists, 'the root is there');
+  Check(FS.MkDir('rel') = rrDenied, 'a path that is not absolute is refused');
+
+  Check(FS.SetMode(C + '/file.txt', &600) = rrOk, 'SetMode of a file: ' + FS.LastError);
+  Check((fpStat(C + '/file.txt', St) = 0) and ((St.st_mode and &7777) = &600), 'the permissions are set');
+  Check(FS.SetMode(C + '/new', &711) = rrOk, 'SetMode of a directory');
+  Check((fpStat(C + '/new', St) = 0) and ((St.st_mode and &7777) = &711), 'its permissions are set');
+  Check(FS.SetMode(C + '/no-such', &600) = rrNotFound, 'SetMode of a missing path');
+  Check(FS.SetMode(C + '/file.txt', -1) = rrFailed, 'a mode below 0 is refused');
+  Check(FS.SetMode(C + '/file.txt', &10000) = rrFailed, 'a mode above 7777 is refused');
+  Check((fpStat(C + '/file.txt', St) = 0) and ((St.st_mode and &7777) = &600), 'and changes nothing');
+
+  Check(FS.Rename(C + '/file.txt', C + '/moved.txt') = rrOk, 'Rename of a file: ' + FS.LastError);
+  Check((not FileExists(C + '/file.txt')) and (LoadText(C + '/moved.txt') = 'f'), 'the file has its new name and its content');
+  Check(FS.Rename(C + '/moved.txt', C + '/taken.txt') = rrExists, 'Rename onto a name that is taken');
+  Check((LoadText(C + '/moved.txt') = 'f') and (LoadText(C + '/taken.txt') = 't'), 'nothing is overwritten');
+  Check(FS.Rename(C + '/moved.txt', C + '/new') = rrExists, 'Rename onto a directory');
+  Check(FileExists(C + '/moved.txt') and DirectoryExists(C + '/new') and (not FileExists(C + '/new/moved.txt')), 'the file is not moved into it');
+  Check(FS.Rename(C + '/no-such', C + '/x') = rrNotFound, 'Rename of a missing path');
+  Check(FS.Rename(C + '/moved.txt', C + '/no-such/x') = rrNotFound, 'Rename into a missing directory: ' + FS.LastError);
+  Check(FS.Rename(C + '/full', Odd + '/full') = rrOk, 'Rename of a directory with content into another one');
+  Check(FileExists(Odd + '/full/x') and DirectoryExists(Odd + '/full/inner') and (not DirectoryExists(C + '/full')), 'it moved whole');
+  Check(FS.Rename(Odd + '/full', C + '/full') = rrOk, 'and back');
+  Check(FS.Rename(C + '/deadlink', C + '/deadlink2') = rrOk, 'Rename of a link to nothing');
+  Check((fpReadLink(C + '/deadlink2') = 'nothing') and (fpReadLink(C + '/deadlink') = ''), 'the link moved, its target is the same');
+  Check(FS.Rename('/', C + '/r') = rrDenied, 'the root is not renamed');
+  Check(FS.Rename(C + '/moved.txt', '/') = rrDenied, 'nothing is renamed to the root');
+
+  Check(FS.Remove(C + '/full') = rrNotEmpty, 'Remove of a directory with content: ' + FS.LastError);
+  Check(FileExists(C + '/full/x'), 'it stays');
+  Check(FS.Remove(C + '/dirlink') = rrOk, 'Remove of a link to a directory');
+  Check((fpReadLink(C + '/dirlink') = '') and FileExists(C + '/full/x'), 'the link goes, the directory and its content stay');
+  Check(FS.Remove(C + '/deadlink2') = rrOk, 'Remove of a link to nothing');
+  Check(fpReadLink(C + '/deadlink2') = '', 'it is gone');
+  Check(FS.Remove(C + '/moved.txt') = rrOk, 'Remove of a file');
+  Check(not FileExists(C + '/moved.txt'), 'it is gone');
+  Check(FS.Remove(C + '/new') = rrOk, 'Remove of an empty directory');
+  Check(not DirectoryExists(C + '/new'), 'it is gone');
+  Check(FS.Remove(C + '/no-such') = rrNotFound, 'Remove of a missing path');
+  Check(FS.Remove('/') = rrDenied, 'the root is not removed');
+  Check(FS.Remove('rel') = rrDenied, 'a path that is not absolute is refused');
+  if fpGetUID <> 0 then
+  begin
+    fpChmod(C + '/full', &555);
+    Check(FS.Remove(C + '/full/x') = rrDenied, 'Remove in a directory that cannot be written is not allowed: ' + FS.LastError);
+    Check(FS.Rename(C + '/full/x', C + '/x') = rrDenied, 'nor Rename out of it');
+    Check(FS.MkDir(C + '/full/d') = rrDenied, 'nor MkDir in it');
+    fpChmod(C + '/full', &755);
+    Check(FileExists(C + '/full/x'), 'the file stays');
+  end;
+
+  Check((FS.List(C, Entries) = rrOk) and (Length(Entries) = 3), 'what is left: full, taken.txt and the directory in UTF-8 (' +
+    IntToStr(Length(Entries)) + ')');
+  Check(FS.Connected, 'the refusals leave the connection open');
+end;
+
 procedure CheckServer(const Server, Base: AnsiString; Stamp: LongInt);
 var
   Proc: TNetProc;
@@ -432,14 +513,7 @@ begin
 
     CheckStreams(FS, Base);
 
-    { the part that follows }
-    Check(FS.MkDir(Base + '/d') = rrUnsupported, 'MkDir is not done yet');
-    Check(FS.Remove(Base + '/plain.txt') = rrUnsupported, 'Remove is not done yet');
-    Check(FS.Rename(Base + '/plain.txt', Base + '/p') = rrUnsupported, 'Rename is not done yet');
-    Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, 'SetMode is not done yet');
-    Check(FS.Connected, 'the refusals leave the connection open');
-    Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Mode = &640) and FileExists(Base + '/plain.txt') and
-      (not DirectoryExists(Base + '/d')) and (not FileExists(Base + '/p')), 'and nothing was changed');
+    CheckChanges(FS, Base);
 
     FS.Disconnect;
     Check(not FS.Connected, 'Disconnect ends the session');
