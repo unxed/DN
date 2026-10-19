@@ -6,8 +6,9 @@
   request but the first carries a number that its answer repeats; one request is in flight at a time, so an answer with another number means that the
   two sides are out of step.
 
-  This part reads the tree: List (OPENDIR, READDIR, CLOSE), Stat (STAT, LSTAT, and READLINK for the target of a link) and RealPath. The methods that
-  move data or change the tree answer rrUnsupported until the next parts of the step.
+  Done so far: List (OPENDIR, READDIR, CLOSE), Stat (STAT, LSTAT, and READLINK for the target of a link), RealPath, and the streams of OpenRead
+  (OPEN, READ in pieces as the caller reads, so Seek is cheap) and OpenWrite (OPEN that makes or empties the file, WRITE as the caller writes, CLOSE
+  when the stream is freed). The methods that change the tree answer rrUnsupported until the next part of the step.
 
   When a request does not get its answer in time, or the server ends, the connection is broken for good: the next answer could not be told from the
   late one. LastError tells why; make a new TSftpFS to try again.
@@ -56,7 +57,10 @@ type
     function StatusResult(var R: TSftpReader; const Path: AnsiString): TRemoteResult;
     function Unexpected(Reply: Byte): TRemoteResult;
     function AskHandle(Kind: Byte; const Fields, Path: AnsiString; out Handle: AnsiString): TRemoteResult;
-    procedure CloseHandle(const Handle: AnsiString);
+    function AskStatus(Kind: Byte; const Fields, Path: AnsiString): TRemoteResult;
+    function CloseHandle(const Handle, Path: AnsiString): TRemoteResult;
+    function ReadAt(const Handle, Path: AnsiString; Offset: Int64; Len: Integer; out Data: AnsiString): TRemoteResult;
+    function WriteAt(const Handle, Path: AnsiString; Offset: Int64; const Data: AnsiString): TRemoteResult;
     function AskAttrs(Kind: Byte; const Path: AnsiString; out Entry: TRemoteEntry): TRemoteResult;
     function AskName(Kind: Byte; const Path: AnsiString; out Name: AnsiString): TRemoteResult;
   public
@@ -73,7 +77,11 @@ type
     function Extension(const Name: AnsiString; out Data: AnsiString): Boolean;
     function List(const Dir: AnsiString; out Entries: TRemoteEntries): TRemoteResult; override;
     function Stat(const Path: AnsiString; FollowLinks: Boolean; out Entry: TRemoteEntry): TRemoteResult; override;
+    { A stream over the file, from its start; it asks the server for a piece of the file when a read goes past what it has. A read that fails raises
+      EReadError (LastError tells why); the stream is the caller's, free it before the file system. }
     function OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
+    { A stream that writes the file from its start (Seek moves the place of the next write; a gap reads as zero bytes). A write that fails raises
+      EWriteError; the file is closed when the stream is freed. }
     function OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult; override;
     function MkDir(const Path: AnsiString): TRemoteResult; override;
     function Remove(const Path: AnsiString): TRemoteResult; override;
@@ -112,7 +120,10 @@ const
 
   FxpInit = 1;
   FxpVersion = 2;
+  FxpOpen = 3;
   FxpClose = 4;
+  FxpRead = 5;
+  FxpWrite = 6;
   FxpLstat = 7;
   FxpOpendir = 11;
   FxpReaddir = 12;
@@ -121,6 +132,7 @@ const
   FxpReadlink = 19;
   FxpStatus = 101;
   FxpHandle = 102;
+  FxpData = 103;
   FxpName = 104;
   FxpAttrs = 105;
 
@@ -129,6 +141,11 @@ const
   FxNoSuchFile = 2;
   FxPermissionDenied = 3;
   FxOpUnsupported = 8;
+
+  FxfRead = $00000001;
+  FxfWrite = $00000002;
+  FxfCreat = $00000008;
+  FxfTrunc = $00000010;
 
   AttrSize = $00000001;
   AttrUidGid = $00000002;
@@ -143,6 +160,8 @@ const
 
   { A packet longer than this is taken for noise (the servers send 256 KiB of data at most). }
   MaxPacket = 4 * 1024 * 1024;
+  { The data of one READ or WRITE: every server takes 32 KiB. }
+  DataChunk = 32768;
 
 function SftpU32(V: LongWord): AnsiString;
 begin
@@ -457,7 +476,7 @@ begin
   Result := rrFailed;
 end;
 
-{ A request that answers with a HANDLE (OPENDIR, later OPEN). }
+{ A request that answers with a HANDLE (OPENDIR, OPEN). }
 function TSftpFS.AskHandle(Kind: Byte; const Fields, Path: AnsiString; out Handle: AnsiString): TRemoteResult;
 var
   Reply: Byte;
@@ -485,13 +504,62 @@ begin
   end;
 end;
 
-{ Lets the server forget a handle; its answer does not change the result of what was done with it. }
-procedure TSftpFS.CloseHandle(const Handle: AnsiString);
+{ A request that answers with a STATUS only (CLOSE, WRITE, later the changes of the tree). }
+function TSftpFS.AskStatus(Kind: Byte; const Fields, Path: AnsiString): TRemoteResult;
 var
   Reply: Byte;
   R: TSftpReader;
 begin
-  Request(FxpClose, SftpStr(Handle), Reply, R);
+  if not Request(Kind, Fields, Reply, R) then
+    Exit(rrFailed);
+  if Reply <> FxpStatus then
+    Exit(Unexpected(Reply));
+  Result := StatusResult(R, Path);
+end;
+
+{ Lets the server forget a handle. For a file that was written the answer tells whether the last of the data reached the disk. }
+function TSftpFS.CloseHandle(const Handle, Path: AnsiString): TRemoteResult;
+begin
+  Result := AskStatus(FxpClose, SftpStr(Handle), Path);
+end;
+
+{ Up to Len bytes of the open file Handle from Offset in Data; '' (and rrOk) at the end of the file. }
+function TSftpFS.ReadAt(const Handle, Path: AnsiString; Offset: Int64; Len: Integer; out Data: AnsiString): TRemoteResult;
+var
+  Reply: Byte;
+  R, Peek: TSftpReader;
+begin
+  Data := '';
+  if not Request(FxpRead, SftpStr(Handle) + SftpU64(QWord(Offset)) + SftpU32(LongWord(Len)), Reply, R) then
+    Exit(rrFailed);
+  case Reply of
+    FxpData:
+    begin
+      Data := SftpTakeStr(R);
+      if R.Bad or (Length(Data) > Len) then
+      begin
+        Data := '';
+        Exit(Unexpected(Reply));
+      end;
+      Result := rrOk;
+    end;
+    FxpStatus:
+    begin
+      Peek := R;
+      if SftpTakeU32(Peek) = FxEof then
+        Exit(rrOk);
+      Result := StatusResult(R, Path);
+      if Result = rrOk then
+        Result := Unexpected(Reply);
+    end;
+  else
+    Result := Unexpected(Reply);
+  end;
+end;
+
+function TSftpFS.WriteAt(const Handle, Path: AnsiString; Offset: Int64; const Data: AnsiString): TRemoteResult;
+begin
+  Result := AskStatus(FxpWrite, SftpStr(Handle) + SftpU64(QWord(Offset)) + SftpStr(Data), Path);
 end;
 
 { STAT or LSTAT of Path into Entry (without its name). }
@@ -700,7 +768,7 @@ begin
   finally
     SetLength(Entries, N);
     if not FBroken then
-      CloseHandle(Handle);
+      CloseHandle(Handle, Dir);
     if Result <> rrOk then
       SetLength(Entries, 0);
   end;
@@ -746,16 +814,229 @@ begin
   Result := rrOk;
 end;
 
+type
+  TSftpReadStream = class(TStream)
+  private
+    FFS: TSftpFS;
+    FHandle, FPath: AnsiString;
+    FPos, FSize, FBufStart: Int64;
+    FBuf: AnsiString;
+  protected
+    function GetSize: Int64; override;
+  public
+    constructor Create(AFS: TSftpFS; const AHandle, APath: AnsiString; ASize: Int64);
+    destructor Destroy; override;
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TSftpReadStream.Create(AFS: TSftpFS; const AHandle, APath: AnsiString; ASize: Int64);
+begin
+  inherited Create;
+  FFS := AFS;
+  FHandle := AHandle;
+  FPath := APath;
+  FSize := ASize;
+end;
+
+destructor TSftpReadStream.Destroy;
+begin
+  if FFS.Connected and (not FFS.FBroken) then
+    FFS.CloseHandle(FHandle, FPath);
+  inherited Destroy;
+end;
+
+function TSftpReadStream.GetSize: Int64;
+begin
+  Result := FSize;
+end;
+
+function TSftpReadStream.Read(var Buffer; Count: LongInt): LongInt;
+var
+  Data: AnsiString;
+  Take: Integer;
+  Dest: PChar;
+begin
+  Result := 0;
+  Dest := @Buffer;
+  while Count > 0 do
+  begin
+    if (FPos < FBufStart) or (FPos >= FBufStart + Length(FBuf)) then
+    begin
+      if FFS.ReadAt(FHandle, FPath, FPos, DataChunk, Data) <> rrOk then
+        raise EReadError.Create(FFS.LastError);
+      FBuf := Data;
+      FBufStart := FPos;
+      if Data = '' then
+      begin
+        { the end of the file, as the server sees it now (the file may have changed since it was opened) }
+        FSize := FPos;
+        Break;
+      end;
+      if FBufStart + Length(FBuf) > FSize then
+        FSize := FBufStart + Length(FBuf);
+    end;
+    Take := Integer(FBufStart + Length(FBuf) - FPos);
+    if Take > Count then
+      Take := Count;
+    Move(FBuf[Integer(FPos - FBufStart) + 1], Dest^, Take);
+    Inc(FPos, Take);
+    Inc(Dest, Take);
+    Dec(Count, Take);
+    Inc(Result, Take);
+  end;
+end;
+
+function TSftpReadStream.Write(const Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  raise EWriteError.Create('the stream of a remote file is for reading only');
+end;
+
+function TSftpReadStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  case Origin of
+    soBeginning: FPos := Offset;
+    soCurrent: FPos := FPos + Offset;
+    soEnd: FPos := FSize + Offset;
+  end;
+  if FPos < 0 then
+    FPos := 0;
+  Result := FPos;
+end;
+
+type
+  TSftpWriteStream = class(TStream)
+  private
+    FFS: TSftpFS;
+    FHandle, FPath: AnsiString;
+    FPos, FSize: Int64;
+  protected
+    function GetSize: Int64; override;
+  public
+    constructor Create(AFS: TSftpFS; const AHandle, APath: AnsiString);
+    destructor Destroy; override;
+    function Read(var Buffer; Count: LongInt): LongInt; override;
+    function Write(const Buffer; Count: LongInt): LongInt; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TSftpWriteStream.Create(AFS: TSftpFS; const AHandle, APath: AnsiString);
+begin
+  inherited Create;
+  FFS := AFS;
+  FHandle := AHandle;
+  FPath := APath;
+end;
+
+{ The answer to CLOSE cannot be passed on from here: a failure is left in LastError of the file system. }
+destructor TSftpWriteStream.Destroy;
+begin
+  if FFS.Connected and (not FFS.FBroken) then
+    FFS.CloseHandle(FHandle, FPath);
+  inherited Destroy;
+end;
+
+function TSftpWriteStream.GetSize: Int64;
+begin
+  Result := FSize;
+end;
+
+function TSftpWriteStream.Read(var Buffer; Count: LongInt): LongInt;
+begin
+  Result := 0;
+  raise EReadError.Create('the stream of a remote file is for writing only');
+end;
+
+function TSftpWriteStream.Write(const Buffer; Count: LongInt): LongInt;
+var
+  Data: AnsiString;
+  Src: PByte;
+  Take: Integer;
+begin
+  Result := 0;
+  if Count < 0 then
+    raise EWriteError.Create('the number of bytes to write is negative');
+  if FPos > High(Int64) - Count then
+    raise EWriteError.Create('the file position is too large');
+  Src := @Buffer;
+  while Result < Count do
+  begin
+    Take := Count - Result;
+    if Take > DataChunk then
+      Take := DataChunk;
+    SetLength(Data, Take);
+    Move(Src^, Data[1], Take);
+    if FFS.WriteAt(FHandle, FPath, FPos, Data) <> rrOk then
+      raise EWriteError.Create(FFS.LastError);
+    Inc(FPos, Take);
+    Inc(Src, Take);
+    Inc(Result, Take);
+    if FPos > FSize then
+      FSize := FPos;
+  end;
+end;
+
+function TSftpWriteStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  case Origin of
+    soBeginning: FPos := Offset;
+    soCurrent: FPos := FPos + Offset;
+    soEnd: FPos := FSize + Offset;
+  end;
+  if FPos < 0 then
+    FPos := 0;
+  Result := FPos;
+end;
+
 function TSftpFS.OpenRead(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+var
+  Clean, Handle: AnsiString;
+  E: TRemoteEntry;
 begin
   Stream := nil;
-  Result := Fail(rrUnsupported, 'reading a file over SFTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  { the kind decides first: a server opens a directory for reading too, and the open of a pipe would wait for a writer }
+  Result := Stat(Clean, True, E);
+  if Result <> rrOk then
+    Exit;
+  case E.Kind of
+    rkDir: Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+    rkLink: Exit(Fail(rrNotFound, 'the link points to nothing: ' + Path));
+    rkOther: Exit(Fail(rrFailed, 'not a regular file: ' + Path));
+  end;
+  Result := AskHandle(FxpOpen, SftpStr(Clean) + SftpU32(FxfRead) + SftpU32(0), Clean, Handle);
+  if Result <> rrOk then
+    Exit;
+  if E.Size < 0 then
+    E.Size := 0;
+  Stream := TSftpReadStream.Create(Self, Handle, Clean, E.Size);
 end;
 
 function TSftpFS.OpenWrite(const Path: AnsiString; out Stream: TStream): TRemoteResult;
+var
+  Clean, Handle: AnsiString;
+  E: TRemoteEntry;
 begin
   Stream := nil;
-  Result := Fail(rrUnsupported, 'writing a file over SFTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+  Result := Stat(Clean, True, E);
+  if Result = rrOk then
+    case E.Kind of
+      rkDir: Exit(Fail(rrIsDir, 'is a directory: ' + Path));
+      rkOther: Exit(Fail(rrFailed, 'not a regular file: ' + Path));
+    end
+  else if Result <> rrNotFound then
+    Exit;
+  Result := AskHandle(FxpOpen, SftpStr(Clean) + SftpU32(FxfWrite or FxfCreat or FxfTrunc) + SftpU32(0), Clean, Handle);
+  if Result <> rrOk then
+    Exit;
+  Stream := TSftpWriteStream.Create(Self, Handle, Clean);
 end;
 
 function TSftpFS.MkDir(const Path: AnsiString): TRemoteResult;
