@@ -778,6 +778,26 @@ Moreover, on a negative answer the created file remains
     Created := Opened = 0;
     end { TryToReset };
 
+  procedure DoSkip(var iQueue: Integer);
+    begin
+    while (iQueue < CopyQueue.Count-1)
+      and (TLine(CopyQueue.At(iQueue)).Eof and eoEnd = 0)
+    do
+      Inc(iQueue);
+    SkipRequested := iQueue >= CopyQueue.Count-1;
+    end;
+
+  procedure WriteProgress(P: TLine);
+    var
+      CT: String;
+    begin
+    Info.Write(6, StrGrd(P.Size, Wrote, Info.Size.X-6, RevertBar));
+    Info.Write(7, WriteCount);
+    CT := CopyTime;
+    if CT <> '' then
+      Info.Write(9, CT); {John_SW 30-06-2005}
+    end;
+
   procedure MaxWrite;
     label DoRewrite, DoAppend, 1, 2, lbStartWrite, lbStartCheck
       , lRetryToReset;
@@ -798,15 +818,6 @@ Moreover, on a negative answer the created file remains
       
       LongNameWarn: String[50];
       I_LW: Byte;
-
-    procedure DoSkip;
-      begin
-      while (iQueue < CopyQueue.Count-1)
-        and (TLine(CopyQueue.At(iQueue)).Eof and eoEnd = 0)
-      do
-        Inc(iQueue);
-      SkipRequested := iQueue >= CopyQueue.Count-1;
-      end;
 
     const
       CrcTable: array[0..255] of Word = (
@@ -869,17 +880,6 @@ Moreover, on a negative answer the created file remains
     var
       WPWas: Boolean;
 
-    procedure WriteProgress;
-      var
-        CT: String;
-      begin
-      Info.Write(6, StrGrd(P.Size, Wrote, Info.Size.X-6, RevertBar));
-      Info.Write(7, WriteCount);
-      CT := CopyTime;
-      if CT <> '' then
-        Info.Write(9, CT); {John_SW 30-06-2005}
-      end;
-
     { **************** }
     { *** FileCopy *** }
     { **************** }
@@ -901,7 +901,7 @@ Moreover, on a negative answer the created file remains
         if iQueue = CopyQueue.Count then
           begin
           if WPWas then
-            WriteProgress;
+            WriteProgress(P);
           Break;
           end;
         P := CopyQueue.At(iQueue);
@@ -981,7 +981,7 @@ Moreover, on a negative answer the created file remains
               else
                 CopyCancel := False;
               NewTimer(Timer, 0);
-              DoSkip;
+              DoSkip(iQueue);
               if not SkipRequested then
                 goto 1;
               if  (not CopyCancel) then
@@ -1032,7 +1032,7 @@ lRetryToReset:
                           GetString(dlFCRenameNew), S1, 255, 0);
                       if  (J <> cmOK) or (S1 = '') then
                         begin
-                        DoSkip;
+                        DoSkip(iQueue);
                         if not SkipRequested then
                           goto 1;
                         Break;
@@ -1043,7 +1043,7 @@ lRetryToReset:
                       end;
                     cmNo:
                       begin
-                      DoSkip;
+                      DoSkip(iQueue);
                       if not SkipRequested then
                         goto 1;
                       Break;
@@ -1091,7 +1091,7 @@ lbStartCheck:
                   begin
                   Info.Write(2, GetString(dlFC_Exists));
                   Close(WriteStream.F);
-                  DoSkip;
+                  DoSkip(iQueue);
                   if not SkipRequested then
                     goto 1;
                   Break;
@@ -1103,7 +1103,7 @@ lbStartCheck:
                     begin
                     Info.Write(2, GetString(dlFC_Older));
                     Close(WriteStream.F);
-                    DoSkip;
+                    DoSkip(iQueue);
                     if not SkipRequested then
                       goto 1;
                     Break;
@@ -1124,7 +1124,7 @@ lbStartCheck:
                      P.Date) of
                     cmSkip:
                       begin
-                      DoSkip;
+                      DoSkip(iQueue);
                       if not SkipRequested then
                         goto 1;
                       Break;
@@ -1136,7 +1136,7 @@ lbStartCheck:
                           GetString(dlFCRenameNew), S1, 255, 0);
                       if  (J <> cmOK) or (S1 = '') then
                         begin
-                        DoSkip;
+                        DoSkip(iQueue);
                         if not SkipRequested then
                           goto 1;
                         Break;
@@ -1249,7 +1249,7 @@ DoRewrite:
                       GetString(dlFCRenameNew), S1, 255, 0);
                   if  (J <> cmOK) or (S1 = '') then
                     begin
-                    DoSkip;
+                    DoSkip(iQueue);
                     if not SkipRequested then
                       goto 1;
                     Break;
@@ -1326,7 +1326,7 @@ lbStartWrite:
 
         if GrdClick then
           begin
-          WriteProgress;
+          WriteProgress(P);
           GrdClick := False;
           WPWas := False
           end
@@ -1348,7 +1348,7 @@ lbStartWrite:
           end;
         if P.Eof and eoEnd <> 0 then
           begin
-          WriteProgress;
+          WriteProgress(P);
           WPWas := False;
           SetDateAttr;
           if  (P.Owner <> nil) then
@@ -1402,6 +1402,109 @@ lbStartWrite:
       Info.Write(9, CT); {John_SW 30-06-2005}
     end;
 
+  procedure RenameFile(S1, S2: String);
+    var
+      F: lFile;
+      W: Word;
+      SR: lSearchRec;
+    begin
+    DosErrorCode := 0;
+    RnFl(S1, S2);
+    if DosErrorCode = 17 {NOT_SAME_DEVICE} then
+      Exit;  { AK155 14.03.2006 actually code 17
+        I only managed to get under OS/2 }
+    if DosErrorCode in [5, 80, 183] then
+        { AK155 14.03.2006
+          Code 80 (FILE_EXISTS) happens, for example, under NT 4 when
+        "renaming" between actually different network paths,
+        when the file exists on the target device. If it is deleted,
+        then "renaming" succeeds, though actually it is copy
+        and delete. Whether that is good is unclear, because a
+        system function runs independently of DN settings.
+          And when "renaming" between directories of one disk under NT
+        we get code 183 (ALREADY_EXISTS). Interestingly, what is
+        the deep difference between FILE_EXISTS and ALREADY_EXISTS?
+          Under OS/2 code 183 sort of does not exist, but when the name matches on
+        a network Windows disk we get 183 even under OS/2. }
+      begin
+      lAssignFile(F, S2);
+      ClrIO;
+      lSetFAttr(F, Archive);
+      ClrIO;
+      lEraseFile(F);
+      RnFl(S1, S2);
+      end;
+    if DosErrorCode in [5, 183] then
+      begin {AK155 The meaning of this block is unclear to me }
+      lAssignFile(F, S1);
+      lGetFAttr(F, W);
+      lSetFAttr(F, Archive);
+      ClrIO;
+      RnFl(S1, S2);
+      lSetFAttr(F, W);
+      ClrIO;
+      end;
+    if not (DosErrorCode in [0, 18]) then
+      begin
+      ForceDispatch;
+      MessFileNotRename(S1, S2, DosErrorCode);
+      CopyCancel := True;
+      end;
+    end { RenameFile };
+
+  procedure DoRename(FName, NName: String; Own: PFileRec; ln: TSize;
+      S1, S2: String);
+    var
+      A: array[0..10] of PString;
+      I, J: Integer;
+    begin
+    for I := 0 to Min(10, Info.Lines.Count-1) do
+      begin
+      A[I] := Info.Lines.At(I);
+      Info.Lines.AtPut(I, nil);
+      end;
+    Info.Write(2, Cut(FName, 40));
+    Info.Write(4, GetString(dlFC_To));
+    Info.Write(6, Cut(NName, 40));
+    //Dispatch;
+    if not CopyCancel then
+      RenameFile(S1, S2);
+    if DosErrorCode = 17 {NOT_SAME_DEVICE} then
+      Exit;
+    if not CopyCancel and (Own <> nil) then
+      begin
+      Own^.Attr := Own^.Attr or Copied;
+      if  (Own^.DIZ <> nil) and
+          (CopyOptions and cpoDesc <> 0)
+      then
+        begin
+        Info.Write(6, GetString(dlExportingDIZ));
+        ExportDiz(@Own^.FlName, GetName(NName), Own^.DIZ, CopyDir);
+        if  (CopyOptions and cpoMove <> 0) and
+            (FMSetup.Options and fmoPreserveDesc = 0)
+        then
+          DeleteDiz(Own);
+        end;
+      {no EA copying should be inserted here}
+
+      
+      Own^.FlName[False] := GetName(lfGetShortFileName(NName));
+      
+{!RLN}        CopyShortString(GetName(NName), Own^.FlName[True]);
+      //         ReplaceLongName(Own, (NName));
+ { This is in case we are standing right on this name.
+ So that when the directory is reread the cursor goes to the new name,
+ and does not stay at the old position }
+      if  (SourcePanel <> nil) then
+        Message(SourcePanel, evCommand, cmCopyUnselect, Own);
+      ToWrite := ToWrite+ln;
+      ToRead := ToRead+ln;
+      end;
+    Info.DrawView;
+    for I := 0 to Min(10, Info.Lines.Count-1) do
+      Info.Lines.AtReplace(I, A[I]);
+    end { DoRename };
+
   procedure CopyFile(const FName, AddDir: String; Own: PFileRec;
        ln: TSize; Dtt: LongInt; Attr: Word);
     label 1;
@@ -1421,108 +1524,6 @@ lbStartWrite:
       D: TDialog; {John_SW}{process locked files}
       R: TRect;   {John_SW}
       S: String;  {John_SW}
-
-    procedure RenameFile;
-      var
-        F: lFile;
-        W: Word;
-        SR: lSearchRec;
-      begin
-      DosErrorCode := 0;
-      RnFl(S1, S2);
-      if DosErrorCode = 17 {NOT_SAME_DEVICE} then
-        Exit;  { AK155 14.03.2006 actually code 17
-          I only managed to get under OS/2 }
-      if DosErrorCode in [5, 80, 183] then
-          { AK155 14.03.2006
-            Code 80 (FILE_EXISTS) happens, for example, under NT 4 when
-          "renaming" between actually different network paths,
-          when the file exists on the target device. If it is deleted,
-          then "renaming" succeeds, though actually it is copy
-          and delete. Whether that is good is unclear, because a
-          system function runs independently of DN settings.
-            And when "renaming" between directories of one disk under NT
-          we get code 183 (ALREADY_EXISTS). Interestingly, what is
-          the deep difference between FILE_EXISTS and ALREADY_EXISTS?
-            Under OS/2 code 183 sort of does not exist, but when the name matches on
-          a network Windows disk we get 183 even under OS/2. }
-        begin
-        lAssignFile(F, S2);
-        ClrIO;
-        lSetFAttr(F, Archive);
-        ClrIO;
-        lEraseFile(F);
-        RnFl(S1, S2);
-        end;
-      if DosErrorCode in [5, 183] then
-        begin {AK155 The meaning of this block is unclear to me }
-        lAssignFile(F, S1);
-        lGetFAttr(F, W);
-        lSetFAttr(F, Archive);
-        ClrIO;
-        RnFl(S1, S2);
-        lSetFAttr(F, W);
-        ClrIO;
-        end;
-      if not (DosErrorCode in [0, 18]) then
-        begin
-        ForceDispatch;
-        MessFileNotRename(S1, S2, DosErrorCode);
-        CopyCancel := True;
-        end;
-      end { RenameFile };
-
-    procedure DoRename;
-      var
-        A: array[0..10] of PString;
-        I, J: Integer;
-      begin
-      for I := 0 to Min(10, Info.Lines.Count-1) do
-        begin
-        A[I] := Info.Lines.At(I);
-        Info.Lines.AtPut(I, nil);
-        end;
-      Info.Write(2, Cut(FName, 40));
-      Info.Write(4, GetString(dlFC_To));
-      Info.Write(6, Cut(NName, 40));
-      //Dispatch;
-      if not CopyCancel then
-        RenameFile;
-      if DosErrorCode = 17 {NOT_SAME_DEVICE} then
-        Exit;
-      if not CopyCancel and (Own <> nil) then
-        begin
-        Own^.Attr := Own^.Attr or Copied;
-        if  (Own^.DIZ <> nil) and
-            (CopyOptions and cpoDesc <> 0)
-        then
-          begin
-          Info.Write(6, GetString(dlExportingDIZ));
-          ExportDiz(@Own^.FlName, GetName(NName), Own^.DIZ, CopyDir);
-          if  (CopyOptions and cpoMove <> 0) and
-              (FMSetup.Options and fmoPreserveDesc = 0)
-          then
-            DeleteDiz(Own);
-          end;
-        {no EA copying should be inserted here}
-
-        
-        Own^.FlName[False] := GetName(lfGetShortFileName(NName));
-        
-{!RLN}        CopyShortString(GetName(NName), Own^.FlName[True]);
-        //         ReplaceLongName(Own, (NName));
-   { This is in case we are standing right on this name.
-   So that when the directory is reread the cursor goes to the new name,
-   and does not stay at the old position }
-        if  (SourcePanel <> nil) then
-          Message(SourcePanel, evCommand, cmCopyUnselect, Own);
-        ToWrite := ToWrite+ln;
-        ToRead := ToRead+ln;
-        end;
-      Info.DrawView;
-      for I := 0 to Min(10, Info.Lines.Count-1) do
-        Info.Lines.AtReplace(I, A[I]);
-      end { DoRename };
 
     label
       NoRename, FileRead, PrepareResume, PrepareSkip, PrepareAppend;
@@ -1726,7 +1727,7 @@ PrepareResume:
       ClrIO;
       Close(ReadStream.F);
       ClrIO;
-      DoRename;
+      DoRename(FName, NName, Own, ln, S1, S2);
       if DosErrorCode <> 17 {NOT_SAME_DEVICE} then
         Exit;
       { What seemed one device turned out to be different ones, and move
@@ -2316,29 +2317,30 @@ TryGetInfo:
       P^.Attr := P^.Attr or Marked;
     end;
 
-  procedure __Remove;
-    var
-      RRC: TStringCollection;
+  var
+    RRC: TStringCollection;
 
-    procedure DoRemove(P_: Pointer);
-    var P: PFileRec absolute P_;
+  procedure DoRemove(P_: Pointer);
+  var P: PFileRec absolute P_;
 
+    begin
+    {Cat: previously the next piece ran only for successfully copied
+    directories, i.e. (P^.Attr and Copied <> 0), but all should be reread}
+    if P^.Attr and Marked = 0 then
       begin
-      {Cat: previously the next piece ran only for successfully copied
-      directories, i.e. (P^.Attr and Copied <> 0), but all should be reread}
-      if P^.Attr and Marked = 0 then
-        begin
-        SSS := CnvString(P^.Owner);
-        if SSS[Length(SSS)] = DnSep then
-          SetLength(SSS, Length(SSS)-1);
-        if Copy(CopyDir, 1, Length(SSS)) = SSS then
-          Inhr := 0;
-        RRC.Insert(NewStr(SSS));
-        if P^.Attr and Directory <> 0 then
-          Red := Red+[DriveOf(SSS)];
-        Files.ForEach(MakeMark);
-        end;
-      end { DoRemove };
+      SSS := CnvString(P^.Owner);
+      if SSS[Length(SSS)] = DnSep then
+        SetLength(SSS, Length(SSS)-1);
+      if Copy(CopyDir, 1, Length(SSS)) = SSS then
+        Inhr := 0;
+      RRC.Insert(NewStr(SSS));
+      if P^.Attr and Directory <> 0 then
+        Red := Red+[DriveOf(SSS)];
+      Files.ForEach(MakeMark);
+      end;
+    end { DoRemove };
+
+  procedure __Remove;
 
     procedure DoReread(P_: Pointer);
     var P: PString absolute P_;

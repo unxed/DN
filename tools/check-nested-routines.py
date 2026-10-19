@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List Pascal routines nested two or more levels deep in dn/src; with --reads, only those using a name declared above their parent."""
+"""List Pascal routines nested two or more levels deep in dn/src; with --reads, only those using a name declared above their parent; --check is --reads that exits 1 when it finds any."""
 
 from __future__ import annotations
 
@@ -232,8 +232,14 @@ def scan(path: Path) -> list[tuple[int, str, str, list[str]]]:
 
 
 def main() -> int:
-    arguments = [argument for argument in sys.argv[1:] if argument != "--reads"]
-    only_reads = len(arguments) != len(sys.argv) - 1
+    options = {argument for argument in sys.argv[1:] if argument.startswith("--")}
+    arguments = [argument for argument in sys.argv[1:] if not argument.startswith("--")]
+    if not options <= {"--reads", "--check"} or len(arguments) > 1:
+        # A second path used to be ignored without a word, so `dn/src/*.pas` checked one file and printed "No nested routines found".
+        print("usage: check-nested-routines.py [--reads | --check] [directory or file]", file=sys.stderr)
+        return 2
+    check = "--check" in options
+    only_reads = check or "--reads" in options
     root = Path(arguments[0]) if arguments else Path("dn/src")
     files = sorted(root.rglob("*.pas")) if root.is_dir() else [root]
     findings: list[tuple[Path, int, str, str, list[str]]] = []
@@ -253,7 +259,8 @@ def main() -> int:
         print(f"{path}:{line}: {child} nested in {parent}{suffix}")
     if not findings:
         print("No nested routines found." if not only_reads else "No routines reading above their parent found.")
-    return 0
+    # --check is the gate of the CI: a routine that reads above its parent (unxed/dn#80) fails it.
+    return 1 if check and findings else 0
 
 
 if __name__ == "__main__":
