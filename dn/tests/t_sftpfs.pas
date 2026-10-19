@@ -39,6 +39,75 @@ begin
   RemoveDir(Dir);
 end;
 
+function LoadText(const Path: AnsiString): AnsiString;
+var
+  F: TFileStream;
+begin
+  Result := '';
+  try
+    F := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(Result, F.Size);
+      if Length(Result) > 0 then
+        F.ReadBuffer(Result[1], Length(Result));
+    finally
+      F.Free;
+    end;
+  except
+    on Exception do
+      Result := '';
+  end;
+end;
+
+{ 1 MiB: a run of zero bytes, every value of a byte, then bytes that do not repeat soon. }
+function BigData: AnsiString;
+var
+  I: Integer;
+  V: LongWord;
+begin
+  SetLength(Result, 1048576);
+  V := 12345;
+  for I := 1 to Length(Result) do
+    if I <= 5000 then
+      Result[I] := #0
+    else if I <= 5000 + 256 * 4 then
+      Result[I] := Chr((I - 5001) mod 256)
+    else
+    begin
+      V := V * 1103515245 + 12345;
+      Result[I] := Chr((V shr 16) and $FF);
+    end;
+end;
+
+{ All of a stream, read in pieces of Piece bytes. }
+function ReadAll(S: TStream; Piece: Integer): AnsiString;
+var
+  Buf: AnsiString;
+  N: Integer;
+begin
+  Result := '';
+  SetLength(Buf, Piece);
+  repeat
+    N := S.Read(Buf[1], Piece);
+    Result := Result + Copy(Buf, 1, N);
+  until N = 0;
+end;
+
+procedure WriteText(S: TStream; const Text: AnsiString; Piece: Integer);
+var
+  P, N: Integer;
+begin
+  P := 1;
+  while P <= Length(Text) do
+  begin
+    N := Length(Text) - P + 1;
+    if N > Piece then
+      N := Piece;
+    S.WriteBuffer(Text[P], N);
+    Inc(P, N);
+  end;
+end;
+
 function IndexOf(const Entries: TRemoteEntries; const Name: AnsiString): Integer;
 var
   I: Integer;
@@ -141,6 +210,136 @@ begin
   end;
 end;
 
+{ OpenRead and OpenWrite against the server; the files are compared with what this machine reads. }
+procedure CheckStreams(FS: TSftpFS; const Base: AnsiString);
+var
+  Stream: TStream;
+  Big, Got: AnsiString;
+  Buf: array[0..9] of Char;
+  Raised: Boolean;
+  E: TRemoteEntry;
+begin
+  Big := BigData;
+
+  Check(FS.OpenRead(Base + '/plain.txt', Stream) = rrOk, 'a file is opened for reading: ' + FS.LastError);
+  if Stream <> nil then
+  begin
+    Check(Stream.Size = 3, 'the stream has the size of the file');
+    Check(ReadAll(Stream, 100) = 'abc', 'the content of a small file');
+    Raised := False;
+    try
+      Stream.Write(Buf, 1);
+    except
+      on EWriteError do
+        Raised := True;
+    end;
+    Check(Raised, 'a stream for reading does not write');
+    Stream.Free;
+  end;
+
+  Check(FS.OpenRead(Base + '/big.bin', Stream) = rrOk, 'a file of 1 MiB is opened');
+  if Stream <> nil then
+  begin
+    Check(Stream.Size = Length(Big), 'its size');
+    Got := ReadAll(Stream, 70000);
+    Check(Got = Big, 'it is read whole in pieces larger than those of the server: ' + IntToStr(Length(Got)) + ' bytes');
+    Stream.Position := 4995;
+    Stream.ReadBuffer(Buf, 10);
+    Check(CompareByte(Buf, Big[4996], 10) = 0, 'a read after Seek, across the end of the zero bytes');
+    Stream.Seek(-10, soEnd);
+    Check((Stream.Read(Buf, 10) = 10) and (CompareByte(Buf, Big[Length(Big) - 9], 10) = 0) and (Stream.Read(Buf, 10) = 0),
+      'the last bytes, then the end');
+    Stream.Position := 40000;
+    Check(ReadAll(Stream, 1) = Copy(Big, 40001, Length(Big)), 'a read one byte at a time from the middle');
+    Stream.Free;
+  end;
+
+  Check(FS.OpenRead(Base + '/empty-file', Stream) = rrOk, 'an empty file is opened');
+  if Stream <> nil then
+  begin
+    Check((Stream.Size = 0) and (ReadAll(Stream, 10) = ''), 'it has nothing');
+    Stream.Free;
+  end;
+  Check(FS.OpenRead(Base + '/with space.txt', Stream) = rrOk, 'a name with a blank is opened');
+  if Stream <> nil then
+  begin
+    Check(ReadAll(Stream, 4) = 'hello world', 'its content');
+    Stream.Free;
+  end;
+
+  Check((FS.OpenRead(Base + '/sub', Stream) = rrIsDir) and (Stream = nil), 'a directory is not read');
+  Check((FS.OpenRead(Base + '/no-such', Stream) = rrNotFound) and (Stream = nil), 'a missing file is not found');
+  Check((FS.OpenRead(Base + '/dangling', Stream) = rrNotFound) and (Stream = nil), 'a link to nothing is not found');
+  Check((FS.OpenRead('relative', Stream) = rrDenied) and (Stream = nil), 'a path that is not absolute is refused');
+  fpMkFifo(PChar(Base + '/pipe'), &600);
+  Check((FS.OpenRead(Base + '/pipe', Stream) = rrFailed) and (Stream = nil), 'a pipe is not opened (the server would wait for a writer)');
+  Check((FS.OpenWrite(Base + '/pipe', Stream) = rrFailed) and (Stream = nil), 'nor written');
+  DeleteFile(Base + '/pipe');
+
+  Check(FS.OpenWrite(Base + '/up.bin', Stream) = rrOk, 'a new file is opened for writing: ' + FS.LastError);
+  if Stream <> nil then
+  begin
+    WriteText(Stream, Big, 7000);
+    Check(Stream.Size = Length(Big), 'the stream counts what was written');
+    Raised := False;
+    try
+      Stream.Read(Buf, 1);
+    except
+      on EReadError do
+        Raised := True;
+    end;
+    Check(Raised, 'a stream for writing does not read');
+    Stream.Free;
+  end;
+  Check(LoadText(Base + '/up.bin') = Big, '1 MiB written in pieces of 7000 bytes is the same on the disk');
+
+  Check(FS.OpenWrite(Base + '/plain.txt', Stream) = rrOk, 'a file that is there is opened for writing');
+  if Stream <> nil then
+  begin
+    WriteText(Stream, 'xy', 10);
+    Stream.Free;
+  end;
+  Check(LoadText(Base + '/plain.txt') = 'xy', 'it was emptied first');
+  Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Mode = &640), 'its permissions stay');
+
+  Check(FS.OpenWrite(Base + '/gap.bin', Stream) = rrOk, 'a file is written with a gap');
+  if Stream <> nil then
+  begin
+    WriteText(Stream, 'ab', 10);
+    Stream.Position := 10;
+    WriteText(Stream, 'Z', 10);
+    Check(Stream.Size = 11, 'the size counts the gap');
+    Stream.Free;
+  end;
+  Check(LoadText(Base + '/gap.bin') = 'ab' + StringOfChar(#0, 8) + 'Z', 'the gap is zero bytes');
+
+  Check(FS.OpenWrite(Base + '/caf' + #195#169 + ' new.txt', Stream) = rrOk, 'a name in UTF-8 with a blank is written');
+  if Stream <> nil then
+  begin
+    WriteText(Stream, 'u', 10);
+    Stream.Free;
+  end;
+  Check(LoadText(Base + '/caf' + #195#169 + ' new.txt') = 'u', 'it is on the disk');
+  Check(FS.OpenWrite(Base + '/empty-new', Stream) = rrOk, 'a file is made without writing to it');
+  Stream.Free;
+  Check(FileExists(Base + '/empty-new') and (LoadText(Base + '/empty-new') = ''), 'it is there and empty');
+
+  Check((FS.OpenWrite(Base + '/sub', Stream) = rrIsDir) and (Stream = nil), 'a directory is not written');
+  Check((FS.OpenWrite('/', Stream) = rrIsDir) and (Stream = nil), 'the root is not written');
+  Check((FS.OpenWrite(Base + '/no-such/f', Stream) = rrNotFound) and (Stream = nil), 'a file in a missing directory: ' + FS.LastError);
+  Check((FS.OpenWrite(Base + '/plain.txt/f', Stream) = rrNotFound) and (Stream = nil), 'a file under a file');
+  if fpGetUID <> 0 then
+  begin
+    fpChmod(Base + '/closed', &555);
+    Check((FS.OpenWrite(Base + '/closed/f', Stream) = rrDenied) and (Stream = nil), 'a directory that cannot be written is not allowed');
+    fpChmod(Base + '/closed', &755);
+    fpChmod(Base + '/up.bin', &000);
+    Check((FS.OpenRead(Base + '/up.bin', Stream) = rrDenied) and (Stream = nil), 'a file that cannot be read is not allowed');
+    fpChmod(Base + '/up.bin', &644);
+  end;
+  Check(FS.Connected, 'the refusals leave the connection open');
+end;
+
 procedure CheckServer(const Server, Base: AnsiString; Stamp: LongInt);
 var
   Proc: TNetProc;
@@ -149,7 +348,6 @@ var
   Remote, Want: TRemoteEntries;
   E: TRemoteEntry;
   Abs1, Abs2, Data: AnsiString;
-  Stream: TStream;
   I, J: Integer;
   Same: Boolean;
 begin
@@ -232,15 +430,16 @@ begin
       fpChmod(Base + '/closed', &755);
     end;
 
-    { the parts that follow }
-    Check((FS.OpenRead(Base + '/plain.txt', Stream) = rrUnsupported) and (Stream = nil), 'reading is not done yet');
-    Check((FS.OpenWrite(Base + '/new.txt', Stream) = rrUnsupported) and (Stream = nil), 'writing is not done yet');
+    CheckStreams(FS, Base);
+
+    { the part that follows }
     Check(FS.MkDir(Base + '/d') = rrUnsupported, 'MkDir is not done yet');
     Check(FS.Remove(Base + '/plain.txt') = rrUnsupported, 'Remove is not done yet');
     Check(FS.Rename(Base + '/plain.txt', Base + '/p') = rrUnsupported, 'Rename is not done yet');
     Check(FS.SetMode(Base + '/plain.txt', &600) = rrUnsupported, 'SetMode is not done yet');
     Check(FS.Connected, 'the refusals leave the connection open');
-    Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Mode = &640), 'and nothing was changed');
+    Check((FS.Stat(Base + '/plain.txt', False, E) = rrOk) and (E.Mode = &640) and FileExists(Base + '/plain.txt') and
+      (not DirectoryExists(Base + '/d')) and (not FileExists(Base + '/p')), 'and nothing was changed');
 
     FS.Disconnect;
     Check(not FS.Connected, 'Disconnect ends the session');
@@ -285,6 +484,8 @@ begin
   PutText(Base + '/ lead and trail ', '');
   PutText(Base + '/caf' + #195#169 + '.txt', 'x');
   PutText(Base + '/sub/inner.bin', StringOfChar('z', 1000));
+  PutText(Base + '/big.bin', BigData);
+  PutText(Base + '/empty-file', '');
   for I := 1 to 300 do
     PutText(Base + '/many/file-' + IntToStr(I) + '-' + StringOfChar('n', 40), '');
   fpChmod(Base + '/plain.txt', &640);
