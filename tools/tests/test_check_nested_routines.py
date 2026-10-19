@@ -176,5 +176,75 @@ end.
         self.assertEqual(lines, ["far nested in middle reads param (outer)", "deep nested in calc reads top (outer)"])
 
 
+    READING = """unit Sample;
+interface
+implementation
+procedure Outer(Param: Integer);
+  procedure Middle;
+    procedure Far;
+      begin
+      Param := 1;
+      end;
+    begin
+    end;
+  begin
+  end;
+begin
+end;
+end.
+"""
+
+    CLEAN = """unit Sample;
+interface
+implementation
+procedure Outer;
+  var Top: Integer;
+  procedure Middle;
+    procedure Far;
+      var Own: Integer;
+      begin
+      Own := 1;
+      end;
+    begin
+    end;
+  begin
+  end;
+begin
+end;
+end.
+"""
+
+    def run_with(self, source: str, *flags: str, extra: tuple = ()) -> subprocess.CompletedProcess:
+        with tempfile.TemporaryDirectory() as temporary:
+            unit = Path(temporary) / "sample.pas"
+            unit.write_text(source, encoding="ascii")
+            return subprocess.run(
+                ["python3", str(SCRIPT), *flags, temporary, *extra],
+                capture_output=True,
+                text=True,
+            )
+
+    def test_check_fails_on_a_routine_reading_above_its_parent(self):
+        result = self.run_with(self.READING, "--check")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("far nested in middle reads param (outer)", result.stdout.lower())
+
+    def test_check_passes_when_nothing_reads_above_its_parent(self):
+        result = self.run_with(self.CLEAN, "--check")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("No routines reading above their parent found.", result.stdout)
+
+    def test_reads_alone_still_exits_zero_with_findings(self):
+        self.assertEqual(self.run_with(self.READING, "--reads").returncode, 0)
+
+    def test_second_path_and_unknown_option_are_errors(self):
+        # `dn/src/*.pas` used to check the first file only and print "No nested routines found".
+        result = self.run_with(self.CLEAN, "--check", extra=("second.pas",))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("usage", result.stderr)
+        result = self.run_with(self.CLEAN, "--chek")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("usage", result.stderr)
+
 if __name__ == "__main__":
     unittest.main()
