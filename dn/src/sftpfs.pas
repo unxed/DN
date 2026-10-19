@@ -8,7 +8,9 @@
 
   Done so far: List (OPENDIR, READDIR, CLOSE), Stat (STAT, LSTAT, and READLINK for the target of a link), RealPath, and the streams of OpenRead
   (OPEN, READ in pieces as the caller reads, so Seek is cheap) and OpenWrite (OPEN that makes or empties the file, WRITE as the caller writes, CLOSE
-  when the stream is freed). The methods that change the tree answer rrUnsupported until the next part of the step.
+  when the stream is freed), and the changes of the tree: MkDir (MKDIR), Remove (REMOVE, RMDIR), Rename (RENAME) and SetMode (SETSTAT). Before a change
+  the paths are looked at, so that the answers are those of TLocalFS whatever words the server has for its errors (rrExists for a taken name,
+  rrNotEmpty for a directory with content); RENAME of version 3 does not overwrite, and a name that is taken is refused before it is sent.
 
   When a request does not get its answer in time, or the server ends, the connection is broken for good: the next answer could not be told from the
   late one. LastError tells why; make a new TSftpFS to try again.
@@ -125,10 +127,15 @@ const
   FxpRead = 5;
   FxpWrite = 6;
   FxpLstat = 7;
+  FxpSetstat = 9;
   FxpOpendir = 11;
   FxpReaddir = 12;
+  FxpRemove = 13;
+  FxpMkdir = 14;
+  FxpRmdir = 15;
   FxpRealpath = 16;
   FxpStat = 17;
+  FxpRename = 18;
   FxpReadlink = 19;
   FxpStatus = 101;
   FxpHandle = 102;
@@ -504,7 +511,7 @@ begin
   end;
 end;
 
-{ A request that answers with a STATUS only (CLOSE, WRITE, later the changes of the tree). }
+{ A request that answers with a STATUS only (CLOSE, WRITE, the changes of the tree). }
 function TSftpFS.AskStatus(Kind: Byte; const Fields, Path: AnsiString): TRemoteResult;
 var
   Reply: Byte;
@@ -1040,23 +1047,79 @@ begin
 end;
 
 function TSftpFS.MkDir(const Path: AnsiString): TRemoteResult;
+var
+  Clean, Dir, Name: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'making a directory over SFTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrExists, 'already exists: ' + Path));
+  Result := Stat(Clean, False, E);
+  if Result = rrOk then
+    Exit(Fail(rrExists, 'already exists: ' + Path));
+  if Result <> rrNotFound then
+    Exit;
+  RemoteSplit(Clean, Dir, Name);
+  Result := Stat(Dir, True, E);
+  if Result <> rrOk then
+    Exit;
+  if E.Kind <> rkDir then
+    Exit(Fail(rrNotDir, 'not a directory: ' + Dir));
+  Result := AskStatus(FxpMkdir, SftpStr(Clean) + SftpU32(0), Clean);
 end;
 
 function TSftpFS.Remove(const Path: AnsiString): TRemoteResult;
+var
+  Clean: AnsiString;
+  E: TRemoteEntry;
+  Entries: TRemoteEntries;
 begin
-  Result := Fail(rrUnsupported, 'removing over SFTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if Clean = '/' then
+    Exit(Fail(rrDenied, 'the root cannot be removed'));
+  Result := Stat(Clean, False, E);
+  if Result <> rrOk then
+    Exit;
+  { a link to a directory is a link and goes with REMOVE }
+  if E.Kind <> rkDir then
+    Exit(AskStatus(FxpRemove, SftpStr(Clean), Clean));
+  Result := AskStatus(FxpRmdir, SftpStr(Clean), Clean);
+  { the servers tell a directory with content as a failure of any kind: its list decides }
+  if (Result in [rrFailed, rrDenied]) and (not FBroken) and (List(Clean, Entries) = rrOk) and (Length(Entries) > 0) then
+    Result := Fail(rrNotEmpty, 'the directory is not empty: ' + Path);
 end;
 
 function TSftpFS.Rename(const OldPath, NewPath: AnsiString): TRemoteResult;
+var
+  OldClean, NewClean: AnsiString;
+  E: TRemoteEntry;
 begin
-  Result := Fail(rrUnsupported, 'renaming over SFTP is not done yet: ' + OldPath);
+  if (not RemoteCleanPath(OldPath, OldClean)) or (not RemoteCleanPath(NewPath, NewClean)) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + OldPath));
+  if (OldClean = '/') or (NewClean = '/') then
+    Exit(Fail(rrDenied, 'the root cannot be renamed'));
+  Result := Stat(OldClean, False, E);
+  if Result <> rrOk then
+    Exit;
+  Result := Stat(NewClean, False, E);
+  if Result = rrOk then
+    Exit(Fail(rrExists, 'already exists: ' + NewPath));
+  if Result <> rrNotFound then
+    Exit;
+  Result := AskStatus(FxpRename, SftpStr(OldClean) + SftpStr(NewClean), OldClean);
 end;
 
 function TSftpFS.SetMode(const Path: AnsiString; Mode: LongInt): TRemoteResult;
+var
+  Clean: AnsiString;
 begin
-  Result := Fail(rrUnsupported, 'setting the mode over SFTP is not done yet: ' + Path);
+  if not RemoteCleanPath(Path, Clean) then
+    Exit(Fail(rrDenied, 'the path is not absolute or leaves the root: ' + Path));
+  if (Mode < 0) or (Mode > &7777) then
+    Exit(Fail(rrFailed, 'the permission bits are not right: ' + Path));
+  Result := AskStatus(FxpSetstat, SftpStr(Clean) + SftpU32(AttrPermissions) + SftpU32(LongWord(Mode)), Clean);
 end;
 
 {$ENDIF}
