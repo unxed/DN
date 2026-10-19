@@ -273,13 +273,18 @@ begin
   end;
 end;
 
-{ Starts pyftpdlib over Base on a free port of this machine and waits until it answers; the port, or 0. }
+{ Starts pyftpdlib over Base on a free port of this machine and waits until it answers; the port, or 0. The server that answers must be this one
+  (a server of another run may hold the port, and then this one cannot start): it must show the file of the marker of this run, and still run. }
 function StartServer(const Base: AnsiString; out Server: TProcess): Integer;
 var
   Try_, Waited: Integer;
   FS: TFtpFS;
+  E: TRemoteEntry;
   Up: Boolean;
+  Marker: AnsiString;
 begin
+  Marker := '/.dn-test-' + IntToStr(fpGetPid);
+  PutText(Base + Marker, '');
   Result := 0;
   Server := nil;
   for Try_ := 0 to 4 do
@@ -299,11 +304,14 @@ begin
       Inc(Waited, 100);
       FS := TFtpFS.Create;
       FS.TimeoutMs := 2000;
-      Up := FS.Connect('127.0.0.1', Result, 'anonymous', 'dn@') = rrOk;
+      Up := (FS.Connect('127.0.0.1', Result, 'anonymous', 'dn@') = rrOk) and (FS.Stat(Marker, False, E) = rrOk) and Server.Running;
       FS.Free;
     end;
     if Up then
+    begin
+      DeleteFile(Base + Marker);
       Exit;
+    end;
     if Server.Running then
       Server.Terminate(1);
     Server.WaitOnExit;
