@@ -15,6 +15,8 @@ on:
       - tools/class-gate.py
       - tools/class-gate.sh
       - tools/tests/test_class_gate.py
+      - tools/check-nested-routines.py
+      - tools/tests/test_check_nested_routines.py
       - tools/gen-shim.py
       - tools/ci-par.sh
       - audit/**
@@ -57,12 +59,14 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-      - name: dn/PROVENANCE.md up to date, the class-gate regressions, the Pascal class gate (all tracked sources, including bootstrap; old construction idioms are blocking)
+      - name: dn/PROVENANCE.md up to date, the class-gate regressions, the Pascal class gate (all tracked sources, including bootstrap; old construction idioms are blocking), no routine reads a name above its parent (unxed/dn#80)
         env:
           CMDS: |
             python3 bootstrap/tools/dn-manifest.py --check
             python3 -B -m unittest discover -s tools/tests -p 'test_class_gate.py'
             CLASS_GATE_STRICT=1 tools/class-gate.sh
+            python3 -B -m unittest discover -s tools/tests -p 'test_check_nested_routines.py'
+            python3 tools/check-nested-routines.py --check dn/src
         run: tools/ci-par.sh
 
   bootstrap:
