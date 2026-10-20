@@ -12,6 +12,7 @@ on:
       - dn/build.env
       - tools/dn-test.sh
       - tools/dn-linux-ops.py
+      - tools/dn_wait.py
 
 concurrency:
   group: dn-freebsd-${{ github.ref }}
@@ -31,7 +32,7 @@ jobs:
           release: '14.3'
           usesh: true
           prepare: |
-            pkg install -y fpc python3 git
+            pkg install -y fpc python3 git bash
             # pyftpdlib for t_ftpfs: the package of the python3 of the system if there is one, else pip
             py=$(python3 -c 'import sys; print("py%d%d" % sys.version_info[:2])')
             pkg search -o pyftpdlib || true
@@ -39,6 +40,8 @@ jobs:
             python3 -c 'import pyftpdlib; print("pyftpdlib", pyftpdlib.__ver__)'
           run: |
             set -e
+            # the tree is synced into the VM with another owner: git refuses it (the class gate lists the files with git ls-files)
+            git config --global --add safe.directory '*'
             freebsd-version
             uname -m
             fpc -iV
