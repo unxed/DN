@@ -148,6 +148,7 @@ jobs:
           - name: ssh in the command line
             cmds: |
               python3 tools/dn-linux-ssh.py out/dn
+              python3 tools/dn-linux-shelllink.py out/dn
     steps:
       - uses: actions/checkout@v4
         with:

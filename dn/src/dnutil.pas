@@ -258,6 +258,7 @@ implementation
 
 uses DnPath, DnActReg,
   SysUtils, FlightRec,
+  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))} NetOpen, {$ENDIF}
   DNRun,
   Dos, Lfn, HelpKern, Menus, FileCopy, Math,
   DNHelp, DnIni, iniengine, cfgstate, DNErrLog, histories,
@@ -2279,6 +2280,18 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
         begin
         System.Delete(S, 1, 3); {DelFC(S); DelFC(S);}
         DelLeft(S);
+        {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+        { the address of a remote place (NetIsUrl, unxed/dn#90): the panel opens it; it is not a local path to expand }
+        if NetIsUrl(fDelRight(S)) then
+          begin
+          S := fDelRight(S);
+          Message(ActivePanel, evCommand, cmChangeDirectory, @S);
+          SD := '';
+          CommandLine.SetData(SD);
+          CommandLine.DrawView;
+          Exit;
+          end;
+        {$ENDIF}
         S := DelSquashes(S);
         S := lFExpand(S);
         repeat
