@@ -1,0 +1,101 @@
+name: plat-probe
+# Temporary probe of unxed/dn#166 (branch tmp/19d3/*, never merged): can DN be built and started on the other platforms with
+# the fpc of their packages? One job per candidate; .github/plat-probe/run.sh builds and runs the smoke test.
+on:
+  push:
+    branches: ['tmp/19d3/**']
+
+jobs:
+  probe:
+    name: ${{ matrix.p }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - { p: freebsd-x86_64, runner: ubuntu-24.04 }
+          - { p: macos-arm64, runner: macos-15 }
+          - { p: macos-x86_64, runner: macos-15-intel }
+          - { p: netbsd-x86_64, runner: ubuntu-24.04 }
+          - { p: openbsd-x86_64, runner: ubuntu-24.04 }
+          - { p: dragonfly-x86_64, runner: ubuntu-24.04 }
+          - { p: haiku-x86_64, runner: ubuntu-24.04 }
+          - { p: linux-armhf, runner: ubuntu-24.04 }
+          - { p: linux-riscv64, runner: ubuntu-24.04 }
+          - { p: freebsd-aarch64, runner: ubuntu-24.04 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - if: matrix.p == 'freebsd-x86_64'
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.3'
+          usesh: true
+          copyback: false
+          prepare: pkg install -y fpc python3
+          run: sh .github/plat-probe/run.sh "A B"
+      - if: matrix.p == 'freebsd-aarch64'
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.3'
+          arch: aarch64
+          usesh: true
+          copyback: false
+          prepare: pkg install -y fpc python3
+          run: sh .github/plat-probe/run.sh A
+      - if: matrix.p == 'netbsd-x86_64'
+        uses: vmactions/netbsd-vm@v1
+        with:
+          release: '10.1'
+          copyback: false
+          prepare: |
+            /usr/sbin/pkg_add fpc || true
+            /usr/sbin/pkg_add python312 || /usr/sbin/pkg_add python311 || true
+            for p in /usr/pkg/bin/python3.12 /usr/pkg/bin/python3.11; do [ -x "$p" ] && { ln -sf "$p" /usr/pkg/bin/python3; break; }; done
+          run: sh .github/plat-probe/run.sh "A B"
+      - if: matrix.p == 'openbsd-x86_64'
+        uses: vmactions/openbsd-vm@v1
+        with:
+          release: '7.8'
+          copyback: false
+          prepare: |
+            pkg_add fpc || pkg_add -v fpc || true
+            pkg_add python%3 || true
+            pkg_info -Q fpc || true
+          run: sh .github/plat-probe/run.sh "A B"
+      - if: matrix.p == 'dragonfly-x86_64'
+        uses: vmactions/dragonflybsd-vm@v1
+        with:
+          release: '6.4.2'
+          copyback: false
+          prepare: |
+            pkg install -y fpc || true
+            pkg install -y python3 || pkg install -y python311 || true
+            pkg search fpc || true
+          run: sh .github/plat-probe/run.sh "A B"
+      - if: matrix.p == 'haiku-x86_64'
+        uses: vmactions/haiku-vm@v1
+        with:
+          release: 'r1beta5'
+          copyback: false
+          prepare: |
+            pkgman search fpc || true
+            pkgman search pascal || true
+            pkgman install -y fpc || pkgman install -y freepascal || true
+            pkgman install -y python3.10 || pkgman install -y python3 || true
+          run: sh .github/plat-probe/run.sh "A B"
+      - if: startsWith(matrix.p, 'macos-')
+        run: |
+          brew install fpc || true
+          sh .github/plat-probe/run.sh "A B"
+      - if: matrix.p == 'linux-armhf' || matrix.p == 'linux-riscv64'
+        uses: docker/setup-qemu-action@v4
+      - if: matrix.p == 'linux-armhf' || matrix.p == 'linux-riscv64'
+        run: |
+          plat=linux/arm/v7; [ "${{ matrix.p }}" = linux-riscv64 ] && plat=linux/riscv64
+          docker run --rm --platform "$plat" -v "$PWD:/w" -w /w debian:trixie sh -c '
+            apt-get update -q >/dev/null && apt-get install -y -q --no-install-recommends fp-compiler fp-units-rtl fp-units-base fp-units-fcl fp-units-misc python3 file >/dev/null || apt-cache policy fp-compiler
+            sh .github/plat-probe/run.sh A'
