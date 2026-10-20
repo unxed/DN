@@ -31,7 +31,12 @@ jobs:
           release: '14.3'
           usesh: true
           prepare: |
-            pkg install -y fpc python3 git py311-pyftpdlib
+            pkg install -y fpc python3 git
+            # pyftpdlib for t_ftpfs: the package of the python3 of the system if there is one, else pip
+            py=$(python3 -c 'import sys; print("py%d%d" % sys.version_info[:2])')
+            pkg search -o pyftpdlib || true
+            pkg install -y "$py-pyftpdlib" || { pkg install -y "$py-pip" && python3 -m pip install pyftpdlib; }
+            python3 -c 'import pyftpdlib; print("pyftpdlib", pyftpdlib.__ver__)'
           run: |
             set -e
             freebsd-version
