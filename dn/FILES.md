@@ -200,6 +200,7 @@ no silent gaps (post-class criterion A).
 | `objtype.pas` | stream object-type numbers (`ot*`) for DN classes |
 | `pktview.pas` | FidoNet `.pkt` viewer |
 | `remotefs.pas` (ours) | `TRemoteFS`, the abstract file system behind a panel that shows no local directory, and `TLocalFS` over a directory of this machine (unxed/dn#90, `docs/NETWORK.md`) |
+| `remotedrive.pas` | `TRemoteDrive`, the drive of a panel over a `TRemoteFS` (FISH, SFTP, FTP): the list of the current directory, a change of directory and the way up; copying and the other operations follow (unxed/dn#90 step 7, `docs/NETWORK.md`); empty in DOS and DN_MINI |
 | `rstrings.pas` | resource string index glue |
 | `strview.pas` | string viewer widget |
 | `timeutil.pas` | time helpers (was `xtime`; `GetCurMSec`, etc.) |
