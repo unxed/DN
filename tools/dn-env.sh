@@ -6,7 +6,7 @@
 #   freebsd64 the fpc of a FreeBSD x86_64 host (FPC=path to use another)
 #   aarch64 DN_AARCH64=PREFIX of tools/build-fpc-aarch64-linux.sh (the cross compiler for aarch64-linux)
 #   win64   DN_WIN=PREFIX of tools/build-fpc-windows.sh PREFIX win64 (the cross compiler for x86_64-win64); win32: DN_WIN32=PREFIX of the same script with win32
-# DN_EXTRA: more options (e.g. -gl: line numbers). DN_RELEASE=1: the build of a release (DN_OPT_release of dn/build.env, no -gl). DN_MINI=1: the mini build (a release with DN_OPT_mini).   Result: DN_PPC (the compiler and its target options), DN_PATH (the directories for PATH:
+# DN_EXTRA: more options (e.g. -gl: line numbers). DN_RELEASE=1: the build of a release (DN_OPT_release of dn/build.env, no -gl). DN_MINI=1: the mini build (a release with DN_OPT_mini). DN_BP=1: the unit paths of Better Pascal (bp/, docs/BETTER-PASCAL.md).   Result: DN_PPC (the compiler and its target options), DN_PATH (the directories for PATH:
 # binutils), DN_UPATHS (the unit and include directories), DN_OPTS, DN_OBJ (where the objects go), DN_GEN (the generated shim units).
 . "$here/dn/build.env"
 case "${DN_TARGET:-}" in
@@ -88,6 +88,22 @@ dn_stage() {
     done
 }
 DN_UPATHS="$DN_FUNITS -Fu$here/tv/src -Fu$here/tve/src -Fu$DN_GEN -Fi$here/tv/src -Fi$here/tve/src -Fi$here/dn/compat/shims -Fu$DN_STAGE -Fi$DN_STAGE"
+# Better Pascal (docs/BETTER-PASCAL.md): DN_BP=1 adds the unit paths of the submodule bp/ (https://github.com/unxed/bp): bp.pas, safe/
+# and ext/, never bp/fpide/. No unit of DN uses them yet, so the default is off and the program is the same either way.
+# DN_BP_DIR=/path: another checkout of unxed/bp instead of bp/.
+if [ "${DN_BP:-0}" = 1 ]; then
+    if [ -z "${DN_BP_DIR:-}" ]; then
+        DN_BP_DIR=$here/bp
+        if [ ! -f "$DN_BP_DIR/bp.pas" ]; then
+            echo "bp/ is empty: fetching the submodule (git submodule update --init --depth 1 bp)" >&2
+            git -C "$here" submodule update --init --depth 1 bp >&2 ||
+                { echo "ERROR: no bp/. Run: git submodule update --init bp   (or set DN_BP_DIR=/path/to/a/checkout of https://github.com/unxed/bp)" >&2; exit 1; }
+        fi
+    fi
+    [ -f "$DN_BP_DIR/bp.pas" ] && [ -f "$DN_BP_DIR/safe/safe.pas" ] ||
+        { echo "DN_BP=1: $DN_BP_DIR has no bp.pas or safe/safe.pas (a checkout of https://github.com/unxed/bp is needed)" >&2; exit 1; }
+    DN_UPATHS="$DN_UPATHS -Fu$DN_BP_DIR -Fu$DN_BP_DIR/safe -Fu$DN_BP_DIR/ext"
+fi
 # the shim units (the names of the units of Borland TV that DN uses, made from tv/): generated for the builds, not committed
 dn_gen_shims() {
     mkdir -p "$DN_GEN"; dn_stage
