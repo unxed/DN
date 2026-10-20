@@ -3,6 +3,7 @@
 #   dos     DN_PREFIX=PREFIX of tools/build-fpc-go32v2.sh (or DN_CROSS=<dir with lib/fpc/3.2.2/ppcross386> and DN_LINK=<dir with djgpp/bin>)
 #   linux   DN_LINUX=PREFIX of tools/build-fpc-i386-linux.sh (the cross compiler for i386-linux)
 #   linux64 the fpc of the host (FPC=path to use another)
+#   freebsd64 the fpc of a FreeBSD x86_64 host (FPC=path to use another)
 #   aarch64 DN_AARCH64=PREFIX of tools/build-fpc-aarch64-linux.sh (the cross compiler for aarch64-linux)
 #   win64   DN_WIN=PREFIX of tools/build-fpc-windows.sh PREFIX win64 (the cross compiler for x86_64-win64); win32: DN_WIN32=PREFIX of the same script with win32
 # DN_EXTRA: more options (e.g. -gl: line numbers). DN_RELEASE=1: the build of a release (DN_OPT_release of dn/build.env, no -gl). DN_MINI=1: the mini build (a release with DN_OPT_mini).   Result: DN_PPC (the compiler and its target options), DN_PATH (the directories for PATH:
@@ -24,6 +25,8 @@ case "${DN_TARGET:-}" in
         DN_OPT=$DN_OPT_linux; DN_UNITS_EXTRA=$DN_UNITS_linux ;;
     linux64)
         DN_PPC="${FPC:-fpc}"; DN_PATH=""; DN_FUNITS=""; DN_OPT=$DN_OPT_linux64; DN_UNITS_EXTRA=$DN_UNITS_linux64 ;;
+    freebsd64)
+        DN_PPC="${FPC:-fpc}"; DN_PATH=""; DN_FUNITS=""; DN_OPT=$DN_OPT_freebsd64; DN_UNITS_EXTRA=$DN_UNITS_freebsd64 ;;
     aarch64)
         : "${DN_AARCH64:?aarch64: set DN_AARCH64 (tools/build-fpc-aarch64-linux.sh PREFIX)}"
         u=$DN_AARCH64/lib/fpc/3.2.2/units/aarch64-linux
@@ -39,12 +42,12 @@ case "${DN_TARGET:-}" in
         u=$DN_WIN32/lib/fpc/3.2.2/units/i386-win32
         DN_FUNITS="-Fu$u/* -Fu$u/rtl"; DN_PPC="$DN_WIN32/lib/fpc/3.2.2/ppcross386 -Twin32 -Pi386 -XPi686-w64-mingw32-"; DN_PATH=""
         DN_OPT=$DN_OPT_win32; DN_UNITS_EXTRA=$DN_UNITS_win32 ;;
-    *) echo "DN_TARGET must be dos, linux, linux64, aarch64, win64 or win32" >&2; exit 1 ;;
+    *) echo "DN_TARGET must be dos, linux, linux64, freebsd64, aarch64, win64 or win32" >&2; exit 1 ;;
 esac
 # no Intel assembler reader on other CPUs (the tree has no assembler left): aarch64 cross, or a native fpc on an ARM machine
 case "$DN_TARGET" in
     aarch64) DN_FPC_COMMON=$(echo "$DN_FPC_COMMON" | sed 's/ -Rintel//') ;;
-    linux64) case "$($DN_PPC -iTP 2>/dev/null)" in x86_64|i386) ;; *) DN_FPC_COMMON=$(echo "$DN_FPC_COMMON" | sed 's/ -Rintel//') ;; esac ;;
+    linux64|freebsd64) case "$($DN_PPC -iTP 2>/dev/null)" in x86_64|i386) ;; *) DN_FPC_COMMON=$(echo "$DN_FPC_COMMON" | sed 's/ -Rintel//') ;; esac ;;
 esac
 # the mini build (DN_MINI=1): a release without the parts of dn/build.env DN_OPT_mini (-dDN_MINI: the games, the calculator and the
 # spreadsheet, the phone book, Arvid, UUE, the DBF viewer, the disassembler of the viewer, the printing, the calendar, the ASCII table, the

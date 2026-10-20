@@ -1,0 +1,40 @@
+name: dn-freebsd
+# DN for FreeBSD x86_64 (unxed/dn#166): tools/build.sh freebsd64 (DN, its resources and its help) in a FreeBSD VM (vmactions/freebsd-vm),
+# with the fpc and the python3 of the packages of FreeBSD. Run by hand, and on a pull request that changes the build of this target.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/dn-freebsd.yml
+      - tools/build.sh
+      - tools/dn-env.sh
+      - dn/build.env
+
+concurrency:
+  group: dn-freebsd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build DN in FreeBSD 14.3
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.3'
+          usesh: true
+          prepare: |
+            pkg install -y fpc python3 git
+          run: |
+            freebsd-version
+            uname -m
+            fpc -iV
+            fpc -iTP
+            fpc -iTO
+            tools/build.sh freebsd64 out/dn
+            ls -l out/dn
+            file out/dn/dn
