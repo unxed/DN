@@ -52,6 +52,11 @@ jobs:
             file out/dn/dn
             # the unit tests (the network ones talk to sftp-server, sshd and pyftpdlib of this VM: /usr/libexec/sftp-server, /usr/sbin/sshd)
             rc=0
-            DN_TEST_JOBS=$(sysctl -n hw.ncpu) DN_RES_DIR=$PWD/out/dn tools/dn-test.sh || rc=1
-            python3 tools/dn-linux-ops.py out/dn || rc=1
+            if ! DN_TEST_JOBS=$(sysctl -n hw.ncpu) DN_RES_DIR=$PWD/out/dn tools/dn-test.sh; then
+                rc=1
+                # the whole output of each test that failed: dn-test.sh prints only its FAIL lines
+                for f in build/dn-tests/*.res; do head -1 "$f" | grep -q ": ALL OK" || { echo "=== ${f%.res}.txt"; tail -60 "${f%.res}.txt"; }; done
+            fi
+            # the pty of the embedded terminal of tv/ is Linux only (tv/src/tvpty.pas): the commands of the command line are left out
+            DN_OPS_NO_RUN=1 python3 tools/dn-linux-ops.py out/dn || rc=1
             exit $rc

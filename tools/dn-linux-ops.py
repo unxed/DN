@@ -138,10 +138,14 @@ def session(out, d):
     check('TEMP:' in t.text().split('\n')[1] and t.alive(), 'Alt-F1: the drive TEMP: opens without an error', t.text())
 
     # a command of the command line: the terminal is given to the shell, Enter returns to DN (it hung before)
-    key('echo ran-ok > ran.txt; echo shown-ok'); key('ENTER', 1.5)
-    check('shown-ok' in t.text() and 'Press Enter' in t.text(), 'a command: its output is on the screen and DN waits for Enter', t.text())
-    key('ENTER', 1.5)
-    check(os.path.isfile(os.path.join(w, 'ran.txt')) and open(os.path.join(w, 'ran.txt')).read() == 'ran-ok\n', 'the command was run in the directory of the panel')
+    if os.environ.get('DN_OPS_NO_RUN') == '1':
+        # FreeBSD (unxed/dn#166): the pty of the embedded terminal (tv/src/tvpty.pas) is Linux only, a command of the command line does not run
+        print('SKIP a command of the command line: DN_OPS_NO_RUN=1 (the pty of tv/ is Linux only)', flush=True)
+    else:
+        key('echo ran-ok > ran.txt; echo shown-ok'); key('ENTER', 1.5)
+        check('shown-ok' in t.text() and 'Press Enter' in t.text(), 'a command: its output is on the screen and DN waits for Enter', t.text())
+        key('ENTER', 1.5)
+        check(os.path.isfile(os.path.join(w, 'ran.txt')) and open(os.path.join(w, 'ran.txt')).read() == 'ran-ok\n', 'the command was run in the directory of the panel')
     check('Name' in t.text() and t.alive(), 'DN is back with its panels', t.text())
 
     # the Info panel is on at the end: quitting disposes the windows (TGroup.Done followed a view that had been disposed: Access violation)
