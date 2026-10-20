@@ -2,8 +2,9 @@
 # ONE COMMAND: builds DOS Navigator from dn/src and tv/src with your FPC: the programs (rcp, the resource compiler, and dn), the resources
 # (*.lng, *.dlg, made by rcp from dn/src/resource) and the help (*.hlp, made by tv/tools/tvhc.pas); all the names of the files of DN are in lower case.
 #
-# usage: tools/build.sh TARGET [OUTDIR]          TARGET: linux64 | linux | aarch64 | dos | win64 | win32        (OUTDIR default: out/TARGET)
+# usage: tools/build.sh TARGET [OUTDIR]          TARGET: linux64 | freebsd64 | linux | aarch64 | dos | win64 | win32        (OUTDIR default: out/TARGET)
 #   linux64   x86_64 Linux, the fpc of your system (FPC=...)                          needs: fpc 3.2.x, python3
+#   freebsd64 x86_64 FreeBSD, the fpc of your system (FPC=...)                        needs: fpc 3.2.x, python3 (unxed/dn#166: checked in CI only, dn-freebsd.yml)
 #   linux     i386 Linux (static; runs on a 64-bit kernel), DN_LINUX=PREFIX            needs: tools/build-fpc-i386-linux.sh PREFIX
 #   aarch64   ARM64 Linux (static), DN_AARCH64=PREFIX                                needs: tools/build-fpc-aarch64-linux.sh PREFIX (+ the fpc of the host for the resources)
 #   win64     Windows x86_64, DN_WIN=PREFIX                                           needs: tools/build-fpc-windows.sh PREFIX win64 (+ the fpc of the host for the resources)
@@ -14,9 +15,9 @@
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 . "$here/tools/need-tv.sh"
-DN_TARGET=${1:?usage: tools/build.sh linux64|linux|dos|win64|win32 [OUTDIR]}; export DN_TARGET
+DN_TARGET=${1:?usage: tools/build.sh linux64|freebsd64|linux|dos|win64|win32 [OUTDIR]}; export DN_TARGET
 # UTF-8 inside DN (-dDNUTF8) is the default on Linux and Windows; DN_UTF8=0 builds the old one (the code page inside); DOS: the code page by default, DN_UTF8=1 builds the UTF-8 one (it asks the DOS for UTF-8 names and clipboard, see dn/TODO-later.md)
-case "$DN_TARGET" in linux*|aarch64) : "${DN_UTF8:=1}";; win*) : "${DN_UTF8:=1}";; *) : "${DN_UTF8:=0}";; esac
+case "$DN_TARGET" in linux*|aarch64|freebsd*) : "${DN_UTF8:=1}";; win*) : "${DN_UTF8:=1}";; *) : "${DN_UTF8:=0}";; esac
 export DN_UTF8
 if [ "$DN_UTF8" != 0 ]; then case "${DN_EXTRA:-}" in *-dDNUTF8*) ;; *) DN_EXTRA="${DN_EXTRA:-} -dDNUTF8";; esac; fi
 export DN_EXTRA
@@ -27,7 +28,9 @@ src=${DN_SRC:-$here/dn/src}
 # (the same sources give the same binary); DN_BUILD_DATE=now: the moment of the build. The revision is the tag of the commit if it has one, else its short hash (+dirty: changes not committed).
 # version.inc reads DN_BUILD_DATE, DN_BUILD_REV and DN_BUILD_TARGET (the macros of the compiler).
 if [ -z "${DN_BUILD_DATE:-}" ] || [ "$DN_BUILD_DATE" = commit ]; then
-    DN_BUILD_DATE=$(LC_ALL=C TZ=UTC date -d "@$(git -C "$here" log -1 --format=%ct 2>/dev/null || date +%s)" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo unknown)
+    t=$(git -C "$here" log -1 --format=%ct 2>/dev/null || date +%s)
+    # date -d is GNU, date -r SECONDS is BSD
+    DN_BUILD_DATE=$(LC_ALL=C TZ=UTC date -d "@$t" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || LC_ALL=C TZ=UTC date -r "$t" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo unknown)
 elif [ "$DN_BUILD_DATE" = now ]; then
     DN_BUILD_DATE=$(LC_ALL=C TZ=UTC date '+%Y-%m-%d %H:%M:%S UTC')
 fi
@@ -35,7 +38,7 @@ if [ -z "${DN_BUILD_REV:-}" ]; then
     DN_BUILD_REV=$(git -C "$here" describe --tags --exact-match 2>/dev/null || git -C "$here" rev-parse --short HEAD 2>/dev/null || echo unknown)
     git -C "$here" diff --quiet HEAD -- . ":(exclude)dist" 2>/dev/null || DN_BUILD_REV="$DN_BUILD_REV+dirty"      # dist/ is the output of the build, not a source
 fi
-case "$DN_TARGET" in dos) DN_BUILD_TARGET="DOS";; linux) DN_BUILD_TARGET="Linux i386";; linux64) DN_BUILD_TARGET="Linux x86_64";; aarch64) DN_BUILD_TARGET="Linux aarch64";;
+case "$DN_TARGET" in dos) DN_BUILD_TARGET="DOS";; linux) DN_BUILD_TARGET="Linux i386";; linux64) DN_BUILD_TARGET="Linux x86_64";; freebsd64) DN_BUILD_TARGET="FreeBSD x86_64";; aarch64) DN_BUILD_TARGET="Linux aarch64";;
     win32) DN_BUILD_TARGET="Windows i386";; win64) DN_BUILD_TARGET="Windows x86_64";; *) DN_BUILD_TARGET="$DN_TARGET";; esac
 export DN_BUILD_DATE DN_BUILD_REV DN_BUILD_TARGET
 exe=; case "$DN_TARGET" in dos|win*) exe=.exe;; esac
