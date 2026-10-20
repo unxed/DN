@@ -96,6 +96,9 @@ type
     property Version: LongWord read FVersion;
   end;
 
+{ A TSftpFS over "ssh -s host sftp" (unit NetSsh) for the address Url, sftp://, connected; the path of the address is not looked at. rrOk and FS;
+  otherwise FS is nil and Err tells why (what ssh said, when it could not connect). }
+function OpenSftpSsh(const Url: AnsiString; out FS: TSftpFS; out Err: AnsiString): TRemoteResult;
 { The packet fields: a number of 4 and of 8 bytes, a string. }
 function SftpU32(V: LongWord): AnsiString;
 function SftpU64(V: QWord): AnsiString;
@@ -115,7 +118,7 @@ implementation
 {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
 
 uses
-  DateUtils;
+  DateUtils, NetSplit, NetSsh;
 
 const
   ProtocolVersion = 3;
@@ -1120,6 +1123,40 @@ begin
   if (Mode < 0) or (Mode > &7777) then
     Exit(Fail(rrFailed, 'the permission bits are not right: ' + Path));
   Result := AskStatus(FxpSetstat, SftpStr(Clean) + SftpU32(AttrPermissions) + SftpU32(LongWord(Mode)), Clean);
+end;
+
+function OpenSftpSsh(const Url: AnsiString; out FS: TSftpFS; out Err: AnsiString): TRemoteResult;
+var
+  U: TNetUrl;
+  Args: TSshArgs;
+  Purpose: TSshPurpose;
+  Proc: TNetProc;
+begin
+  FS := nil;
+  Result := rrFailed;
+  if not NetSplitUrl(Url, SshDefaultPort, U, Err) then
+    Exit;
+  if (not SshPurposeOf(U.Scheme, Purpose)) or (Purpose <> spSftp) then
+  begin
+    Err := 'not an address of SFTP (sftp://): ' + Url;
+    Exit;
+  end;
+  if not SshArgs(U, spSftp, Args, Err) then
+    Exit;
+  Proc := TNetProc.Create;
+  if not Proc.Start(SshProgram, Args) then
+  begin
+    Err := Proc.LastError;
+    Proc.Free;
+    Exit;
+  end;
+  FS := TSftpFS.Create(Proc, True);
+  Result := FS.Connect;
+  if Result <> rrOk then
+  begin
+    Err := FS.LastError;
+    FreeAndNil(FS);
+  end;
 end;
 
 {$ENDIF}

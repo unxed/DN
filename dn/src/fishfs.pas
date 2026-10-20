@@ -83,6 +83,9 @@ type
     property Connected: Boolean read FConnected;
   end;
 
+{ A TFishFS over "ssh host sh" (unit NetSsh) for the address Url, sh:// or fish://, connected with the helper whose text is HelperSource; the path of
+  the address is not looked at. rrOk and FS; otherwise FS is nil and Err tells why (what ssh said, when it could not connect). }
+function OpenFishSsh(const Url, HelperSource: AnsiString; out FS: TFishFS; out Err: AnsiString): TRemoteResult;
 { One line of a list or of an answer to a stat, in the form of the tool Mode ("find", "stat", "statbsd", or "ls " and the way of ls to print the time:
   "ls epoch", "ls iso", "ls bsd"); False when the line does not fit it. }
 function ParseEntry(const Mode, Line: AnsiString; out E: TRemoteEntry): Boolean;
@@ -93,7 +96,7 @@ implementation
 {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
 
 uses
-  StrUtils, DateUtils, base64;
+  StrUtils, DateUtils, base64, NetSplit, NetSsh;
 
 const
   TokenMark = '__F4_TOKEN__';
@@ -1446,6 +1449,40 @@ begin
   if (Mode < 0) or (Mode > &7777) then
     Exit(Fail(rrFailed, 'the permission bits are not right: ' + Path));
   Result := Ask('chmod ' + OctalText(Mode), [Clean], nil);
+end;
+
+function OpenFishSsh(const Url, HelperSource: AnsiString; out FS: TFishFS; out Err: AnsiString): TRemoteResult;
+var
+  U: TNetUrl;
+  Args: TSshArgs;
+  Purpose: TSshPurpose;
+  Proc: TNetProc;
+begin
+  FS := nil;
+  Result := rrFailed;
+  if not NetSplitUrl(Url, SshDefaultPort, U, Err) then
+    Exit;
+  if (not SshPurposeOf(U.Scheme, Purpose)) or (Purpose <> spShell) then
+  begin
+    Err := 'not an address of a shell (sh:// or fish://): ' + Url;
+    Exit;
+  end;
+  if not SshArgs(U, spShell, Args, Err) then
+    Exit;
+  Proc := TNetProc.Create;
+  if not Proc.Start(SshProgram, Args) then
+  begin
+    Err := Proc.LastError;
+    Proc.Free;
+    Exit;
+  end;
+  FS := TFishFS.Create(Proc, True);
+  Result := FS.Connect(HelperSource);
+  if Result <> rrOk then
+  begin
+    Err := FS.LastError;
+    FreeAndNil(FS);
+  end;
 end;
 
 {$ENDIF}

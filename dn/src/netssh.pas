@@ -33,6 +33,11 @@ const
   { How long ssh may take to open the connection, in seconds. }
   SshConnectTimeout = 20;
 
+var
+  { A configuration file of ssh to use instead of the one of the user (-F); '' for the usual one. The tests give theirs: ssh takes ~/.ssh from
+    the database of the users, not from HOME. }
+  SshConfigFile: AnsiString = '';
+
 { The arguments of ssh (without the name of the program) for the address U. False when the address cannot be reached this way: Err tells why (in
   English, for a message to the user). }
 function SshArgs(const U: TNetUrl; Purpose: TSshPurpose; out Args: TSshArgs; out Err: AnsiString): Boolean;
@@ -101,6 +106,11 @@ begin
   Add(Args, 'BatchMode=yes');
   Add(Args, '-o');
   Add(Args, 'ConnectTimeout=' + IntToStr(SshConnectTimeout));
+  if SshConfigFile <> '' then
+  begin
+    Add(Args, '-F');
+    Add(Args, SshConfigFile);
+  end;
   if U.PortGiven then
   begin
     Add(Args, '-p');
