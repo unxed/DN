@@ -1549,6 +1549,7 @@ const
   cmUpdateHighlight = 3068; {JO}
   cmForceTagData = 3069;
   cmForceUntagData = 3070;
+  cmShellLink = 3071; { the address of a remote place for the active panel (unxed/dn#90) }
 
   cmLoConfigArchiver = 3101;
 
@@ -3076,8 +3077,11 @@ type
     dlInFoundInArchive,
     dlInList,
     dlNetworkError,
-    dlNoNetworkPath
+    dlNoNetworkPath,
     {/JO}
+    dlShellLink,
+    dlShellLinkAddress,
+    dlNotRemoteAddress
     );
 
   TDlgIdx = (

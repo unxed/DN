@@ -1915,6 +1915,31 @@ begin
   until (Cmd <> cmYes) and (Cmd <> cmNo);
 end;
 
+{ Disk | Shell link: the address of a remote place for the active panel (unxed/dn#90). Nothing in DOS and DN_MINI. }
+procedure OpenShellLink;
+  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  var
+    S: String;
+  begin
+  if ActivePanel = nil then
+    Exit;
+  S := 'sh://';
+  if InputBox(GetString(dlShellLink), GetString(dlShellLinkAddress), S, 255, 0) <> cmOK then
+    Exit;
+  S := fDelRight(S);
+  DelLeft(S);
+  if not NetIsUrl(S) then
+    begin
+    MessageBox(GetString(dlNotRemoteAddress) + ^M^C + S, nil, mfError+mfOKButton);
+    Exit;
+    end;
+  TFilePanelRoot(ActivePanel).OpenRemote(S);
+  end;
+  {$ELSE}
+  begin
+  end;
+  {$ENDIF}
+
 procedure TDNApplication.HandleCommand(var Event: TEvent);
 
   var
@@ -2760,6 +2785,8 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
       ViewHistoryMenu;
     cmCopyJobs:
       ShowCopyJobs;
+    cmShellLink:
+      OpenShellLink;
     
     cmXEditFile:
       OpenEditor;

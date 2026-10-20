@@ -546,6 +546,7 @@ MENU dlgMainMenu
 ;$ENDIF
     MenuLine
     MenuItem '~D~irectory tree', main.CreateTree
+    MenuItem 'Shell ~l~ink...', main.ShellLink
  END
  SubMenu '~U~tilities', hcUtilMenu,
 ;$IFNDEF VIRTUALPASCAL

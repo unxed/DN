@@ -6,6 +6,7 @@ configuration of the test. The helper of FISH is put beside dn as tools/dn-pack.
   - Enter on a directory goes into it, Enter on ".." goes back;
   - `cd sftp://dnhost/DIR`: the same over SFTP;
   - `cd LOCAL`: the panel is a local one again;
+  - Disk | Shell link: the address typed in its dialog opens in the panel;
   - an address where no server answers: a message, DN goes on."""
 import os, shutil, stat, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -107,6 +108,21 @@ try:
         t.wait_text('local-marker', 20)
         text = t.text()
         check('local-marker' in text and 'sftp://' not in text, 'cd to a local directory: the panel is local again', text)
+
+        # Disk | Shell link: the dialog takes the address ("sh://" is there already)
+        t.send('\x1b[21~', 0.8)
+        t.send('d', 0.8)
+        t.send('l', 1.0)
+        t.wait_text('Address', 10)
+        check('Shell link' in t.text() and 'Address' in t.text(), 'Disk | Shell link opens the dialog of the address', t.text())
+        t.send('\x1b[F', 0.3)
+        t.send('dnhost' + tree, 0.3)
+        t.send('\r', 1.0)
+        t.wait_text('alpha-remote', 30)
+        text = t.text()
+        check('alpha-remote' in text and 'sh://dnhost' in text, 'the address of the dialog opens in the panel', text)
+        command(t, 'cd ' + w)
+        t.wait_text('local-marker', 20)
 
         command(t, 'cd sh://dnnone/')
         t.wait_text('Cannot open', 30)
