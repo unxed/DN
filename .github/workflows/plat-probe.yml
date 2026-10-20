@@ -15,16 +15,11 @@ jobs:
       max-parallel: 6
       matrix:
         include:
-          - { p: freebsd-x86_64, runner: ubuntu-24.04 }
+          - { p: linux-x86_64, runner: ubuntu-24.04 }
           - { p: macos-arm64, runner: macos-15 }
-          - { p: macos-x86_64, runner: macos-15-intel }
+          - { p: macos-x86_64-asm, runner: macos-15-intel }
+          - { p: macos-x86_64-fixes, runner: macos-15-intel }
           - { p: netbsd-x86_64, runner: ubuntu-24.04 }
-          - { p: openbsd-x86_64, runner: ubuntu-24.04 }
-          - { p: dragonfly-x86_64, runner: ubuntu-24.04 }
-          - { p: haiku-x86_64, runner: ubuntu-24.04 }
-          - { p: linux-armhf, runner: ubuntu-24.04 }
-          - { p: linux-riscv64, runner: ubuntu-24.04 }
-          - { p: freebsd-aarch64, runner: ubuntu-24.04 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +50,11 @@ jobs:
             /usr/sbin/pkg_add fpc || true
             /usr/sbin/pkg_add python312 || /usr/sbin/pkg_add python311 || true
             for p in /usr/pkg/bin/python3.12 /usr/pkg/bin/python3.11; do [ -x "$p" ] && { ln -sf "$p" /usr/pkg/bin/python3; break; }; done
+            ls -d /usr/pkg/lib/fpc/*/units/* || true
+            find / -name 'fpc.cfg*' -o -name fpcmkcfg 2>/dev/null | grep -v '^/proc' || true
+            v=$(fpc -iV); /usr/pkg/bin/fpcmkcfg -d basepath=/usr/pkg/lib/fpc/$v -o /usr/pkg/etc/fpc.cfg || true
+            [ -s /usr/pkg/etc/fpc.cfg ] || printf '%s\n' "-Fu/usr/pkg/lib/fpc/$v/units/\$fpctarget" "-Fu/usr/pkg/lib/fpc/$v/units/\$fpctarget/*" "-Fu/usr/pkg/lib/fpc/$v/units/\$fpctarget/rtl" > /usr/pkg/etc/fpc.cfg
+            cp /usr/pkg/etc/fpc.cfg /etc/fpc.cfg; head -40 /etc/fpc.cfg
           run: sh .github/plat-probe/run.sh "A B"
       - if: matrix.p == 'openbsd-x86_64'
         uses: vmactions/openbsd-vm@v1
@@ -87,9 +87,37 @@ jobs:
             pkgman install -y fpc || pkgman install -y freepascal || true
             pkgman install -y python3.10 || pkgman install -y python3 || true
           run: sh .github/plat-probe/run.sh "A B"
-      - if: startsWith(matrix.p, 'macos-')
+      - if: matrix.p == 'linux-x86_64'
         run: |
-          brew install fpc || true
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends fp-compiler fp-units-rtl fp-units-fcl fp-units-base fp-units-misc python3
+          sh .github/plat-probe/run.sh A
+      - if: matrix.p == 'macos-arm64'
+        run: |
+          brew install fpc
+          sh .github/plat-probe/run.sh "A B"
+      - if: matrix.p == 'macos-x86_64-asm'
+        run: |
+          brew install fpc
+          fpc -ia || true
+          for a in macho as-darwin clang gas as; do
+            echo "=== -A$a"
+            if DN_EXTRA="-A$a" sh .github/plat-probe/run.sh A; then echo "PROBE ASM -A$a: OK"; break; else echo "PROBE ASM -A$a: FAILED"; fi
+            rm -rf out
+          done
+      - if: matrix.p == 'macos-x86_64-fixes'
+        run: |
+          brew install fpc
+          s=$(date +%s)
+          git clone -q --depth 1 -b fixes_3_2 https://gitlab.com/freepascal.org/fpc/source.git "$RUNNER_TEMP/fpcsrc"
+          git -C "$RUNNER_TEMP/fpcsrc" log -1 --format='fixes_3_2 %h %cI %s'
+          make -s -C "$RUNNER_TEMP/fpcsrc" all FPC="$(command -v fpc)" > "$RUNNER_TEMP/fpcmake.log" 2>&1 || { tail -40 "$RUNNER_TEMP/fpcmake.log"; exit 1; }
+          make -s -C "$RUNNER_TEMP/fpcsrc" install FPC="$(command -v fpc)" PREFIX="$HOME/fpc32" > /dev/null 2>&1 || { echo install failed; exit 1; }
+          echo "PROBE FIXES: fpc built in $(( $(date +%s) - s )) s"
+          v=$(ls "$HOME/fpc32/lib/fpc" | grep '^3' | head -1)
+          "$HOME/fpc32/lib/fpc/$v/samplecfg" "$HOME/fpc32/lib/fpc/$v" "$HOME/fpc32/etc" > /dev/null
+          cp "$HOME/fpc32/etc/fpc.cfg" "$HOME/.fpc.cfg"
+          ln -sf "$HOME/fpc32/lib/fpc/$v/ppcx64" "$HOME/fpc32/bin/ppcx64"
+          export PATH="$HOME/fpc32/bin:$PATH"
           sh .github/plat-probe/run.sh "A B"
       - if: matrix.p == 'linux-armhf' || matrix.p == 'linux-riscv64'
         uses: docker/setup-qemu-action@v4
