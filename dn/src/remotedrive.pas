@@ -213,6 +213,7 @@ var
   Size: TSize;
   P: PFileRec;
   AllFiles: Boolean;
+  UpTime: LongInt;
 begin
   Abort := False;
   NoMemory := False;
@@ -220,7 +221,13 @@ begin
   Result := TFilesCollection.Create($10, $20);
   Result.Panel := Panel;
   if isUp then
-    Result.AtInsert(0, NewFileRec('..', '..', -1, 0, 0, 0, Directory, @CurDir));
+  begin
+    { ".." shows the time of the current directory, as on a local drive }
+    UpTime := 0;
+    if FS.Stat(CurDir, True, T) = rrOk then
+      UpTime := PackedTime(T.MTime);
+    Result.AtInsert(0, NewFileRec('..', '..', -1, UpTime, 0, 0, Directory, @CurDir));
+  end;
   if FS.List(CurDir, Entries) <> rrOk then
   begin
     LastError := FS.LastError;
