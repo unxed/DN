@@ -228,7 +228,7 @@ uses DnPath,
   {$ENDIF}
   
   , panelwin, filepanel, FileType
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
   , RemoteFS, NetOpen, RemoteDrive
   {$ENDIF}
   {$IFNDEF DN_MINI}
@@ -3174,7 +3174,7 @@ is commented out, DN glitches, but control still never gets here.
 
 {-DataCompBoy-}
 procedure TFilePanelRoot.OpenRemote(const Url: String);
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
   var
     FS: TRemoteFS;
     Address, Path, Err: AnsiString;
@@ -3196,7 +3196,7 @@ procedure TFilePanelRoot.ChDir(Dir: String);
   var
     PDr: TDrive;
   begin
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
   if NetIsUrl(Dir) then
     begin
     OpenRemote(Dir);

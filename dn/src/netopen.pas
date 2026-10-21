@@ -17,7 +17,7 @@ unit NetOpen;
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
 uses
   RemoteFS;
 
@@ -39,7 +39,7 @@ function NetOpenUrl(const Url: AnsiString; out FS: TRemoteFS; out Address, Path,
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
 uses
   SysUtils, Classes, NetSplit, NetSsh, FishFS, SftpFS, FtpFS;
 

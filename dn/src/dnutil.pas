@@ -258,7 +258,7 @@ implementation
 
 uses DnPath, DnActReg,
   SysUtils, FlightRec,
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))} NetOpen, {$ENDIF}
+  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))} NetOpen, {$ENDIF}
   DNRun,
   Dos, Lfn, HelpKern, Menus, FileCopy, Math,
   DNHelp, DnIni, iniengine, cfgstate, DNErrLog, histories,
@@ -1917,7 +1917,7 @@ end;
 
 { Disk | Shell link: the address of a remote place for the active panel (unxed/dn#90). Nothing in DOS and DN_MINI. }
 procedure OpenShellLink;
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
   var
     S: String;
   begin
@@ -2305,7 +2305,7 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
         begin
         System.Delete(S, 1, 3); {DelFC(S); DelFC(S);}
         DelLeft(S);
-        {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+        {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
         { the address of a remote place (NetIsUrl, unxed/dn#90): the panel opens it; it is not a local path to expand }
         if NetIsUrl(fDelRight(S)) then
           begin
