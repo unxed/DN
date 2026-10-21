@@ -46,6 +46,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 {$I STDEFINE.INC}
+{$I netbuild.inc}
 {AK155 = Alexey Korop, 2:461/155@fidonet}
 
 unit
@@ -228,7 +229,7 @@ uses DnPath,
   {$ENDIF}
   
   , panelwin, filepanel, FileType
-  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
+  {$IFDEF DN_NET}
   , RemoteFS, NetOpen, RemoteDrive
   {$ENDIF}
   {$IFNDEF DN_MINI}
@@ -3174,7 +3175,7 @@ is commented out, DN glitches, but control still never gets here.
 
 {-DataCompBoy-}
 procedure TFilePanelRoot.OpenRemote(const Url: String);
-  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
+  {$IFDEF DN_NET}
   var
     FS: TRemoteFS;
     Address, Path, Err: AnsiString;
@@ -3196,7 +3197,7 @@ procedure TFilePanelRoot.ChDir(Dir: String);
   var
     PDr: TDrive;
   begin
-  {$IF NOT (DEFINED(DOS) OR DEFINED(GO32V2) OR DEFINED(DN_MINI))}
+  {$IFDEF DN_NET}
   if NetIsUrl(Dir) then
     begin
     OpenRemote(Dir);

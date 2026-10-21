@@ -45,6 +45,7 @@
 //
 //////////////////////////////////////////////////////////////////////////}
 {$I STDEFINE.INC}
+{$I netbuild.inc}
 unit RegAll;
 
 interface
@@ -66,7 +67,7 @@ uses
   {$IFNDEF DN_MINI}
   Arvid,
   {$ENDIF}
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  {$IFDEF DN_NET}
   RemoteDrive,
   {$ENDIF}
   Archiver, ArcView, {$IFNDEF DN_MINI} ASCIITab, calcline, {$ENDIF} Collect, DiskInfo, mainapp,
@@ -135,7 +136,7 @@ begin
   Reg('Archiver.TARJArchive', @Archiver.TARJArchive.Build);
   Reg('Archiver.TFileInfo', @Archiver.TFileInfo.Build);
   Reg('ArcView.TArcDrive', @ArcView.TArcDrive.Build);
-  {$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+  {$IFDEF DN_NET}
   Reg('RemoteDrive.TRemoteDrive', @RemoteDrive.TRemoteDrive.Build);
   {$ENDIF}
   {$IFNDEF DN_MINI}
