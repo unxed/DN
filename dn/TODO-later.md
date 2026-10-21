@@ -418,3 +418,9 @@ memory model, costs an emulator feature; (b) needs the 16-bit memory model for ~
 
 - Checked: DOSBox-X `master` (2026.10.01, built from `joncampbell123/dosbox-x`) runs `tools/dn-dos-input.py` with `DN_DOS_PATCHED=1`: all 9 checks pass, including the UTF-8 names (the patches are in `master`).
 - Open: the CI installs the package `dosbox-x` of Ubuntu (stock, no UTF-8 names), so the UTF-8 DOS scenarios are not in the CI. A job that builds `master` (about 15 minutes; cache the build by the commit) and runs `dn-dos-input.py` with `DN_DOS_PATCHED=1` belongs in `nightly`.
+
+## Async architecture migration (Far 4 style) (2026-10-21)
+
+- After DN 3.0: long operations (copy/move/delete, search, archives, directory tree scans) run in the background with progress and
+  cancel, the UI keeps answering. The plan, its prerequisites (DN 3.0, Better Pascal, tv3 concurrency) and the inventory of the
+  synchronous places: unxed/dn#170 (task: unxed/lunobot#218).
