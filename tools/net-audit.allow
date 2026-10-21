@@ -1,5 +1,6 @@
 # Files of dn/src and dn/compat that bring network code in (tools/net-audit.sh), one path relative to the root per line; the plan is unxed/dn#90.
 dn/src/fishfs.pas   # the FISH+ client (the protocol is spoken over a shell, later over ssh)
 dn/src/ftpfs.pas    # the FTP client (the listings first, then the connection)
+dn/src/remotedrive.pas # the drive of a panel over the remote file systems (it holds a connection)
 dn/src/netssh.pas   # the command line of ssh for the file systems that reach a host through it
 dn/src/sftpfs.pas   # the SFTP client (over a program that speaks the protocol: sftp-server, ssh -s)
