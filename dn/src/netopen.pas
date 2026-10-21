@@ -12,12 +12,14 @@
   MIT, see LICENSE. }
 unit NetOpen;
 
+{$I netbuild.inc}
+
 {$mode objfpc}
 {$H+}
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   RemoteFS;
 
@@ -39,7 +41,7 @@ function NetOpenUrl(const Url: AnsiString; out FS: TRemoteFS; out Address, Path,
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   SysUtils, Classes, NetSplit, NetSsh, FishFS, SftpFS, FtpFS;
 

@@ -15,10 +15,11 @@
 unit RemoteDrive;
 
 {$I STDEFINE.INC}
+{$I netbuild.inc}
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   Defines, Streams, Views, FilesCol, DiskInfo, Collect, Drives, RemoteFS;
 
@@ -65,7 +66,7 @@ function RemoteDriveTarget(const Url, Dir, ADir: AnsiString; out Target: AnsiStr
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   SysUtils, Dos, osdep, Basics, fileutil, panelsetup, panelroot;
 

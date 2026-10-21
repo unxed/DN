@@ -2690,6 +2690,7 @@ MENU dlgMainMenu
 ;$ENDIF
     MenuLine
     MenuItem '~Д~ерево каталогів', main.CreateTree
+    MenuItem '~В~іддалене місце...', main.ShellLink
  END
  SubMenu '~У~тиліти', hcUtilMenu,
 ;$IFNDEF VIRTUALPASCAL

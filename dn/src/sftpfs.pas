@@ -20,12 +20,14 @@
   MIT, see LICENSE. }
 unit SftpFS;
 
+{$I netbuild.inc}
+
 {$mode objfpc}
 {$H+}
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   SysUtils, Classes, RemoteFS, NetProc;
 
@@ -115,7 +117,7 @@ procedure SftpTakeAttrs(var R: TSftpReader; var E: TRemoteEntry);
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 
 uses
   DateUtils, NetSplit, NetSsh;

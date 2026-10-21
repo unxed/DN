@@ -46,6 +46,7 @@
 //////////////////////////////////////////////////////////////////////////}
 
 {$I STDEFINE.INC}
+{$I netbuild.inc}
 {AK155 = Alexey Korop, 2:461/155@fidonet}
 
 unit
@@ -126,6 +127,8 @@ type
     procedure DecDrawDisabled;
     procedure ChkNoMem;
     procedure ChDir(Dir: String);
+    { Opens the address of a remote place (NetOpen) in this panel; a message when it cannot be reached. Nothing in DOS and DN_MINI. }
+    procedure OpenRemote(const Url: String);
     procedure SetState(AState: Word; Enable: Boolean); override;
     procedure Reorder;
       {` Re-sort files according to the current (changed)
@@ -226,6 +229,9 @@ uses DnPath,
   {$ENDIF}
   
   , panelwin, filepanel, FileType
+  {$IFDEF DN_NET}
+  , RemoteFS, NetOpen, RemoteDrive
+  {$ENDIF}
   {$IFNDEF DN_MINI}
   , Arvid 
   {$ENDIF}
@@ -1141,7 +1147,8 @@ WrongArc:
       CE;
       Exit
       end;
-    if TDrive(Event.Message.InfoPtr).DriveType in [dtDisk, dtNet, dtLink] then
+    { a remote drive (dtNet) keeps the drive it replaces: ".." above its root goes back there }
+    if TDrive(Event.Message.InfoPtr).DriveType in [dtDisk, dtLink] then
       begin
       if Drive <> nil then
         Drive.Free;
@@ -3167,8 +3174,48 @@ is commented out, DN glitches, but control still never gets here.
 {-DataCompBoy-}
 
 {-DataCompBoy-}
-procedure TFilePanelRoot.ChDir(Dir: String);
+procedure TFilePanelRoot.OpenRemote(const Url: String);
+  {$IFDEF DN_NET}
+  var
+    FS: TRemoteFS;
+    Address, Path, Err: AnsiString;
   begin
+  FRNote('dir', 'panel ' + ItoS(Ord(SelfNum)) + ' opens [' + Url + ']');
+  if NetOpenUrl(Url, FS, Address, Path, Err) <> rrOk then
+    begin
+    MessageBox(Copy('Cannot open ' + Url, 1, 255) + ^M^C + Copy(Err, 1, 200), nil, mfError+mfOKButton);
+    Exit;
+    end;
+  Message(Self, evCommand, cmInsertDrive, TRemoteDrive.Create(FS, Address, Path, Self));
+  end;
+  {$ELSE}
+  begin
+  end;
+  {$ENDIF}
+
+procedure TFilePanelRoot.ChDir(Dir: String);
+  var
+    PDr: TDrive;
+  begin
+  {$IFDEF DN_NET}
+  if NetIsUrl(Dir) then
+    begin
+    OpenRemote(Dir);
+    Exit;
+    end;
+  {$ENDIF}
+  if Drive.DriveType = dtNet then
+    begin
+    { a local directory from a remote panel: back to the drive it replaced (or the disk), the connection ends }
+    PDr := Drive;
+    Drive := PDr.Prev;
+    PDr.Prev := nil;
+    PDr.Free;
+    if Drive = nil then
+      Drive := TDrive.Create(0, Self);
+    Drive.Panel := Self;
+    SetupPanelFromDrive;
+    end;
   if Drive.DriveType <> dtDisk then
     Exit;
   MakeNoSlash(Dir);
