@@ -17,6 +17,7 @@ The repository holds two independent projects with different licenses and one sh
 | Directory | What it is | License | Where the code comes from |
 |---|---|---|---|
 | [`tv/`](tv/README.md) | a git submodule: the repository **[unxed/tv3](https://github.com/unxed/tv3)** (it was a directory of this repository until 2026-10-03). **TV**: a Pascal translation of the [magiblot/tvision](https://github.com/magiblot/tvision) library, its own backends (memory, DOS), tests, demos | Borland disclaimer + MIT (`tv/COPYRIGHT.magiblot`, `tv/LICENSE`) | magiblot/tvision (its code comes from the TV 2.0 release published by Borland and the MIT contribution of magiblot) and our new code |
+| [`bp/`](docs/BETTER-PASCAL.md) | a git submodule: the repository **[unxed/bp](https://github.com/unxed/bp)** (Better Pascal). A build with `DN_BP=1` puts `bp.pas`, `bp/safe/` and `bp/ext/` on the unit path; no unit of DN uses them yet (unxed/dn#87) | MIT for those files (`bp/LICENSE`); `bp/fpide/` is GPL and is not used by DN | unxed/bp |
 | [`dn/`](dn/README.md) | **DN**: the file manager itself, sources in git | DN files: the DN license (not relicensed); our files: MIT ([`dn/LICENSE.md`](dn/LICENSE.md)) | the public release of DN OSP 2.14 (the path: `bootstrap/`) and our new code |
 | [`bootstrap/`](bootstrap/README.md) | a record of how the first commit of `dn/src` was made from the public archive, and a way to reproduce it | MIT | the dn project |
 | `audit/`, `tools/`, `research/`, `.github/` | the detector of Borland code, build and checks, research | n/a | the dn project |
