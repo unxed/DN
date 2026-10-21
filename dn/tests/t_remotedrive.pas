@@ -168,6 +168,8 @@ begin
     try
       S := NamesOf(C);
       Check(Copy(S, 1, 4) = '../ ', '".." comes first: ' + S);
+      P := FindRec(C, '..');
+      Check((P <> nil) and (P^.Yr >= 2020), '".." has the time of the directory, the year: ' + IntToStr(P^.Yr));
       Check(SortedNamesOf(C) = '../ c.txt deep/', 'the directory: ' + SortedNamesOf(C));
     finally
       C.Free;
