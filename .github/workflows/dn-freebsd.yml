@@ -1,6 +1,7 @@
 name: dn-freebsd
 # DN for FreeBSD x86_64 (unxed/dn#166): tools/build.sh freebsd64 (DN, its resources and its help) in a FreeBSD VM (vmactions/freebsd-vm),
-# with the fpc and the python3 of the packages of FreeBSD. Run by hand, and on a pull request that changes the build of this target.
+# with the fpc and the python3 of the packages of FreeBSD; then the unit tests of dn/tests (tools/dn-test.sh) and the file operations in a pty
+# (tools/dn-linux-ops.py). Run by hand, and on a pull request that changes the build of this target or these tests.
 on:
   workflow_dispatch:
   pull_request:
@@ -9,6 +10,9 @@ on:
       - tools/build.sh
       - tools/dn-env.sh
       - dn/build.env
+      - tools/dn-test.sh
+      - tools/dn-linux-ops.py
+      - tools/dn_wait.py
 
 concurrency:
   group: dn-freebsd-${{ github.ref }}
@@ -22,14 +26,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Build DN in FreeBSD 14.3
+      - name: Build and test DN in FreeBSD 14.3
         uses: vmactions/freebsd-vm@v1
         with:
           release: '14.3'
           usesh: true
           prepare: |
-            pkg install -y fpc python3 git
+            pkg install -y fpc python3 git bash
+            # pyftpdlib for t_ftpfs: the package of the python3 of the system if there is one, else pip
+            py=$(python3 -c 'import sys; print("py%d%d" % sys.version_info[:2])')
+            pkg search -o pyftpdlib || true
+            pkg install -y "$py-pyftpdlib" || { pkg install -y "$py-pip" && python3 -m pip install pyftpdlib; }
+            python3 -c 'import pyftpdlib; print("pyftpdlib", pyftpdlib.__ver__)'
           run: |
+            set -e
+            # the tree is synced into the VM with another owner: git refuses it (the class gate lists the files with git ls-files)
+            git config --global --add safe.directory '*'
             freebsd-version
             uname -m
             fpc -iV
@@ -38,3 +50,13 @@ jobs:
             tools/build.sh freebsd64 out/dn
             ls -l out/dn
             file out/dn/dn
+            # the unit tests (the network ones talk to sftp-server, sshd and pyftpdlib of this VM: /usr/libexec/sftp-server, /usr/sbin/sshd)
+            rc=0
+            if ! DN_TEST_JOBS=$(sysctl -n hw.ncpu) DN_RES_DIR=$PWD/out/dn tools/dn-test.sh; then
+                rc=1
+                # the whole output of each test that failed: dn-test.sh prints only its FAIL lines
+                for f in build/dn-tests/*.res; do head -1 "$f" | grep -q ": ALL OK" || { echo "=== ${f%.res}.txt"; tail -60 "${f%.res}.txt"; }; done
+            fi
+            # the pty of the embedded terminal of tv/ is Linux only (tv/src/tvpty.pas): the commands of the command line are left out
+            DN_OPS_NO_RUN=1 python3 tools/dn-linux-ops.py out/dn || rc=1
+            exit $rc

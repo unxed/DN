@@ -13,6 +13,7 @@ import io
 import os
 import re
 import select
+import shutil
 import struct
 import subprocess
 import sys
@@ -37,6 +38,8 @@ def shape(screen):
 # exec -a keeps argv[0]; an exec that fails with "Text file busy" (a copy of the program that another thread still has open: the child of
 # a fork made by another thread between the copy and its close) is tried again
 EXEC = 'shopt -s execfail; for i in 1 2 3 4 5 6 7 8 9 10; do exec -a "$0" "$@"; sleep 0.3; done; exit 127'
+# what `setsid -c` does: a session of its own, standard input (the pty) as its terminal; then the command of the arguments
+SETSID = 'import fcntl, os, sys, termios; os.setsid(); fcntl.ioctl(0, termios.TIOCSCTTY, 0); os.execvp(sys.argv[1], sys.argv[1:])'
 
 
 class DnTerm(PtyTerm):
@@ -66,7 +69,11 @@ class DnTerm(PtyTerm):
             rest = list(cmd[1:])
         master, slave = os.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
-        self.proc = subprocess.Popen(['setsid', '-c', 'bash', '-c', EXEC, argv0, prog] + rest,
+        start = ['setsid', '-c']
+        if shutil.which('setsid') is None:
+            # no setsid(1) (FreeBSD): a new python3 (exec'd, not a fork of this one) makes the session and the terminal, then runs bash
+            start = [sys.executable, '-c', SETSID]
+        self.proc = subprocess.Popen(start + ['bash', '-c', EXEC, argv0, prog] + rest,
                                      stdin=slave, stdout=slave, stderr=slave, cwd=cwd, env=e)
         os.close(slave)
         self.pid, self.fd = self.proc.pid, master

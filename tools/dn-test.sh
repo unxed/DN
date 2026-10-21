@@ -50,9 +50,10 @@ for k in u8 cp; do
     rm -rf "$w/lib-$k"; mkdir -p "$w/lib-$k"
     [ -z "$names" ] && continue
     { echo "program allunits;"; echo "uses"
-      # the names of the uses clauses (the directives and comments dropped), each once
-      awk 'tolower($0) ~ /^[[:space:]]*uses([[:space:]]|$)/ { p = 1 } p { print } p && /;/ { p = 0; nextfile }' $names | sed 's/{[^}]*}//g; s/^[[:space:]]*uses\b//I; s/;.*//' |
-          tr ',' '\n' | tr -d ' \t\r' | grep -v '^$' | awk '!s[tolower($0)]++' | paste -sd, -
+      # the names of the uses clauses (the directives and comments dropped), each once; POSIX sed and awk (BSD as well as GNU)
+      awk 'tolower($0) ~ /^[[:space:]]*uses([[:space:]]|$)/ { p = 1 } p { print } p && /;/ { p = 0; nextfile }' $names | sed 's/{[^}]*}//g; s/;.*//' |
+          awk '{ if ($0 ~ /^[[:space:]]*[Uu][Ss][Ee][Ss][[:space:]]*$/) $0 = ""; else sub(/^[[:space:]]*[Uu][Ss][Ee][Ss][[:space:]]+/, ""); print }' |
+          tr ',' '\n' | tr -d ' \t\r' | grep -v '^$' | awk '!s[tolower($0)]++' | paste -s -d, -
       echo "; begin end."; } > "$w/lib-$k/allunits.pas"
     (cd "$here/dn/tests" && fpc $(opts $k) -FU"$w/lib-$k" -FE"$w/lib-$k" "$w/lib-$k/allunits.pas" > "$w/lib-$k/build.txt" 2>&1) &
 done

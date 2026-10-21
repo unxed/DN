@@ -161,8 +161,13 @@ begin
   Check(SysMountPoint('/no/such/dir_osdep_xyz') = '', 'mount point: a folder that does not exist has none');
   Check(not SysOtherFileSystem('/', '/'), 'file systems: the root is on its own');
   Check(not SysOtherFileSystem(SysMountPoint('/tmp/'), '/tmp/'), 'file systems: /tmp is on that of its mount point');
+  {$IFDEF FREEBSD}
+  { FreeBSD mounts no /proc by default; /dev is its devfs }
+  Check(SysOtherFileSystem('/', '/dev'), 'file systems: /dev is another one than the root');
+  {$ELSE}
   if DirectoryExists('/proc') then
     Check(SysOtherFileSystem('/', '/proc'), 'file systems: /proc is another one than the root');
+  {$ENDIF}
 {$ELSE}
   Check(SysMountPoint('C:\') = '', 'mount point: none where the drives have their roots');
   Check(not SysOtherFileSystem('C:\', 'C:\dir'), 'file systems: one per drive');

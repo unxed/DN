@@ -107,6 +107,7 @@ begin
     Result := 20000 + (fpGetPid * 13 + Try_ * 991 + 5000) mod 30000;
     Cfg := 'Port ' + IntToStr(Result) + LineEnding + 'ListenAddress 127.0.0.1' + LineEnding + 'HostKey ' + K + '/host' + LineEnding +
       'PidFile ' + K + '/sshd.pid' + LineEnding + 'AuthorizedKeysFile ' + K + '/authorized_keys' + LineEnding + 'UsePAM no' + LineEnding +
+      'PermitRootLogin prohibit-password' + LineEnding +   { root in the VM of FreeBSD, whose sshd says no to root by default }
       'PasswordAuthentication no' + LineEnding + 'KbdInteractiveAuthentication no' + LineEnding + 'PubkeyAuthentication yes' + LineEnding +
       'StrictModes no' + LineEnding + 'Subsystem sftp ' + SftpServer + LineEnding;
     PutText(K + '/sshd_config', Cfg);
