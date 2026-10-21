@@ -157,6 +157,8 @@ def session(out, d):
     # dn/build.env) has no emulator: the commands draw on the terminal itself
     if os.environ.get('DN_MINI') == '1':
         print('SKIP Ctrl-O, the screen of the commands: the mini build (DN_MINI=1) has no embedded terminal', flush=True)
+    elif os.environ.get('DN_OPS_NO_RUN') == '1':
+        print('SKIP Ctrl-O, the screen of the commands: DN_OPS_NO_RUN=1 (no command was run)', flush=True)
     else:
         key('\x0f', 1.0)
         check('shown-ok' in t.text() and 'ran-ok' in t.text(), 'Ctrl-O: the screen of the commands (the command line and its output)', t.text())
