@@ -1,10 +1,12 @@
 program t_sshfs;
-{ Tests of OpenFishSsh (src/fishfs.pas) and OpenSftpSsh (src/sftpfs.pas): FISH and SFTP through the ssh of the system. The other side is an sshd of
+{ Tests of OpenFishSsh (src/fishfs.pas) and OpenSftpSsh (src/sftpfs.pas): FISH and SFTP through the ssh of the system; and of the registry of
+  addresses (src/netopen.pas) with the drive of a panel over what it opens (src/remotedrive.pas). The other side is an sshd of
   the test (a port of 127.0.0.1, keys made for the run, no PAM, no password), which ssh reaches through a configuration file of the test
   (NetSsh.SshConfigFile); the files are a tree made for the test, and what the file systems did is looked at on this machine. On CI an sshd that is
   not found is a failure, elsewhere the checks are left out. }
 {$mode objfpc}{$H+}
-uses SysUtils, Classes, BaseUnix, Process, ssockets, RemoteFS, NetProc, NetSsh, FishFS, SftpFS;
+uses Defines, FilesCol, FileType, RemoteDrive, SysUtils, Classes, BaseUnix, Process, ssockets, RemoteFS, NetProc, NetSsh, FishFS, SftpFS,
+  NetOpen;
 {$I dntest.inc}
 
 const
@@ -216,6 +218,78 @@ begin
   end;
 end;
 
+{ The names of the list of the drive, sorted, apart by blanks; a directory ends with "/". }
+function DriveNames(D: TRemoteDrive): AnsiString;
+var
+  C: TFilesCollection;
+  L: TStringList;
+  Total: Defines.TSize;
+  I: Integer;
+  P: PFileRec;
+  S: AnsiString;
+begin
+  Result := '';
+  C := D.GetDirectory('*', Total);
+  L := TStringList.Create;
+  try
+    L.Sorted := True;
+    for I := 0 to C.Count - 1 do
+    begin
+      P := PFileRec(C.At(I));
+      S := P^.FlName[True];
+      if P^.Attr and $10 <> 0 then
+        S := S + '/';
+      L.Add(S);
+    end;
+    for I := 0 to L.Count - 1 do
+    begin
+      if I > 0 then
+        Result := Result + ' ';
+      Result := Result + L[I];
+    end;
+  finally
+    L.Free;
+    C.Free;
+  end;
+end;
+
+procedure CheckRegistry(const Base: AnsiString);
+var
+  FS: TRemoteFS;
+  Address, Path, Err, S: AnsiString;
+  D: TRemoteDrive;
+begin
+  FishHelperPath := HelperPath;
+  Check(NetOpenUrl('sh://dnhost' + Base + '/sub/..', FS, Address, Path, Err) = rrOk, 'the registry opens a shell link: ' + Err);
+  Check((Address = 'sh://dnhost') and (Path = Base), 'the address and the path of it: ' + Address + ' ' + Path);
+  if FS <> nil then
+  begin
+    D := TRemoteDrive.Create(FS, Address, Path, nil);
+    try
+      S := DriveNames(D);
+      Check((Pos(' plain.txt ', S) > 0) and (Pos(' sub/ ', S) > 0) and (Pos(' with space.txt', S) > 0), 'the drive of a panel lists it: ' + S);
+      D.lChDir('sub');
+      Check(D.GetDir = 'sh://dnhost' + Base + '/sub', 'and goes into a directory: ' + D.GetDir + ' ' + D.LastError);
+      Check(Copy(DriveNames(D), 1, 3) = '../', 'where ".." leads back');
+    finally
+      D.Free;
+    end;
+  end;
+  Check(NetOpenUrl('sftp://dnhost' + Base, FS, Address, Path, Err) = rrOk, 'the registry opens an SFTP link: ' + Err);
+  Check(Address = 'sftp://dnhost', 'its address: ' + Address);
+  if FS <> nil then
+  begin
+    D := TRemoteDrive.Create(FS, Address, Path, nil);
+    try
+      S := DriveNames(D);
+      Check((Pos(' plain.txt ', S) > 0) and (Pos(' sub/ ', S) > 0) and (Pos(' with space.txt', S) > 0), 'the drive of a panel lists it too: ' + S);
+    finally
+      D.Free;
+    end;
+  end;
+  Check((NetOpenUrl('sh://dnnone/', FS, Address, Path, Err) = rrFailed) and (FS = nil), 'no server: the registry fails as ssh: ' + Err);
+end;
+
 procedure CheckRefusals(const Helper: AnsiString);
 var
   Fish: TFishFS;
@@ -250,6 +324,7 @@ begin
     Finish;
     Exit;
   end;
+  PrepareExtCollection;    { what the program does at its start: the list of a drive looks up the kind of a file }
   Helper := LoadText(HelperPath);
   Check(Length(Helper) > 1000, 'the text of the helper is found');
 
@@ -277,6 +352,7 @@ begin
       CheckFish(Base, Helper);
       CheckSftp(Base);
       CheckRefusals(Helper);
+      CheckRegistry(Base);
     end;
   finally
     if Server <> nil then
