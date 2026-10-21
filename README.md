@@ -6,7 +6,7 @@ A port of DOS Navigator to Free Pascal.
 
 ## Status
 
-**Alpha.** The port runs on Windows, Linux and DOS (UTF-8 file names under DOS need a DOS with the UTF-8 API: DOSBox-X from `master` since October 2026 has it). The codebase is being moved from the old Pascal object model to classes so the project can keep evolving; reliability is roughly where the pre-migration tree was, not worse by intent, but crashes and hangs are still possible — treat data carefully. The in-app About box says alpha for the same reason.
+**Alpha.** The port runs on Windows, Linux, FreeBSD x86_64 and DOS (UTF-8 file names under DOS need a DOS with the UTF-8 API: DOSBox-X from `master` since October 2026 has it). The codebase is being moved from the old Pascal object model to classes so the project can keep evolving; reliability is roughly where the pre-migration tree was, not worse by intent, but crashes and hangs are still possible — treat data carefully. The in-app About box says alpha for the same reason.
 
 When a stretch of real use goes by without crash/hang reports, the label moves to beta. Feature gaps that are already known (for example archive browsing) are tracked in issues and will be fixed after the class migration settles.
 
@@ -141,6 +141,14 @@ our `tvhc` from `dnhelp.htx`, the window is `TvHelp`), exit (Alt-X). **Does not 
    Without building: the archives `linux64`, `linux32` (i386, a static ELF) and `linux-aarch64` of the [releases](#releases) (description: `README.TXT` in the archive).
    i386 from sources: `tools/build-fpc-i386-linux.sh PREFIX`, then `DN_LINUX=PREFIX tools/build.sh linux`.
    ARM64 (aarch64) Linux: on an ARM machine the ordinary build (`tools/build.sh linux64`); cross from x86_64: `tools/build-fpc-aarch64-linux.sh PREFIX` (needs `binutils-aarch64-linux-gnu`), then `DN_AARCH64=PREFIX tools/build.sh aarch64`; checking without hardware: `PTY_RUN_PREFIX=qemu-aarch64-static python3 tools/dn-linux-ops.py out/aarch64` (package `qemu-user-static`), the tv tests: `TV_FPC=PREFIX/bin/fpc-aarch64-linux TV_RUN=qemu-aarch64-static tools/tv-test.sh`. A ready build: the archive `linux-aarch64` of the [releases](#releases).
+
+0f. **DN on FreeBSD x86_64** (needs `fpc` 3.2.x and `python3` from packages: `pkg install fpc python3`):
+
+       tools/build.sh freebsd64                # the result is out/freebsd64/dn, the resources and the help next to it
+       cd out/freebsd64 && ./dn                # needs a terminal of at least 80x25
+
+   CI builds it and runs the unit tests and `tools/dn-linux-ops.py` in FreeBSD 14.3 (workflow `dn-freebsd`). Not yet on FreeBSD:
+   the commands of the command line and Ctrl-O (the embedded terminal of `tv/` is Linux only).
 
 0w. **DN on Windows** (cross build on Linux; needs `fpc`, `make`, `git`, `binutils-mingw-w64-x86-64` / `-i686`, `python3`):
 
