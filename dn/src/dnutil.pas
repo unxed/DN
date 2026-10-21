@@ -45,6 +45,7 @@
 //
 //////////////////////////////////////////////////////////////////////////}
 {$I STDEFINE.INC}
+{$I netbuild.inc}
 {Cat = Aleksej Kozlov, 2:5030/1326.13@fidonet}
 
 {JO: this define forces error message dialog colors to the defaults }
@@ -258,6 +259,7 @@ implementation
 
 uses DnPath, DnActReg,
   SysUtils, FlightRec,
+  {$IFDEF DN_NET} NetOpen, {$ENDIF}
   DNRun,
   Dos, Lfn, HelpKern, Menus, FileCopy, Math,
   DNHelp, DnIni, iniengine, cfgstate, DNErrLog, histories,
@@ -1914,6 +1916,31 @@ begin
   until (Cmd <> cmYes) and (Cmd <> cmNo);
 end;
 
+{ Disk | Shell link: the address of a remote place for the active panel (unxed/dn#90). Nothing in DOS and DN_MINI. }
+procedure OpenShellLink;
+  {$IFDEF DN_NET}
+  var
+    S: String;
+  begin
+  if ActivePanel = nil then
+    Exit;
+  S := 'sh://';
+  if InputBox(GetString(dlShellLink), GetString(dlShellLinkAddress), S, 255, 0) <> cmOK then
+    Exit;
+  S := fDelRight(S);
+  DelLeft(S);
+  if not NetIsUrl(S) then
+    begin
+    MessageBox(GetString(dlNotRemoteAddress) + ^M^C + S, nil, mfError+mfOKButton);
+    Exit;
+    end;
+  TFilePanelRoot(ActivePanel).OpenRemote(S);
+  end;
+  {$ELSE}
+  begin
+  end;
+  {$ENDIF}
+
 procedure TDNApplication.HandleCommand(var Event: TEvent);
 
   var
@@ -2279,6 +2306,18 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
         begin
         System.Delete(S, 1, 3); {DelFC(S); DelFC(S);}
         DelLeft(S);
+        {$IFDEF DN_NET}
+        { the address of a remote place (NetIsUrl, unxed/dn#90): the panel opens it; it is not a local path to expand }
+        if NetIsUrl(fDelRight(S)) then
+          begin
+          S := fDelRight(S);
+          Message(ActivePanel, evCommand, cmChangeDirectory, @S);
+          SD := '';
+          CommandLine.SetData(SD);
+          CommandLine.DrawView;
+          Exit;
+          end;
+        {$ENDIF}
         S := DelSquashes(S);
         S := lFExpand(S);
         repeat
@@ -2747,6 +2786,8 @@ procedure TDNApplication.HandleCommand(var Event: TEvent);
       ViewHistoryMenu;
     cmCopyJobs:
       ShowCopyJobs;
+    cmShellLink:
+      OpenShellLink;
     
     cmXEditFile:
       OpenEditor;

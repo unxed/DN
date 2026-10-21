@@ -195,11 +195,14 @@ no silent gaps (post-class criterion A).
 | `fishfs.pas` (ours) | `TFishFS`, the file system of a remote host reached through a shell over the FISH+ protocol (the helper script is sent, then lists and stat are asked for; the other methods follow, unxed/dn#90); empty in DOS and DN_MINI |
 | `netproc.pas` (ours) | a child process with its three pipes, read with a time limit: the transport for the file systems that talk to a remote side through a program (unxed/dn#90); empty in DOS and DN_MINI |
 | `netssh.pas` | the command line of the ssh client of the system for an address `sh://` or `sftp://` (no terminal, batch mode: keys and the agent of the user, no password from the address) (unxed/dn#90 step 7) |
+| `netopen.pas` | the registry of the addresses of remote places: `sh://` and `fish://` (FISH through ssh, the helper `fishhelper.sh` beside the program), `sftp://` (SFTP through ssh), `ftp://` (anonymous without a user) open their file system; the address a panel shows has no password (unxed/dn#90 step 7); empty in DOS and DN_MINI |
+| `netbuild.inc` | DN_NET: whether the network panels are in the build (not in DOS, where Process and Pipes are not, and not in DN_MINI); the network units test DN_NET |
 | `netsplit.pas` (ours) | an address `scheme://user:password@host:port/path` split into its parts and put together again, the percent coding (unxed/dn#90) |
 | `sftpfs.pas` | `TSftpFS`, the file system of a remote host over SFTP version 3 through a program that speaks it (sftp-server, `ssh -s host sftp`): lists, stat and links, files read and written as streams, MkDir/Remove/Rename/SetMode (unxed/dn#90 step 9); empty in DOS and DN_MINI |
 | `objtype.pas` | stream object-type numbers (`ot*`) for DN classes |
 | `pktview.pas` | FidoNet `.pkt` viewer |
 | `remotefs.pas` (ours) | `TRemoteFS`, the abstract file system behind a panel that shows no local directory, and `TLocalFS` over a directory of this machine (unxed/dn#90, `docs/NETWORK.md`) |
+| `remotedrive.pas` | `TRemoteDrive`, the drive of a panel over a `TRemoteFS` (FISH, SFTP, FTP): the list of the current directory, a change of directory and the way up; copying and the other operations follow (unxed/dn#90 step 7, `docs/NETWORK.md`); empty in DOS and DN_MINI |
 | `rstrings.pas` | resource string index glue |
 | `strview.pas` | string viewer widget |
 | `timeutil.pas` | time helpers (was `xtime`; `GetCurMSec`, etc.) |

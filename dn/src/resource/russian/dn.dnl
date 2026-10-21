@@ -1334,3 +1334,6 @@ dlInList 'списке'
 dlNetworkError 'Ошибка сети'
 dlNoNetworkPath 'Сетевой путь недоступен'
 ;JO-
+dlShellLink 'Удалённое место'
+dlShellLinkAddress '~А~дрес (sh://, sftp://, ftp://пользователь@хост/путь)'
+dlNotRemoteAddress 'Это не адрес удалённого места:'

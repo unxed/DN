@@ -14,6 +14,10 @@ on:
       - tools/net-audit.allow
       - tools/ci-par.sh
       - tools/tests/**
+      - tools/dn-env.sh
+      - docs/BETTER-PASCAL.md
+      - .gitmodules
+      - bp
       - .github/workflows/layout.yml
 jobs:
   layout:

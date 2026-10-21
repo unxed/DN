@@ -24,12 +24,14 @@
   MIT, see LICENSE. }
 unit FtpFS;
 
+{$I netbuild.inc}
+
 {$mode objfpc}
 {$H+}
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   SysUtils, Classes, ssockets, RemoteFS;
 
@@ -109,7 +111,7 @@ function FtpParseList(const Line: AnsiString; Now: TDateTime; out E: TRemoteEntr
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 
 uses
   StrUtils, DateUtils, Math;

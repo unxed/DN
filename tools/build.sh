@@ -10,7 +10,7 @@
 #   win64     Windows x86_64, DN_WIN=PREFIX                                           needs: tools/build-fpc-windows.sh PREFIX win64 (+ the fpc of the host for the resources)
 #   win32     Windows i386, DN_WIN32=PREFIX                                           needs: tools/build-fpc-windows.sh PREFIX win32
 #   dos       DOS (go32v2), DN_PREFIX=PREFIX                                           needs: tools/build-fpc-go32v2.sh PREFIX, dosbox-x (rcp runs in it)
-# env: DN_BUILD_DATE=now (the moment of the build in the About box; the default is the date of the last commit), DN_BUILD_REV (the tag or the hash shown there); DN_UTF8=0 (linux, windows: the old DN with the code page inside; the default is UTF-8 inside); DN_EXTRA=-gl (more options of the compiler); DN_SRC=<a copy of dn/src> (e.g. with the traces of tools/dn-trace-*.py)
+# env: DN_BUILD_DATE=now (the moment of the build in the About box; the default is the date of the last commit), DN_BUILD_REV (the tag or the hash shown there); DN_UTF8=0 (linux, windows: the old DN with the code page inside; the default is UTF-8 inside); DN_EXTRA=-gl (more options of the compiler); DN_SRC=<a copy of dn/src> (e.g. with the traces of tools/dn-trace-*.py); DN_BP=1 (the unit paths of Better Pascal, bp/: docs/BETTER-PASCAL.md)
 # Run DN (linux): cd OUTDIR && ./dn        (the *.lng *.dlg *.hlp files are next to it)
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)

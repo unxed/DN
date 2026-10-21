@@ -22,7 +22,7 @@ type
   end;
 
 const
-  Commands: array[0..605] of TNameRec = (
+  Commands: array[0..606] of TNameRec = (
     (V: 0; N: 'cmValid'),
     (V: 1; N: 'cmQuit'),
     (V: 2; N: 'cmError'),
@@ -242,6 +242,7 @@ const
     (V: 3068; N: 'cmUpdateHighlight'),
     (V: 3069; N: 'cmForceTagData'),
     (V: 3070; N: 'cmForceUntagData'),
+    (V: 3071; N: 'cmShellLink'),
     (V: 3101; N: 'cmLoConfigArchiver|cmConfigACE'),
     (V: 3102; N: 'cmConfigAIN'),
     (V: 3103; N: 'cmConfigARC'),

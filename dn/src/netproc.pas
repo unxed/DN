@@ -11,12 +11,14 @@
   MIT, see LICENSE. }
 unit NetProc;
 
+{$I netbuild.inc}
+
 {$mode objfpc}
 {$H+}
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   SysUtils, Classes, Pipes, Process;
 
@@ -49,7 +51,7 @@ type
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 
 const
   PollStepMs = 5;

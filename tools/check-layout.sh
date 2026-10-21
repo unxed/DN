@@ -47,6 +47,18 @@ if [ -d dn ]; then
     find dn -type d -name ref | grep . && err "dn/ must not hold a reference corpus"
 fi
 
+# 4b. no unit of DN, tv/ or tve/ has the name of a unit of Better Pascal (the submodule bp/, docs/BETTER-PASCAL.md): with DN_BP=1 the
+#     compiler would take one for the other. Skipped when bp/ is not checked out.
+if [ -f bp/bp.pas ]; then
+    for f in bp/bp.pas bp/safe/*.pas bp/ext/*.pas; do
+        b=$(basename "$f" | tr 'A-Z' 'a-z')
+        for d in dn/src dn/archives dn/compat dn/compat/linux dn/lib/localecp dn/lib/zipcharset dn/tests tv/src tve/src; do
+            [ -d "$d" ] || continue
+            ls "$d" | tr 'A-Z' 'a-z' | grep -qx "$b" && err "$d has a unit named $b, the name of the unit $f of bp/"
+        done
+    done
+fi
+
 # 5. the manifest of the origin of the files of dn/src
 python3 bootstrap/tools/dn-manifest.py --check >/dev/null || err "dn/PROVENANCE.md is not up to date (run bootstrap/tools/dn-manifest.py)"
 

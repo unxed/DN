@@ -18,12 +18,14 @@
   MIT, see LICENSE. }
 unit FishFS;
 
+{$I netbuild.inc}
+
 {$mode objfpc}
 {$H+}
 
 interface
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 uses
   SysUtils, Classes, RemoteFS, NetProc;
 
@@ -93,7 +95,7 @@ function ParseEntry(const Mode, Line: AnsiString; out E: TRemoteEntry): Boolean;
 
 implementation
 
-{$IF NOT (DEFINED(DOS) OR DEFINED(DN_MINI))}
+{$IFDEF DN_NET}
 
 uses
   StrUtils, DateUtils, base64, NetSplit, NetSsh;

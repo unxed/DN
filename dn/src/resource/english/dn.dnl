@@ -1393,3 +1393,6 @@ dlInList 'List'
 dlNetworkError 'Network error'
 dlNoNetworkPath 'Network path is not accessible'
 ;JO-
+dlShellLink 'Shell link'
+dlShellLinkAddress '~A~ddress (sh://, sftp://, ftp://user@host/path)'
+dlNotRemoteAddress 'Not an address of a remote place:'

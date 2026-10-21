@@ -163,6 +163,7 @@ ACTION main.HangUp,                         cmHangUp, kbNoKey, 'Alt-H', hcUtilMe
 ACTION main.EnvEdit,                        cmEnvEdit, kbNoKey, '', hcUtilMenu
 ACTION main.UserMenu,                       cmUserMenu, kbF2, 'F2', hcUtilMenu
 ACTION main.DirHistory,                     cmDirHistory, kbNoKey, 'Alt-BkSp', hcPanelMenu
+ACTION main.ShellLink,                      cmShellLink, kbNoKey, '', hcDiskMenu
 ACTION main.HistoryList,                    cmHistoryList, kbAltF8, 'Alt-F8', hcUtilMenu
 ACTION main.EditHistory,                    cmEditHistory, kbAltPgUp, 'Alt-PgUp', hcUtilMenu
 ACTION main.ViewHistory,                    cmViewHistory, kbAltPgDn, 'Alt-PgDn', hcUtilMenu
