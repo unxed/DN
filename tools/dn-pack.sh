@@ -1,7 +1,7 @@
 #!/bin/sh
 # Packs a build of DN for a GitHub release: tools/dn-pack.sh OUTDIR NAME KIND DEST [VERSION]
 #   OUTDIR   the directory that tools/build.sh made (dn or dn.exe, *.lng, *.dlg, *.hlp, xlt/, cwsdpmi.exe for DOS)
-#   NAME     the target as shown in the file name (linux64, linux-aarch64, linux32, win64, win32, dos, dos-utf8)
+#   NAME     the target as shown in the file name (linux64, linux-aarch64, freebsd64, linux32, win64, win32, dos, dos-utf8)
 #   KIND     tar (tar.gz) or zip
 #   DEST     the directory for the archive: DEST/dn-VERSION-NAME.tar.gz or .zip
 #   VERSION  the tag of a release (workflow release); without it: the short commit, a nightly build (workflow nightly)
@@ -18,7 +18,7 @@ mkdir -p "$dest"; dest=$(cd "$dest" && pwd)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 stage=$tmp/dn-$label-$name
 case "$name" in
-    linux|linux32|linux64|linux-aarch64)
+    linux|linux32|linux64|linux-aarch64|freebsd64)
         mkdir -p "$stage/bin" "$stage/lib/dn" "$stage/share/applications" \
             "$stage/share/icons/hicolor/scalable/apps"
         [ -f "$out/dn" ] || { echo "dn-pack: no dn in $out" >&2; exit 1; }

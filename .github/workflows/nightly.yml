@@ -91,6 +91,32 @@ jobs:
           name: nightly-linux-aarch64
           path: pack/*
 
+  freebsd64:
+    needs: gate
+    if: needs.gate.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          submodules: true
+      - name: Build and pack DN in FreeBSD 14.3
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.3'
+          usesh: true
+          prepare: pkg install -y fpc python3 git bash
+          run: |
+            set -e
+            git config --global --add safe.directory '*'
+            tools/build.sh freebsd64 out/dn
+            tools/dn-pack.sh out/dn freebsd64 tar pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-freebsd64
+          path: pack/*
+
   linux32:
     needs: gate
     if: needs.gate.outputs.publish == 'true'
@@ -189,7 +215,7 @@ jobs:
           path: pack/*
 
   publish:
-    needs: [gate, linux64, linux-aarch64, linux32, windows, dos]
+    needs: [gate, linux64, linux-aarch64, freebsd64, linux32, windows, dos]
     if: ${{ !cancelled() && needs.gate.outputs.publish == 'true' }}
     runs-on: ubuntu-24.04
     # the replacement of the release, one at a time over all the commits; the gate is asked again just before it
