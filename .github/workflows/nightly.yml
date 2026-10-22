@@ -9,7 +9,7 @@ name: nightly
 # Run by hand (workflow_dispatch): the same gate for the head of the chosen branch (it must be a commit of main); "force" publishes it without the gate.
 on:
   workflow_run:
-    workflows: [dn-linux, dn, dn-windows, dos-utf8]
+    workflows: [dn-linux, dn, dn-windows, dos-utf8, dn-freebsd]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -31,7 +31,7 @@ permissions:
 env:
   # the test workflows (the files in .github/workflows) whose runs of the push of a commit must all succeed; keep in step with
   # on.workflow_run.workflows (those are the names of the same workflows)
-  REQUIRED: dn-linux.yml dn.yml dn-windows.yml dos-utf8.yml
+  REQUIRED: dn-linux.yml dn.yml dn-windows.yml dos-utf8.yml dn-freebsd.yml
   # optimized, smart-linked, without symbols and line information (dn/build.env, DN_OPT_release)
   DN_RELEASE: '1'
 
