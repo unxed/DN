@@ -1,18 +1,12 @@
 name: dn-freebsd
 # DN for FreeBSD x86_64 (unxed/dn#166): tools/build.sh freebsd64 (DN, its resources and its help) in a FreeBSD VM (vmactions/freebsd-vm),
 # with the fpc and the python3 of the packages of FreeBSD; then the unit tests of dn/tests (tools/dn-test.sh) and the file operations in a pty
-# (tools/dn-linux-ops.py). Run by hand, and on a pull request that changes the build of this target or these tests.
+# (tools/dn-linux-ops.py). Run on push to main, on pull requests and by hand.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    paths:
-      - .github/workflows/dn-freebsd.yml
-      - tools/build.sh
-      - tools/dn-env.sh
-      - dn/build.env
-      - tools/dn-test.sh
-      - tools/dn-linux-ops.py
-      - tools/dn_wait.py
 
 concurrency:
   group: dn-freebsd-${{ github.ref }}
