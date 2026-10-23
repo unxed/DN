@@ -61,6 +61,30 @@ jobs:
           name: release-linux-aarch64
           path: ${{ runner.temp }}/pack/*
 
+  freebsd64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+      - name: Build and pack DN in FreeBSD 14.3
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.3'
+          usesh: true
+          prepare: pkg install -y fpc python3 git bash
+          run: |
+            set -e
+            git config --global --add safe.directory '*'
+            tools/build.sh freebsd64 "$RUNNER_TEMP/out/dn"
+            tools/dn-pack.sh "$RUNNER_TEMP/out/dn" freebsd64 tar "$RUNNER_TEMP/pack" "$TAG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-freebsd64
+          path: ${{ runner.temp }}/pack/*
+
   linux32:
     runs-on: ubuntu-24.04
     steps:
@@ -153,7 +177,7 @@ jobs:
 
   publish:
     # only when every target was built: a release has all the archives
-    needs: [linux64, linux-aarch64, linux32, windows, dos]
+    needs: [linux64, linux-aarch64, freebsd64, linux32, windows, dos]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -169,7 +193,7 @@ jobs:
           set -eu
           cd "$RUNNER_TEMP/assets"
           n=$(ls | wc -l)
-          [ "$n" -eq 7 ] || { echo "expected 7 archives, got $n:" >&2; ls -l >&2; exit 1; }
+          [ "$n" -eq 8 ] || { echo "expected 8 archives, got $n:" >&2; ls -l >&2; exit 1; }
           sha256sum -- * > SHA256SUMS.txt
           ls -l
           set -- ./*
