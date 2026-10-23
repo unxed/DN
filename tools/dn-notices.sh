@@ -1,6 +1,6 @@
 #!/bin/sh
 # Writes the licence texts and README.TXT that every published build of DN carries: tools/dn-notices.sh DEST TARGET
-#   TARGET  linux, linux64, aarch64, win32, win64, dos or dos-utf8 (the names of tools/build.sh or of tools/dn-pack.sh); NAME-mini: the mini build
+#   TARGET  linux, linux64, aarch64, freebsd64, win32, win64, dos or dos-utf8 (the names of tools/build.sh or of tools/dn-pack.sh); NAME-mini: the mini build
 # The files (all of them must exist: a missing one is an error):
 #   LICENSE.TXT                  the MIT license of the dn project (LICENSE)
 #   LICENSE-DN.TXT               the licence of the DN code (RIT Research Labs), the notice from the head of its files
@@ -70,6 +70,17 @@ command ends: 0, the default, goes back to the panels at once).
 $keys
 DN names the files as DOS does: the disk C: is the root of the file system ("C:\\home\\you"). The first start shows a notice
 of the beta (Esc closes it).
+EOS
+    ;;
+freebsd*)
+    cat <<EOS
+DN for FreeBSD (EXPERIMENTAL): DOS Navigator OSP 2.14 on Turbo Vision (tv3), built from https://github.com/unxed/dn.
+It needs a terminal of at least 80x25.
+
+  bin/dn             start the installed program; lib/dn/ holds the binary and its resources.
+  Install the archive under /usr/local with: tar -xzf dn-VERSION-$target.tar.gz -C /usr/local --strip-components=1
+
+$keys
 EOS
     ;;
 win*)

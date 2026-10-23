@@ -1,4 +1,6 @@
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,6 +14,20 @@ def projects():
 
 
 class ThirdPartyTests(unittest.TestCase):
+    def test_freebsd64_notice_is_supported(self):
+        with tempfile.TemporaryDirectory() as dest:
+            result = subprocess.run(
+                [str(ROOT / "tools/dn-notices.sh"), dest, "freebsd64"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            readme = (Path(dest) / "README.TXT").read_text(encoding="utf-8")
+            self.assertIn("DN for FreeBSD", readme)
+            self.assertIn("dn-VERSION-freebsd64.tar.gz", readme)
+            self.assertNotIn("DN for Linux", readme)
+
     def test_every_project_has_license_and_notice(self):
         self.assertTrue(projects())
         for project in projects():

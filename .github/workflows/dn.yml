@@ -63,6 +63,7 @@ jobs:
         env:
           CMDS: |
             python3 bootstrap/tools/dn-manifest.py --check
+            python3 -B -m unittest discover -s tools/tests -p 'test_third_party.py'
             python3 -B -m unittest discover -s tools/tests -p 'test_class_gate.py'
             CLASS_GATE_STRICT=1 tools/class-gate.sh
             python3 -B -m unittest discover -s tools/tests -p 'test_check_nested_routines.py'
